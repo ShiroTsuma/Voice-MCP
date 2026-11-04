@@ -95,7 +95,8 @@
 
 <script>
 const $ = id => document.getElementById(id);
-let data = { groups: [], items: [] }, group = 'agents', timer = 0, openLogs = new Set();
+// The log's open state: what the user chose wins; untouched, it is open while the action runs.
+let data = { groups: [], items: [] }, group = 'agents', timer = 0, logOpen = new Map();
 
 async function api(path, body) {
   const r = await fetch('/settings/api/' + path, body === undefined ? {} :
@@ -162,7 +163,7 @@ function renderMain() {
       b.onclick = async () => {
         if (a.id === 'remove' && !confirm('Remove ' + it.title + '? Its files are deleted; you can download or install it again later.')) return;
         b.disabled = true;
-        try { await api('integration', { id: it.id, action: a.id }); openLogs.add(it.id); } catch (e) { alert(e.message); }
+        try { await api('integration', { id: it.id, action: a.id }); logOpen.delete(it.id); } catch (e) { alert(e.message); }
         refresh();
       };
       acts.append(b);
@@ -170,8 +171,8 @@ function renderMain() {
     row.append(left, acts);
     if (it.job && (it.job.log.length || it.job.error)) {
       const det = document.createElement('details'); det.className = 'log';
-      det.open = running || openLogs.has(it.id);
-      det.ontoggle = () => det.open ? openLogs.add(it.id) : openLogs.delete(it.id);
+      det.open = logOpen.has(it.id) ? logOpen.get(it.id) : running;
+      det.addEventListener('toggle', () => { if (det.isConnected) logOpen.set(it.id, det.open); });
       const sum = document.createElement('summary');
       sum.textContent = running ? 'Working on it…' : it.job.error ? 'Failed: ' + it.job.error : 'Done';
       const pre = document.createElement('pre');
