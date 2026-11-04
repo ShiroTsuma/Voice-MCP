@@ -622,6 +622,10 @@
             <label class="lab" for="device">Speakers</label>
             <select id="device"></select>
           </div>
+          <div class="row col">
+            <label class="lab" for="mic">Microphone<span class="help">For dictation and spoken answers; it changes at once</span></label>
+            <select id="mic"></select>
+          </div>
           <div class="more row">
             <label class="lab" for="duckOn">Lower other apps while speaking</label>
             <label class="switch"><input type="checkbox" id="duckOn"><span></span></label>
@@ -630,10 +634,7 @@
             <label class="lab" for="duck">Down to</label>
             <div class="slider"><input type="range" id="duck" min="0" max="0.9" step="0.05" value="0.35"><span class="val" id="duckVal"></span></div>
           </div>
-          <div class="more row col">
-            <label class="lab" for="mic">Microphone</label>
-            <select id="mic"></select>
-          </div>
+
           <div class="more row">
             <label class="lab" for="barge">Stop when I start talking<span class="help">Use headphones, or voice may hear itself</span></label>
             <label class="switch"><input type="checkbox" id="barge"><span></span></label>
@@ -1497,7 +1498,7 @@ function summaries() {
   const tgt = { auto: "into the agent's terminal", console: 'into terminals only', window: 'into the window in front' }[$('dictateTarget').value];
   $('sumDictation').textContent = keyText($('dictateKey').dataset.value) + ', ' + ($('dictateRouting').checked ? 'to the agent you name' : tgt) + ', '
     + ({ screen: 'shown on screen', voice: 'told by voice', both: 'shown and told' }[fb] || 'shown on screen') + ($('dictateSubmit').checked ? ', Enter pressed' : '');
-  $('sumSound').textContent = ($('device').value === 'default' ? 'System speakers' : $('device').value) + ($('duckOn').checked ? ', others down to ' + pct($('duck').value) : '') + ($('barge').checked ? ', stops when you talk' : '');
+  $('sumSound').textContent = ($('device').value === 'default' ? 'System speakers' : $('device').value) + ', ' + ($('mic').value && $('mic').value !== 'default' ? 'microphone ' + $('mic').value : 'system microphone') + ($('duckOn').checked ? ', others down to ' + pct($('duck').value) : '') + ($('barge').checked ? ', stops when you talk' : '');
   $('sumModels').textContent = optText('model').split(' — ')[0] + ($('unload').value === '0' ? ', kept loaded' : ', freed after ' + optText('unload'));
   $('sumClone').textContent = !clones.length ? 'No cloned voices yet' : clones.length + (clones.length === 1 ? ' voice: ' : ' voices: ') + andList(clones.map(c => c.name));
 }

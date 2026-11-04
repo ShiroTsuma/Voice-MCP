@@ -154,6 +154,20 @@ func (l *Listener) Transcribe(pcm []float32, sampleRate int) (text, lang string,
 	return strings.TrimSpace(text), lang, err
 }
 
+// SetInputDevice sets the microphone; the next recording opens it, so it
+// changes while voice runs.
+func (l *Listener) SetInputDevice(name string) {
+	l.mu.Lock()
+	l.cfg.InputDevice = name
+	l.mu.Unlock()
+}
+
+func (l *Listener) inputDevice() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.cfg.InputDevice
+}
+
 // SetLanguages sets the languages the user speaks (see preset.Listen).
 func (l *Listener) SetLanguages(langs []string) {
 	l.mu.Lock()
@@ -255,7 +269,7 @@ func (l *Listener) WaitForSpeech(ctx context.Context, min time.Duration) (bool, 
 	}
 	defer vad.Close()
 	window := time.Duration(sherpa.VADWindow) * time.Second / rate
-	mic, err := audio.OpenCapture(l.cfg.InputDevice, rate, window)
+	mic, err := audio.OpenCapture(l.inputDevice(), rate, window)
 	if err != nil {
 		return false, err
 	}
@@ -304,7 +318,7 @@ func (l *Listener) Record(ctx context.Context, seconds float64, rate int, stop <
 		}
 	}
 	out.Play(ctx, audio.Chime("listen", audio.DeviceRate))
-	mic, err := audio.OpenCapture(l.cfg.InputDevice, rate, 100*time.Millisecond)
+	mic, err := audio.OpenCapture(l.inputDevice(), rate, 100*time.Millisecond)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +400,7 @@ func (l *Listener) Listen(ctx context.Context, opts Options) (Result, error) {
 	defer out.Close()
 	out.Play(ctx, audio.Chime("listen", audio.DeviceRate))
 
-	mic, err := audio.OpenCapture(l.cfg.InputDevice, rate, time.Duration(sherpa.VADWindow)*time.Second/rate)
+	mic, err := audio.OpenCapture(l.inputDevice(), rate, time.Duration(sherpa.VADWindow)*time.Second/rate)
 	if err != nil {
 		return Result{}, err
 	}

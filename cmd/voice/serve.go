@@ -129,7 +129,7 @@ func runServe(args []string) error {
 		logf("word lists: %v", err)
 	}
 	ctl := startExtras(ctx, cfg, sp, l, agents)
-	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device + "\x00" + cfg.Listen.InputDevice}
+	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device}
 	ctl.onSpeaking, ctl.onDictating = b.speaking, b.dictating
 	// The Integrations window picks a GPU backend's model size here.
 	sidecarOptions = func(name string) map[string]string { return b.cfg.Sidecar[name] }
@@ -201,7 +201,7 @@ type backend struct {
 	exe     string
 	logPath string
 	info    daemon.Info
-	devices string // output and input device this process opened
+	devices string // the output device this process opened
 }
 
 func (b *backend) save(fn func(*settings.Settings)) {
@@ -292,10 +292,12 @@ func (b *backend) reload() (bool, error) {
 		return false, err
 	}
 	cur := b.cfg
-	// The audio devices are opened once, at start; the recognizer switches live.
-	restart := next.Device+"\x00"+next.Listen.InputDevice != b.devices
+	// The speakers are opened once, at start; the microphone (opened for
+	// each recording) and the recognizer switch live.
+	restart := next.Device != b.devices
 	if b.ctl != nil && b.ctl.l != nil {
 		b.ctl.l.SetModel(next.Listen.Model, next.Listen.Language, next.Listen.Threads)
+		b.ctl.l.SetInputDevice(next.Listen.InputDevice)
 		b.ctl.l.SetLanguages(next.Languages)
 	}
 	// The windows show what is saved, a device waiting for the restart too,
