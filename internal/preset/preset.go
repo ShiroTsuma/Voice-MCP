@@ -114,6 +114,9 @@ type Listen struct {
 	// Words the recognizer should get right: names, terms, or "heard -> meant".
 	Words   []string `toml:"words"`
 	Threads int      `toml:"threads"`
+	// Languages the user speaks (en, pl, ...): Whisper recognizes only these
+	// instead of guessing among a hundred. Empty: any; language wins when set.
+	Languages []string `toml:"languages"`
 }
 
 // Preset is one voice character. Unset fields inherit from Extends.
@@ -311,6 +314,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if l.Threads != 0 {
 		c.Listen.Threads = l.Threads
+	}
+	if l.Languages != nil {
+		c.Listen.Languages = l.Languages
 	}
 	if l.Words != nil {
 		c.Listen.Words = l.Words

@@ -289,6 +289,7 @@
   .seg button.on { background: var(--ink); color: var(--ground); }
   .seg button:focus-visible { outline-offset: -2px; }
   .seg button.on:focus-visible { outline-color: var(--ground); }
+  .seg.langs { flex-wrap: wrap; align-self: flex-start; max-width: 100%; }
 
   .slider { display: flex; align-items: center; gap: 12px; }
   input[type=range] { appearance: none; flex: 1; height: 22px; margin: 0; background: none; cursor: pointer; }
@@ -651,6 +652,10 @@
           <div class="row col">
             <label class="lab" for="model">Speech recognition</label>
             <select id="model"></select>
+          </div>
+          <div class="row col">
+            <span class="lab" id="langsLab">Languages you speak<span class="help">Whisper recognizes only these, so a short sentence is not taken for another language. None: any. Parakeet knows its 25 languages by itself.</span></span>
+            <div class="seg langs" id="langs" role="group" aria-labelledby="langsLab"></div>
           </div>
           <div class="row col">
             <label class="lab" for="words">Words to get right<span class="help">One per line: names and terms (character and project names are known already), or <i>heard -> meant</i> for what the recognizer keeps mishearing</span></label>
@@ -1574,6 +1579,7 @@ function render(s) {
   notes(s.notes);
   fillCloneEngines(s);
   if (document.activeElement !== $('words')) $('words').value = ((s.listen && s.listen.words) || []).join('\n');
+  renderLangs((s.listen && s.listen.languages) || []);
   // Base voices in the list; a tuned default (voice-default) shows as its base plus the tuning.
   const presets = o.presets.filter(p => !p.extends).map(p => ({ value: p.name, label: p.name }));
   const tunedDefault = o.presets.find(p => p.name === s.default_preset && p.extends);
@@ -1722,6 +1728,33 @@ for (const [id, key] of [['tReverb', 'reverb'], ['tCompress', 'compress']])
 on('tSoft', 'change', e => retune(() => { tune.soft = e.target.checked; }));
 // The words list saves when the field is left.
 on('words', 'change', () => save({ listen: { words: $('words').value.split('\n').map(w => w.trim()).filter(Boolean) } }));
+
+// Languages: common ones as toggles, plus any saved that the list lacks.
+const LANGS = [['en', 'English'], ['pl', 'Polski'], ['de', 'Deutsch'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano'], ['pt', 'Português'], ['nl', 'Nederlands'], ['cs', 'Čeština'], ['uk', 'Українська']];
+let langsOn = [];
+function renderLangs(saved) {
+  langsOn = saved.map(l => String(l).toLowerCase());
+  const all = LANGS.concat(langsOn.filter(l => !LANGS.some(([c]) => c === l)).map(l => [l, l]));
+  const box = $('langs');
+  box.replaceChildren(...all.map(([code, name]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = code.toUpperCase();
+    b.title = name;
+    b.dataset.lang = code;
+    b.className = langsOn.includes(code) ? 'on' : '';
+    b.setAttribute('aria-pressed', langsOn.includes(code) ? 'true' : 'false');
+    return b;
+  }));
+}
+on('langs', 'click', e => {
+  const b = e.target.closest('button[data-lang]');
+  if (!b) return;
+  const code = b.dataset.lang;
+  const next = langsOn.includes(code) ? langsOn.filter(l => l !== code) : langsOn.concat(code);
+  renderLangs(next);
+  save({ listen: { languages: next } });
+});
 on('tReset', 'click', () => retune(() => { tune = fromPreset(presetOf($('preset').value)); }));
 on('volume', 'input', () => { $('volumeVal').textContent = pct($('volume').value); paintRange($('volume')); save({ volume: +$('volume').value }, 350); });
 on('lang', 'change', () => save({ default_lang: $('lang').value }));

@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -146,10 +147,82 @@ func (l *Listener) Transcribe(pcm []float32, sampleRate int) (text, lang string,
 	if err != nil {
 		return "", "", err
 	}
+	langs := l.languages()
 	recMu.Lock()
-	text, lang, err = r.Transcribe(pad(audio.Resample(pcm, sampleRate, rate)), rate)
+	text, lang, err = recognize(r, pad(audio.Resample(pcm, sampleRate, rate)), langs)
 	recMu.Unlock()
 	return strings.TrimSpace(text), lang, err
+}
+
+// SetLanguages sets the languages the user speaks (see preset.Listen).
+func (l *Listener) SetLanguages(langs []string) {
+	l.mu.Lock()
+	l.cfg.Languages = langs
+	l.mu.Unlock()
+}
+
+// languages are the ones recognition may choose from; nil for any, or when
+// [listen] language fixes one for the whole recognizer.
+func (l *Listener) languages() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.cfg.Language != "" {
+		return nil
+	}
+	var out []string
+	for _, s := range l.cfg.Languages {
+		if s = strings.ToLower(strings.TrimSpace(s)); s != "" && !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// recognize transcribes pcm (16 kHz) in one of langs. Whisper, left alone,
+// picks among a hundred languages and takes a short Polish sentence for
+// Armenian; told the user's one language it cannot. With several, what it
+// detects stands when it is one of them; otherwise it recognizes again in
+// each, keeping the first text that reads as that language. Models that
+// cannot be told (Parakeet) and an empty langs recognize as before.
+func recognize(rec *sherpa.Recognizer, pcm []float32, langs []string) (string, string, error) {
+	if len(langs) == 0 || !rec.CanSetLanguage() {
+		return rec.Transcribe(pcm, rate)
+	}
+	if len(langs) == 1 {
+		text, _, err := rec.TranscribeIn(pcm, rate, langs[0])
+		return text, langs[0], err
+	}
+	text, lang, err := rec.Transcribe(pcm, rate)
+	if err != nil || slices.Contains(langs, lang) {
+		return text, lang, err
+	}
+	first, firstLang := "", ""
+	for _, try := range langs {
+		t, _, err := rec.TranscribeIn(pcm, rate, try)
+		if err != nil {
+			return "", "", err
+		}
+		if t = strings.TrimSpace(t); t == "" {
+			continue
+		}
+		if first == "" {
+			first, firstLang = t, try
+		}
+		if readsAs(t, try) {
+			return t, try, nil
+		}
+	}
+	return first, firstLang, nil
+}
+
+// readsAs: whether text looks written in lang, for the languages voice can
+// tell apart by text (Polish and English); others count as yes.
+func readsAs(text, lang string) bool {
+	switch lang {
+	case "pl", "en":
+		return core.DetectLang(text) == lang
+	}
+	return true
 }
 
 // pad surrounds speech with silence: transducers drop the first word when
@@ -322,7 +395,7 @@ func (l *Listener) Listen(ctx context.Context, opts Options) (Result, error) {
 	var phrases *phraser
 	if opts.Partial != nil {
 		if pv, err := sherpa.NewVAD(filepath.Join(engine.Dirs.Models, "silero-vad", "silero_vad.onnx"), 0.4); err == nil {
-			phrases = newPhraser(pv, rec, opts.Partial)
+			phrases = newPhraser(pv, rec, l.languages(), opts.Partial)
 			defer phrases.close()
 		}
 	}
@@ -412,7 +485,7 @@ func (l *Listener) Listen(ctx context.Context, opts Options) (Result, error) {
 		return res, nil
 	}
 	recMu.Lock()
-	text, lang, err := rec.Transcribe(pad(pcm), rate)
+	text, lang, err := recognize(rec, pad(pcm), l.languages())
 	recMu.Unlock()
 	if err != nil {
 		return Result{}, err
@@ -453,7 +526,7 @@ const (
 	preRoll        = rate * 3 / 10 // audio kept from before the VAD hears speech
 )
 
-func newPhraser(vad *sherpa.VAD, rec *sherpa.Recognizer, report func(string)) *phraser {
+func newPhraser(vad *sherpa.VAD, rec *sherpa.Recognizer, langs []string, report func(string)) *phraser {
 	p := &phraser{vad: vad, jobs: make(chan phraseJob, 64), done: make(chan struct{})}
 	go func() {
 		defer close(p.done)
@@ -463,7 +536,7 @@ func newPhraser(vad *sherpa.VAD, rec *sherpa.Recognizer, report func(string)) *p
 				continue // recording ended: the final transcription takes over
 			}
 			recMu.Lock()
-			text, _, err := rec.Transcribe(pad(job.pcm), rate)
+			text, _, err := recognize(rec, pad(job.pcm), langs)
 			recMu.Unlock()
 			if len(p.jobs) == 0 {
 				p.busy.Store(false)

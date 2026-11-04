@@ -78,6 +78,8 @@ type Listen struct {
 	InputDevice *string `toml:"input_device,omitempty" json:"input_device,omitempty"`
 	// Words replaces config.toml's list when set.
 	Words *[]string `toml:"words,omitempty" json:"words,omitempty"`
+	// Languages replaces config.toml's list when set.
+	Languages *[]string `toml:"languages,omitempty" json:"languages,omitempty"`
 }
 
 type Hooks struct {

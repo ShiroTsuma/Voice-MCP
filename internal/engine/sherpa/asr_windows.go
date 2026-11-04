@@ -46,6 +46,15 @@ type Recognizer struct {
 	h      uintptr
 	fn     []uintptr
 	Family string
+
+	// Whisper's language changes in place (SherpaOnnxOfflineRecognizerSetConfig,
+	// 0 in runtimes without it): config builds the configuration for a
+	// language, base is the one it was made with ("" detects), lang the one
+	// set now, conf keeps that configuration alive.
+	setConfig  uintptr
+	config     func(lang string) *cbuf
+	base, lang string
+	conf       *cbuf
 }
 
 const (
@@ -71,43 +80,54 @@ func NewRecognizer(dir, lang string, threads int) (*Recognizer, error) {
 	if _, err := os.Stat(dir); err != nil {
 		return nil, fmt.Errorf("speech recognition model %s not installed; see `voice models`", dir)
 	}
-	c := newCBuf("SherpaOnnxOfflineRecognizerConfig")
-	const p = "SherpaOnnxOfflineRecognizerConfig."
-	c.i32(p+"feat_config.sample_rate", 16000)
-	c.i32(p+"feat_config.feature_dim", 80)
-	c.i32(p+"model_config.num_threads", int32(max(1, threads)))
-	c.str(p+"model_config.provider", "cpu")
-	c.str(p+"decoding_method", "greedy_search")
-	c.i32(p+"max_active_paths", 4)
 	r := &Recognizer{fn: fn}
-	var need []string
-	file := func(off, pattern string) {
-		f := pick(dir, pattern)
-		need = append(need, f)
-		c.str(off, f)
+	if set, err := procs("SherpaOnnxOfflineRecognizerSetConfig"); err == nil {
+		r.setConfig = set[0]
 	}
-	switch {
-	case has(dir, "joiner*.onnx"):
-		r.Family = "transducer"
-		file(p+"model_config.transducer.encoder", "encoder*.onnx")
-		file(p+"model_config.transducer.decoder", "decoder*.onnx")
-		file(p+"model_config.transducer.joiner", "joiner*.onnx")
-		file(p+"model_config.tokens", "tokens.txt")
-		c.str(p+"model_config.model_type", "nemo_transducer")
-	case has(dir, "*-encoder*.onnx"):
-		r.Family = "whisper"
-		// Prefer the int8 files when both are present: much faster on CPU.
-		enc, dec := "*-encoder.int8.onnx", "*-decoder.int8.onnx"
-		if !has(dir, enc) {
-			enc, dec = "*-encoder.onnx", "*-decoder.onnx"
+	const p = "SherpaOnnxOfflineRecognizerConfig."
+	var need []string
+	r.config = func(lang string) *cbuf {
+		c := newCBuf("SherpaOnnxOfflineRecognizerConfig")
+		c.i32(p+"feat_config.sample_rate", 16000)
+		c.i32(p+"feat_config.feature_dim", 80)
+		c.i32(p+"model_config.num_threads", int32(max(1, threads)))
+		c.str(p+"model_config.provider", "cpu")
+		c.str(p+"decoding_method", "greedy_search")
+		c.i32(p+"max_active_paths", 4)
+		need = need[:0]
+		file := func(off, pattern string) {
+			f := pick(dir, pattern)
+			need = append(need, f)
+			c.str(off, f)
 		}
-		file(p+"model_config.whisper.encoder", enc)
-		file(p+"model_config.whisper.decoder", dec)
-		file(p+"model_config.tokens", "*-tokens.txt")
-		c.str(p+"model_config.whisper.language", lang)
-		c.str(p+"model_config.whisper.task", "transcribe")
-		c.i32(p+"model_config.whisper.tail_paddings", -1)
-	default:
+		switch {
+		case has(dir, "joiner*.onnx"):
+			r.Family = "transducer"
+			file(p+"model_config.transducer.encoder", "encoder*.onnx")
+			file(p+"model_config.transducer.decoder", "decoder*.onnx")
+			file(p+"model_config.transducer.joiner", "joiner*.onnx")
+			file(p+"model_config.tokens", "tokens.txt")
+			c.str(p+"model_config.model_type", "nemo_transducer")
+		case has(dir, "*-encoder*.onnx"):
+			r.Family = "whisper"
+			// Prefer the int8 files when both are present: much faster on CPU.
+			enc, dec := "*-encoder.int8.onnx", "*-decoder.int8.onnx"
+			if !has(dir, enc) {
+				enc, dec = "*-encoder.onnx", "*-decoder.onnx"
+			}
+			file(p+"model_config.whisper.encoder", enc)
+			file(p+"model_config.whisper.decoder", dec)
+			file(p+"model_config.tokens", "*-tokens.txt")
+			c.str(p+"model_config.whisper.language", lang)
+			c.str(p+"model_config.whisper.task", "transcribe")
+			c.i32(p+"model_config.whisper.tail_paddings", -1)
+		default:
+			return nil
+		}
+		return c
+	}
+	c := r.config(lang)
+	if c == nil {
 		return nil, fmt.Errorf("%s: unsupported speech recognition model", dir)
 	}
 	for _, f := range need {
@@ -116,15 +136,26 @@ func NewRecognizer(dir, lang string, threads int) (*Recognizer, error) {
 		}
 	}
 	r.h = call(fn[fCreateRec], c.ptr())
-	runtime.KeepAlive(c)
 	if r.h == 0 {
 		return nil, fmt.Errorf("sherpa-onnx rejected the speech recognition model in %s", dir)
 	}
+	r.base, r.lang, r.conf = lang, lang, c
 	return r, nil
 }
 
 // Transcribe returns the text and, for Whisper, the detected language.
 func (r *Recognizer) Transcribe(pcm []float32, rate int) (string, string, error) {
+	return r.TranscribeIn(pcm, rate, "")
+}
+
+// CanSetLanguage reports whether TranscribeIn can make Whisper recognize a
+// given language instead of the one it detects.
+func (r *Recognizer) CanSetLanguage() bool { return r.Family == "whisper" && r.setConfig != 0 }
+
+// TranscribeIn is Transcribe with Whisper told the language (en, pl, ...);
+// "" uses the one the recognizer was made with (or detects), as do models
+// that cannot be told.
+func (r *Recognizer) TranscribeIn(pcm []float32, rate int, language string) (string, string, error) {
 	if len(pcm) == 0 {
 		return "", "", nil
 	}
@@ -132,6 +163,17 @@ func (r *Recognizer) Transcribe(pcm []float32, rate int) (string, string, error)
 	defer r.mu.Unlock()
 	if r.h == 0 {
 		return "", "", errors.New("recognizer closed")
+	}
+	// Whisper ignores the per-stream "language" option; it follows its
+	// configuration, which changes in place without loading the model again.
+	if language == "" {
+		language = r.base
+	}
+	if language != r.lang && r.CanSetLanguage() {
+		if c := r.config(language); c != nil {
+			call(r.setConfig, r.h, c.ptr())
+			r.lang, r.conf = language, c
+		}
 	}
 	stream := call(r.fn[fCreateStream], r.h)
 	if stream == 0 {

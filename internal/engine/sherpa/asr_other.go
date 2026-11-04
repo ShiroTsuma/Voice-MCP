@@ -11,6 +11,10 @@ type Recognizer struct{ Family string }
 func NewRecognizer(string, string, int) (*Recognizer, error)          { return nil, errASR }
 func (*Recognizer) Transcribe([]float32, int) (string, string, error) { return "", "", errASR }
 func (*Recognizer) Close()                                            {}
+func (*Recognizer) CanSetLanguage() bool                              { return false }
+func (*Recognizer) TranscribeIn([]float32, int, string) (string, string, error) {
+	return "", "", errASR
+}
 
 type VAD struct{}
 

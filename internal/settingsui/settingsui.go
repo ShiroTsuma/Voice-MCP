@@ -322,6 +322,9 @@ func merge(s *settings.Settings, in settings.Settings) {
 	set(&s.Serve.UnloadAfter, in.Serve.UnloadAfter)
 	set(&s.Listen.Model, in.Listen.Model)
 	set(&s.Listen.InputDevice, in.Listen.InputDevice)
+	if in.Listen.Languages != nil {
+		s.Listen.Languages = in.Listen.Languages
+	}
 	if in.Listen.Words != nil {
 		s.Listen.Words = in.Listen.Words
 	}
