@@ -80,21 +80,17 @@ func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool)
 	if bestN > 0 {
 		return []uint32{best}, skip(bestN), false
 	}
-	// "..., Rebekka": the name said last addresses too.
+	// "..., Rebekka": a session's name said last addresses too. A client or
+	// project said last does not: it ends a sentence as often as it names
+	// someone ("... works with Claude and Codex").
 	bestScore = 0
 	for _, a := range agents {
-		for i, addr := range addresses(a.Name, clientKind(a.Client), a.Project) {
-			n := len(addr)
-			if n >= len(words) || matchWords(norm[len(norm)-n:], addr) == 0 {
-				continue
-			}
-			score := n*2 + len(addr)
-			if i == 0 && a.Name != "" {
-				score += 100
-			}
-			if score > bestScore {
-				best, bestN, bestScore = a.PID, n, score
-			}
+		name := normalize(a.Name)
+		if name == "" || len(words) < 2 || matchWords(norm[len(norm)-1:], []string{name}) == 0 {
+			continue
+		}
+		if score := len(name); score > bestScore {
+			best, bestN, bestScore = a.PID, 1, score
 		}
 	}
 	if bestN == 0 {

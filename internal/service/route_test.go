@@ -31,7 +31,8 @@ func TestRoute(t *testing.T) {
 		{"Rebeca, zrób deploy", "Zrób deploy", []uint32{3}, false},
 		{"Kodex, uruchom testy", "Uruchom testy", []uint32{2}, false},
 		{"Zrób deploy, Rebekka?", "Zrób deploy?", []uint32{3}, false},
-		{"uruchom testy, Codex.", "uruchom testy", []uint32{2}, false},
+		{"uruchom testy, Codex.", "uruchom testy, Codex.", nil, false},                                     // a client said last is content
+		{"to działa tylko z Claude'em i do Codexa", "to działa tylko z Claude'em i do Codexa", nil, false}, // as in a real dictation
 		{"Wszyscy: kończymy", "Kończymy", []uint32{1, 2, 3}, true},
 		{"do wszystkich, kończymy", "Kończymy", []uint32{1, 2, 3}, true},
 		{"Popraw błąd w parserze", "Popraw błąd w parserze", nil, false},
