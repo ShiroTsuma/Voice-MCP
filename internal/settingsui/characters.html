@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>voice · Characters</title>
+<!--
+  The characters window, in the flyout's look: Windows' dark greys, Segoe UI Variable, and each
+  character's light as the only colour. On the left the cast, first one the default; on the right the
+  one being edited, its face dissolving into the dark under its own light.
+-->
+<style>
+  :root {
+    --ground:   oklch(21.5% 0.003 260);
+    --sheet:    oklch(25% 0.003 260);
+    --field:    oklch(29.5% 0.003 260);  /* controls at rest */
+    --field-hi: oklch(34% 0.003 260);    /* under the pointer */
+    --rule:     oklch(30% 0.003 260);
+    --frame:    oklch(17% 0.003 260);    /* behind a face */
+    --ink:      oklch(94% 0.002 260);
+    --ink-2:    oklch(72% 0.003 260);
+    --ink-3:    oklch(54% 0.003 260);
+    --plain:    oklch(80% 0.004 260);
+
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-small: "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ease: cubic-bezier(.3, .7, .2, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  html { background: var(--ground); }
+  body { margin: 0; display: flex; overflow: hidden; font: 14px/1.4 var(--ui); color: var(--ink); background: var(--ground); user-select: none; cursor: default; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* ── The cast ─────────────────────────────────────────────── */
+  aside { width: 288px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--rule); }
+  aside header { padding: 18px 20px 8px; }
+  aside h1 { margin: 0 0 6px; font: 600 20px/1.3 var(--ui-display); letter-spacing: -.01em; }
+  .list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 8px; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; }
+  .list .item { display: grid; grid-template-columns: 52px 1fr auto; column-gap: 11px; align-items: center; padding: 7px 10px 7px 8px; border-radius: 6px; cursor: pointer; transition: background .12s; }
+  .list .item:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); }
+  .list .item.sel { background: var(--field); }
+  .list .item:hover .thumb, .list .item.sel .thumb { filter: none; }
+  .list .who { min-width: 0; }
+  .list b { display: block; font: 600 14px/1.3 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list small { display: block; font: 12px/1.35 var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list .item.draft b { color: var(--ink-2); font-weight: 400; }
+  .list .def { font: 11.5px var(--ui-small); color: var(--ink-3); }
+  .list:focus-visible { outline-offset: -2px; }
+  aside footer { padding: 10px 12px 12px; border-top: 1px solid var(--rule); }
+
+  /* A small face, out of the light: toned down like a face in shadow; the line under it is its light. */
+  .thumb { position: relative; display: block; width: 52px; height: 36px; border-radius: 3px; overflow: hidden; background-color: var(--frame); background-repeat: no-repeat;
+    filter: saturate(.35) brightness(.8); transition: filter .2s; }
+  .thumb::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--c); }
+  .thumb.none { background: radial-gradient(circle at 50% 50%, var(--c) 0 3px, color-mix(in oklab, var(--c) 40%, transparent) 6px, transparent 14px) var(--frame); }
+  .thumb.none::after { display: none; }
+
+  /* ── Rows, switches, fields: as in the flyout ─────────────── */
+  .row { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 5px 0; }
+  .row.col { flex-direction: column; align-items: stretch; gap: 6px; padding: 6px 0; }
+  .opt { font: 12.5px var(--ui-small); color: var(--ink-3); margin-left: 4px; }
+  .pair { display: flex; gap: 8px; align-items: center; }
+  .lab { flex: 1; min-width: 0; font-size: 14px; }
+  .help { display: block; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin-top: 1px; }
+  .help:empty { display: none; }
+
+  .switch { position: relative; width: 36px; height: 20px; flex: none; cursor: pointer; }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .switch span { position: absolute; inset: 0; border-radius: 10px; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background .2s, box-shadow .2s; pointer-events: none; }
+  .switch span::after { content: ""; position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-2); transition: transform .22s var(--ease), background .2s; }
+  .switch:hover span { box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+  .switch input:checked + span { background: var(--ink); box-shadow: none; }
+  .switch input:checked + span::after { transform: translateX(16px); background: var(--ground); }
+  .switch input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  select, .btn, input.text, textarea { border-radius: 6px; border: 0; background-color: var(--field); color: var(--ink); font-size: 13.5px; outline: none; transition: background-color .12s, box-shadow .12s; }
+  select, .btn, input.text { height: 32px; }
+  select { appearance: none; flex: 1; min-width: 0; padding: 0 28px 0 10px; text-overflow: ellipsis; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23b0b1b5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; }
+  option { background: var(--field); color: var(--ink); }
+  select:hover, .btn:hover { background-color: var(--field-hi); }
+  select:focus-visible, .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .btn { flex: none; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 600; }
+  .btn svg { width: 11px; height: 11px; flex: none; }
+  .btn.wide { width: 100%; }
+  .btn:disabled { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); cursor: default; }
+  .btn.primary { min-width: 84px; background: var(--ink); color: var(--ground); }
+  .btn.primary:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
+  input.text, textarea { width: 100%; padding: 0 10px; user-select: text; cursor: text; }
+  textarea { display: block; height: 52px; min-height: 44px; padding: 8px 10px; resize: vertical; font: 13.5px/1.45 var(--ui); }
+  input.text:hover, textarea:hover { background-color: var(--field-hi); }
+  input.text:focus, textarea:focus { background-color: var(--field); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+  ::placeholder { color: var(--ink-3); }
+
+  /* ── The one being edited ─────────────────────────────────── */
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .empty { margin: auto; padding: 0 32px 40px; font: 13.5px/1.4 var(--ui); color: var(--ink-2); text-align: center; }
+  form { flex: 1; min-height: 0; display: flex; flex-direction: column; --c: var(--plain); }
+  /* Its face, lit in its colour; the light washes out from the face over the top of the page. */
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent;
+    background: radial-gradient(460px 300px at 110px 100px,
+      color-mix(in oklab, var(--c) 15%, var(--ground)) 0%,
+      color-mix(in oklab, var(--c) 6%, var(--ground)) 42%,
+      var(--ground) 100%) local no-repeat var(--ground); }
+  .top { display: grid; grid-template-columns: 148px minmax(0, 1fr); column-gap: 26px; align-items: center; padding: 20px 36px 8px; }
+  .portrait { position: relative; width: 148px; height: 148px; }
+  .portrait .pool { position: absolute; inset: -34px; pointer-events: none;
+    background: radial-gradient(closest-side at 50% 50%, color-mix(in oklab, var(--c) 26%, transparent), transparent); }
+  .portrait .pic { position: absolute; inset: 0; overflow: hidden;
+    -webkit-mask: linear-gradient(90deg, transparent, #000 15% 85%, transparent), linear-gradient(180deg, transparent, #000 15% 85%, transparent);
+    -webkit-mask-composite: source-in;
+    mask: linear-gradient(90deg, transparent, #000 15% 85%, transparent), linear-gradient(180deg, transparent, #000 15% 85%, transparent);
+    mask-composite: intersect; }
+  .portrait .img { position: absolute; inset: 0; background-repeat: no-repeat; }
+  .portrait .pic::after { /* the light on the face, from below */
+    content: ""; position: absolute; inset: 0; mix-blend-mode: screen; opacity: .75;
+    background: radial-gradient(150% 150% at 50% 135%, color-mix(in oklab, var(--c) 55%, transparent), transparent 62%); }
+  /* Nothing to show yet: the light alone, where a face would be. */
+  .portrait.none .pic { display: none; }
+  .portrait.none .pool { inset: -6px; opacity: .8;
+    background: radial-gradient(circle at 50% 50%, var(--c) 0 12px, color-mix(in oklab, var(--c) 55%, transparent) 19px,
+      color-mix(in oklab, var(--c) 18%, transparent) 36px, color-mix(in oklab, var(--c) 5%, transparent) 54px, transparent 74px); }
+
+  .ident { min-width: 0; max-width: 520px; }
+  .ident .lab { display: block; margin-bottom: 7px; }
+  input.text.name { height: 42px; padding: 0 12px; font: 600 19px var(--ui-display); letter-spacing: -.01em; }
+  .picacts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+  .picacts .help { flex-basis: 100%; margin-top: 0; }
+
+  .fields { padding: 0 36px 10px; max-width: 760px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { height: 28px; padding: 0 11px; border: 0; border-radius: 6px; background: var(--field); font-size: 13px; color: var(--ink-2); transition: background .12s, color .12s; }
+  .chips button:hover { background: var(--field-hi); color: var(--ink); }
+  .chips button.on { background: var(--ink); color: var(--ground); font-weight: 600; }
+  .chips button.on:focus-visible { outline-offset: 2px; }
+  .chips button.plus { background: transparent; color: var(--ink-2); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 18%, transparent); }
+  .chips button.plus:hover { color: var(--ink); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 30%, transparent); }
+  .chips input { width: 130px; height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--field); box-shadow: inset 0 0 0 1.5px var(--ink-2); font-size: 13px; outline: none; user-select: text; }
+
+  /* Its colour: automatic (its place in the list), or one of the palette's lights. */
+  .lights { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+  .lights button { position: relative; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: none; }
+  .lights button::after { content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border-radius: 50%; background: var(--c);
+    box-shadow: 0 0 8px color-mix(in oklab, var(--c) 45%, transparent); }
+  .lights button:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+  .lights button.on { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .lights button.auto { width: auto; height: 28px; margin-right: 8px; padding: 0 11px 0 28px; border-radius: 6px; background: var(--field); font-size: 13px; color: var(--ink-2); }
+  .lights button.auto::after { right: auto; left: 10px; width: 10px; height: 10px; }
+  .lights button.auto:hover { background: var(--field-hi); color: var(--ink); }
+  .lights button.auto.on { background: var(--ink); color: var(--ground); font-weight: 600; box-shadow: none; }
+  .lights button:focus-visible { outline-offset: 1px; }
+
+  .bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 36px; border-top: 1px solid var(--rule); }
+  .bar .grow { flex: 1; }
+  #status { min-width: 0; font: 12.5px var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; }
+  #status.warn { color: var(--ink); }
+
+  @media (max-width: 720px) {
+    aside { width: 240px; }
+    .top { grid-template-columns: 112px minmax(0, 1fr); column-gap: 20px; padding: 24px 24px 18px; }
+    .portrait { width: 112px; height: 112px; }
+    .fields { padding: 4px 24px 20px; }
+    .bar { padding: 10px 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1>Characters</h1>
+    <div class="row">
+      <label class="lab" for="personas">Give sessions characters<span class="help">Each session takes on its character's personality, voice and picture; off keeps just the names</span></label>
+      <label class="switch"><input type="checkbox" id="personas"><span></span></label>
+    </div>
+  </header>
+  <div class="list" id="list"></div>
+  <footer><button class="btn wide" id="add" type="button"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 1.5v9M1.5 6h9"/></svg>New character</button></footer>
+</aside>
+<main id="main"><div class="empty" id="empty">Pick a character on the left, or create a new one.</div>
+  <form id="form" hidden autocomplete="off">
+    <div class="scroll">
+      <div class="top">
+        <div class="portrait" id="pic"><div class="pool"></div><div class="pic"><i class="img" id="picImg"></i></div></div>
+        <div class="ident">
+          <label class="lab" for="name">Name<span class="help">What you call it when you dictate ("Anna, …")</span></label>
+          <input class="text name" type="text" id="name" maxlength="24" spellcheck="false">
+          <div class="picacts">
+            <button class="btn" id="pickPic" type="button">Change picture</button>
+            <button class="btn" id="noPic" type="button">Remove picture</button>
+            <span class="help">PNG, JPEG or GIF; cropped to a square</span>
+            <input type="file" id="file" accept="image/png,image/jpeg,image/gif" hidden>
+          </div>
+        </div>
+      </div>
+      <div class="fields">
+        <div class="row col">
+          <div class="lab">Personality</div>
+          <div class="chips" id="traits"></div>
+        </div>
+        <div class="row col">
+          <label class="lab" for="desc">In your own words<span class="opt">optional</span></label>
+          <textarea id="desc" maxlength="300" placeholder="e.g. talks like a pirate, but helpfully"></textarea>
+        </div>
+        <div class="row col">
+          <label class="lab" for="preset">Voice<span class="help" id="presetHint"></span></label>
+          <div class="pair"><select id="preset"></select><button class="btn" id="test" type="button"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3 1.5v9l7.5-4.5z"/></svg>Hear it</button></div>
+        </div>
+        <div class="row col">
+          <div class="lab">Colour<span class="help">Its light when it speaks; automatic follows its place in the list</span></div>
+          <div class="lights" id="lights" role="group" aria-label="Colour"></div>
+        </div>
+      </div>
+    </div>
+    <div class="bar">
+      <button class="btn" id="del" type="button">Delete</button>
+      <button class="btn" id="def" type="button" title="New sessions start with the first character">Make default</button>
+      <span class="grow"></span><span id="status"></span>
+      <button class="btn primary" id="save" type="submit">Save</button>
+    </div>
+  </form>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let state = null, sel = -1, image = '', color = '';
+
+async function api(path, body) {
+  const r = await fetch('/settings/api/' + path, body === undefined ? {} :
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+function status(text, kind) { const s = $('status'); s.textContent = text; s.className = kind || ''; s.title = text; }
+
+// ── Faces and their light, drawn as the flyout draws them ──────
+// Each character owns a light: its own color, or one from this palette by its place in the list.
+const PALETTE = ['oklch(76% 0.13 152)', 'oklch(74% 0.15 18)', 'oklch(73% 0.13 262)', 'oklch(76% 0.12 322)',
+  'oklch(80% 0.12 92)', 'oklch(75% 0.11 195)', 'oklch(75% 0.13 48)', 'oklch(80% 0.13 128)',
+  'oklch(72% 0.14 292)', 'oklch(78% 0.1 232)', 'oklch(77% 0.12 352)', 'oklch(80% 0.07 70)'];
+const autoColour = i => PALETTE[Math.max(0, i) % PALETTE.length];
+const colourAt = (c, i) => (c && c.color) || autoColour(i);
+const avatarURL = file => '/settings/avatar/' + file;
+
+// No picture: the shape of the voice, a spectrogram of a short phrase seeded by the name, in its colour.
+const printCache = {};
+const bell = (d, w) => Math.exp(-(d / w) * (d / w));
+function seeded(text, salt) {
+  let seed = [...String(text)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, salt);
+  return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+function voiceprint(name, colour) {
+  const key = name + '|' + colour;
+  if (printCache[key]) return printCache[key];
+  const p = seeded(name, 11);
+  const v = { f0: 165 + p() * 85, pace: .75 + p() * .7, glide: -.15 + p() * .35 };
+  const W = 226, H = 124, fmax = 3400, r = seeded(name, 7);
+  const vowel = () => [320 + r() * 480, 950 + r() * 1350, 2350 + r() * 650];
+  const syl = []; let t = .04 + r() * .03, paused = false;
+  while (t < .97) {
+    const len = (.07 + r() * .07) / v.pace;
+    syl.push({ c: t + len / 2, w: len / 2.3, loud: .65 + r() * .35, F: vowel(), fric: r() < .35 });
+    t += len + (!paused && t > .4 && r() < .5 ? (paused = true, .07 / v.pace) : .004);
+  }
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H);
+  const ph = r() * 6;
+  for (let x = 0; x < W; x++) {
+    const tt = (x + .5) / W;
+    let env = 0, wsum = 0, F = [0, 0, 0], hiss = 0;
+    for (const g of syl) {
+      env = Math.max(env, bell(tt - g.c, g.w * 1.3) * g.loud);
+      const wt = bell(tt - g.c, g.w * 1.6) + 1e-6; wsum += wt;
+      F = F.map((f, i) => f + g.F[i] * wt);
+      if (g.fric) hiss += bell(tt - (g.c - g.w * 1.4), g.w * .7);
+    }
+    F = F.map(f => f / wsum);
+    const f0 = v.f0 * (1 + v.glide * (tt - .5) + .07 * Math.sin(tt * 7 + ph));
+    for (let y = 0; y < H; y++) {
+      const f = (1 - (y + .5) / H) * fmax, hn = f / f0, n = Math.round(hn), d = hn - n;
+      const comb = n >= 1 ? .78 + .22 * Math.exp(-d * d / .03) : 0;
+      const bw = .55 + .45 * env;
+      const res = .2 * Math.exp(-f / 600) + bell(f - F[0], 210 * bw) + .75 * bell(f - F[1], 260 * bw) + .5 * bell(f - F[2], 300 * bw);
+      let I = env * comb * res * Math.exp(-f / 3600) * 1.6;
+      I += Math.min(1, hiss) * .12 * bell(f - 3000, 600) * (.6 + .4 * r());
+      img.data[(y * W + x) * 4 + 3] = Math.min(255, Math.pow(I * 1.25, .62) * 255);
+    }
+  }
+  for (let i = 0; i < img.data.length; i += 4) img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+  ctx.putImageData(img, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = colour;
+  ctx.fillRect(0, 0, W, H);
+  return printCache[key] = cv.toDataURL();
+}
+// A picture is a 256px square, already cropped: a wide frame shows the band a little above the middle,
+// the portrait nearly the whole square.
+function paintFace(el, name, file, colour, portrait) {
+  if (file) {
+    el.style.backgroundImage = 'url("' + avatarURL(file) + '")';
+    el.style.backgroundSize = portrait ? '108%' : 'cover';
+    el.style.backgroundPosition = portrait ? '50% 30%' : '50% 22%';
+  } else {
+    el.style.backgroundImage = 'url("' + voiceprint(name, colour) + '")';
+    el.style.backgroundSize = '100% 100%'; el.style.backgroundPosition = '0 0';
+  }
+}
+
+// The colour being edited, as it would be after saving.
+const editColour = () => color || autoColour(sel);
+// paint shows the character being edited: its picture, else the shape of its voice, else (no name yet)
+// the light alone; all in its colour.
+function paint() {
+  const name = $('name').value.trim(), colour = editColour();
+  $('form').style.setProperty('--c', colour);
+  const none = !name && !image;
+  $('pic').classList.toggle('none', none);
+  $('pic').title = none ? '' : name;
+  if (!none) paintFace($('picImg'), name, image, colour, true);
+  $('noPic').disabled = !image;
+}
+
+function lights() {
+  const box = $('lights'); box.textContent = '';
+  const add = (value, label) => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.style.setProperty('--c', value || autoColour(sel));
+    b.className = (value ? '' : 'auto') + (value === color ? ' on' : '');
+    b.setAttribute('aria-pressed', value === color);
+    b.title = label; b.setAttribute('aria-label', label);
+    if (!value) b.textContent = 'Automatic';
+    b.addEventListener('click', () => { color = value; lights(); paint(); });
+    box.append(b);
+  };
+  add('', 'Automatic: its place in the list');
+  PALETTE.forEach((p, i) => add(p, 'Colour ' + (i + 1)));
+  // A colour set by hand outside the palette is kept, and shown as one more choice.
+  if (color && !PALETTE.includes(color)) add(color, color);
+}
+
+function list() {
+  const box = $('list'); box.textContent = '';
+  const chars = state.characters || [];
+  const row = (c, i, draft) => {
+    const it = document.createElement('div'); it.className = 'item' + (i === sel ? ' sel' : '') + (draft ? ' draft' : '');
+    const th = document.createElement('i'); th.className = 'thumb';
+    th.style.setProperty('--c', colourAt(c, i));
+    if (draft) th.classList.add('none'); else paintFace(th, c.name, c.image, colourAt(c, i));
+    const who = document.createElement('div'); who.className = 'who';
+    const b = document.createElement('b'); b.textContent = draft ? 'New character' : c.name;
+    const sm = document.createElement('small'); sm.textContent = draft ? 'not saved yet' : (c.traits || []).join(', ') || 'no personality yet';
+    who.append(b, sm);
+    it.append(th, who);
+    if (!draft && i === 0) { const d = document.createElement('span'); d.className = 'def'; d.textContent = 'default'; d.title = 'Default: new sessions start with this one'; it.append(d); }
+    if (!draft && c.description) it.title = c.description;
+    if (!draft) it.addEventListener('click', () => open(i));
+    box.append(it);
+  };
+  chars.forEach((c, i) => row(c, i));
+  if (sel >= chars.length) row(null, sel, true);
+}
+
+function open(i) {
+  const chars = state.characters || [];
+  sel = i;
+  const c = chars[i] || { name: '', traits: [], description: '', preset: '', image: '' };
+  image = c.image || '';
+  color = c.color || '';
+  $('empty').hidden = true; $('form').hidden = false;
+  $('name').value = c.name; $('desc').value = c.description || '';
+  paint();
+  lights();
+  const on = new Set(c.traits || []), box = $('traits'); box.textContent = '';
+  for (const t of state.options.traits || []) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.className = on.has(t) ? 'on' : '';
+    b.addEventListener('click', () => b.classList.toggle('on'));
+    box.append(b);
+  }
+  box.append(addChip(box));
+  const sp = $('preset'); sp.textContent = '';
+  for (const p of [{ name: '' }].concat(state.options.presets)) {
+    const o = document.createElement('option'); o.value = p.name; o.textContent = p.name || 'Default voice'; sp.append(o);
+  }
+  sp.value = c.preset || '';
+  hint();
+  $('del').hidden = i >= chars.length;
+  $('def').hidden = i <= 0 || i >= chars.length;
+  status('');
+  list();
+  if (!c.name) $('name').focus();
+}
+
+// hint says what the chosen voice sounds like.
+function hint() {
+  const name = $('preset').value || state.default_preset;
+  const p = (state.options.presets || []).find(x => x.name === name);
+  $('presetHint').textContent = ($('preset').value ? '' : 'The default voice, ' + (name || 'as set in the tray') + (p && p.description ? ': ' : '')) + (p && p.description || '');
+}
+
+// addChip is the "+" chip: it turns into a field, and Enter adds the typed
+// trait to the character (selected); it is offered to the others from then on.
+function addChip(box) {
+  const plus = document.createElement('button'); plus.type = 'button'; plus.className = 'plus'; plus.textContent = '+ Your own';
+  plus.addEventListener('click', () => {
+    const input = document.createElement('input'); input.maxLength = 24; input.placeholder = 'e.g. pirate';
+    const done = add => {
+      const v = input.value.trim().toLowerCase();
+      if (add && v) {
+        const have = [...box.querySelectorAll('button:not(.plus)')].find(b => b.textContent.toLowerCase() === v);
+        if (have) have.classList.add('on');
+        else { const b = document.createElement('button'); b.type = 'button'; b.textContent = v; b.className = 'on';
+          b.addEventListener('click', () => b.classList.toggle('on')); box.insertBefore(b, input); }
+      }
+      input.replaceWith(plus);
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); done(true); }
+      if (e.key === 'Escape') { e.preventDefault(); done(false); }
+    });
+    input.addEventListener('blur', () => done(true));
+    plus.replaceWith(input); input.focus();
+  });
+  return plus;
+}
+
+async function store(chars, keep) {
+  const r = await api('save', { characters: chars });
+  state = r.state;
+  list();
+  if (keep !== undefined) open(keep);
+}
+
+async function load(keep) {
+  state = await api('state');
+  $('personas').checked = !!state.serve.personas;
+  const n = (state.characters || []).length;
+  if (keep !== undefined && keep >= 0 && keep < n) open(keep);
+  else { sel = -1; list(); $('form').hidden = true; $('empty').hidden = false; }
+}
+// The window calls this each time it is shown.
+window.onShow = () => load(sel);
+
+$('add').addEventListener('click', () => open((state.characters || []).length));
+$('personas').addEventListener('change', async () => {
+  try { await api('save', { serve: { personas: $('personas').checked } }); } catch (e) { status(e.message, 'warn'); }
+});
+let nameTimer = 0;
+$('name').addEventListener('input', () => { clearTimeout(nameTimer); nameTimer = setTimeout(paint, 180); });
+$('preset').addEventListener('change', hint);
+$('pickPic').addEventListener('click', () => $('file').click());
+$('noPic').addEventListener('click', () => { image = ''; paint(); });
+$('file').addEventListener('change', () => {
+  const f = $('file').files[0]; $('file').value = '';
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async () => {
+    status('Loading picture…');
+    try { image = (await api('avatar', { data: rd.result })).image; paint(); status('Picture ready: Save to keep it', 'ok'); }
+    catch (e) { status(e.message, 'warn'); }
+  };
+  rd.readAsDataURL(f);
+});
+$('test').addEventListener('click', async () => {
+  const name = $('name').value.trim() || 'your new character';
+  try { await api('test', { Preset: $('preset').value || state.default_preset, Text: 'Hi, I am ' + name + '. Nice to meet you.' }); }
+  catch (e) { status(e.message, 'warn'); }
+});
+$('del').addEventListener('click', async () => {
+  const chars = (state.characters || []).slice(); const gone = chars.splice(sel, 1)[0];
+  if (!confirm('Delete ' + gone.name + '?')) return;
+  try { await store(chars); load(); } catch (e) { status(e.message, 'warn'); }
+});
+$('def').addEventListener('click', async () => {
+  const chars = (state.characters || []).slice(); chars.unshift(chars.splice(sel, 1)[0]);
+  try { await store(chars, 0); status('Now the default', 'ok'); } catch (e) { status(e.message, 'warn'); }
+});
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('name').value.trim(), chars = (state.characters || []).slice();
+  if (!name) { status('Give the character a name', 'warn'); $('name').focus(); return; }
+  if (chars.some((c, i) => i !== sel && c.name.toLowerCase() === name.toLowerCase())) { status('Another character has that name', 'warn'); return; }
+  chars[sel] = { name, traits: [...$('traits').querySelectorAll('button.on')].map(b => b.textContent),
+    description: $('desc').value.trim(), preset: $('preset').value, image };
+  if (color) chars[sel].color = color;
+  try { await store(chars, sel); status('Saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
+});
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "voice",
+  "version": "0.2.6",
+  "description": "Starts a turn with what you dictated to this session through voice, even when it is not on screen; /character picks the session's character.",
+  "author": { "name": "ShiroTsuma" },
+  "license": "GPL-3.0-only"
+}

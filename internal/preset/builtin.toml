@@ -1,0 +1,180 @@
+# Built-in engines and presets. config.toml next to voice.exe overrides or
+# extends any of these by name. Neural engines need `voice models pull`;
+# without them every preset falls back to the Windows voices.
+
+default_preset = "neutral"
+max_chars = 400
+# English voices are far better than the Polish ones; Polish is used only
+# when a request asks for it (or with default_lang = "auto").
+default_lang = "en"
+
+# Personality traits the characters window offers as chips; add your own here or
+# type one in the window (it stays on that character and is offered to others).
+traits = ["cheerful", "nice", "sweet", "teasing", "playful", "sarcastic", "mean", "grumpy",
+  "calm", "formal", "blunt", "enthusiastic", "shy", "dramatic", "witty"]
+
+[hooks]
+enabled = true
+skip_after_speech = 20  # seconds: the agent just spoke for itself
+min_turn_seconds = 30   # Claude Stop: stay quiet after quick replies
+
+[hooks.phrases]
+permission = ["I need your permission for something.", "Could you approve this for me?", "Quick approval needed, when you have a moment."]
+input = ["I'm waiting for you.", "Whenever you're ready, I'm here.", "Your turn."]
+done = ["All done. Take a look when you can.", "Finished. Come have a look.", "I'm done here."]
+
+# The background process (voice serve) that owns audio and models.
+[serve]
+unload_after = "15m"        # free idle models; "0" keeps them loaded
+duck = 0.35                 # other apps' volume while voice speaks; 1 = no ducking
+stop_hotkey = "Ctrl+Alt+End"
+mute_hotkey = "Ctrl+Alt+M"
+barge_in = false            # stop when you start talking (needs headphones)
+dictate_hotkey = "Ctrl+Alt+D"  # say something, it is typed into the agent
+dictate_submit = false      # true: press Enter after it, so the agent gets it at once
+dictate_target = "auto"
+dictate_feedback = "screen" # screen: blobs in the screen corner; voice; both
+dictate_theme = "reference" # the overlay's look; the settings list them all
+dictate_overlay_scale = 1.5  # the overlay's size: 1 = 100%
+dictate_routing = false
+personas = false            # true: sessions take on their character's personality and voice     # true: "Annie, ..." / "Codex, ..." / "wszyscy: ..." picks who gets it
+
+[listen]
+model = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
+end_silence = 1.2  # seconds of silence that end an answer
+
+[engines.sapi]
+type = "sapi"
+
+[engines.espeak]
+type = "exec"
+command = "espeak-ng"
+args = ["-v", "{voice}", "-s", "{wpm}", "--stdout", "{text}"]
+
+[engines.kokoro]
+type = "sherpa"
+model = "kokoro-multi-lang-v1_0"
+lang = "en-us"
+voice = "af_heart"  # used when a preset falls back here without its own voice
+
+[engines.kokoro-gb]
+type = "sherpa"
+model = "kokoro-multi-lang-v1_0"
+lang = "en-gb"
+
+# Cloning engines: they speak with the voice of a reference clip, set with
+# voice = "clone:<name>" (see `voice clone`). English.
+[engines.pocket]
+type = "sherpa"
+model = "sherpa-onnx-pocket-tts-2026-01-26"
+
+[engines.zipvoice]
+type = "sherpa"
+model = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
+
+# GPU models in the Python sidecar (`voice sidecar setup chatterbox`). voice
+# starts the server on first use; it exits after 10 minutes without requests,
+# freeing GPU memory, and starts again when needed.
+[engines.chatterbox]
+type = "http"
+url = "http://127.0.0.1:8765"
+start = ["{python:chatterbox}", "-m", "voice_sidecar", "--backend", "chatterbox", "--port", "8765", "--idle-seconds", "600"]
+extra = { exaggeration = 0.4, cfg_weight = 0.4 }
+
+[engines.f5]
+type = "http"
+url = "http://127.0.0.1:8766"
+start = ["{python:f5}", "-m", "voice_sidecar", "--backend", "f5", "--port", "8766", "--idle-seconds", "600"]
+
+[engines.xtts]
+type = "http"
+url = "http://127.0.0.1:8767"
+start = ["{python:xtts}", "-m", "voice_sidecar", "--backend", "xtts", "--port", "8767", "--idle-seconds", "600"]
+
+[engines.piper-gosia]
+type = "sherpa"
+model = "vits-piper-pl_PL-gosia-medium"
+
+[engines.piper-justyna]
+type = "sherpa"
+model = "vits-piper-pl_PL-justyna_wg_glos-medium"
+
+[engines.piper-darkman]
+type = "sherpa"
+model = "vits-piper-pl_PL-darkman-medium"
+
+[presets.neutral]
+description = "Natural, clear female voice"
+engine = "kokoro"
+voice = "af_heart"
+chime = "soft"
+fallback = ["sapi"]
+lang.pl = { engine = "piper-gosia" }
+
+[presets.brisk]
+extends = "neutral"
+description = "Faster and without a chime, for frequent notifications"
+speed = 1.15
+chime = "none"
+
+[presets.calm-mature]
+description = "Soft, mature, close female voice; calm (ASMR-like)"
+engine = "kokoro"
+# A single voice: blends such as nicole+emma turn mechanical once slowed,
+# pitched or reverberated.
+voice = "af_nicole"
+pitch = -1.0
+volume = 0.9
+dsp = ["highpass:90", "lowpass:7000", "compress:soft", "reverb:small"]
+chime = "soft"
+fallback = ["sapi"]
+lang.pl = { engine = "piper-justyna", speed = 0.9, pitch = -1.5 }
+
+[presets.narrator]
+description = "Deep, calm British male narrator"
+engine = "kokoro-gb"
+voice = "bm_george"
+speed = 0.95
+pitch = -0.5
+dsp = ["highpass:70", "compress:soft"]
+chime = "bell"
+fallback = ["sapi"]
+lang.pl = { engine = "piper-darkman" }
+
+[presets.system]
+description = "Built-in Windows voices, no downloads needed"
+engine = "sapi"
+chime = "soft"
+fallback = ["espeak"]
+
+# Who agent sessions become (settings window: Characters). A new session takes
+# the first character no other session has; the first is the default.
+[[characters]]
+name = "Annie"
+traits = ["cheerful", "nice"]
+description = "Warm and upbeat, celebrates progress with the user."
+
+[[characters]]
+name = "Rebekka"
+traits = ["teasing", "playful"]
+description = "Pokes fun at the user's mistakes in a friendly way."
+
+[[characters]]
+name = "Clara"
+traits = ["calm", "formal"]
+description = "Precise and composed, like a senior colleague."
+
+[[characters]]
+name = "Diana"
+traits = ["sarcastic", "witty"]
+description = "Dry humour, rolls her eyes at bad ideas but fixes them."
+
+[[characters]]
+name = "Fiona"
+traits = ["sweet", "shy"]
+description = "Gentle and encouraging."
+
+[[characters]]
+name = "Greta"
+traits = ["grumpy", "blunt"]
+description = "Complains about everything, gets it done anyway."

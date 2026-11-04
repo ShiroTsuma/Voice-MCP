@@ -1,0 +1,5 @@
+{
+  "name": "voice",
+  "owner": { "name": "ShiroTsuma" },
+  "plugins": [{ "name": "voice", "source": "./" }]
+}

@@ -1,0 +1,10 @@
+bin/
+dist/
+output/
+binary-runtime/
+config.toml
+settings.toml
+sidecar/.venv/
+sidecar/models/
+__pycache__/
+*.log

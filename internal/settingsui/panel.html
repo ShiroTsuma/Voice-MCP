@@ -1,0 +1,1640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>voice</title>
+<!--
+  The tray flyout. Windows' own dark greys and Segoe UI Variable, light as the only colour.
+
+  At the top, what voice is saying fills in word by word beside the portrait of whoever says it;
+  under it your last dictation and what became of it; under that the sessions, one row that never
+  grows taller: up to three every session is a full tile, past that the sessions that matter now
+  (speaking, spoken to, working, with a queued message) stay tiles and the rest shrink to a face.
+  Sessions keep the order the API gives; they change size, never place. One pool of light sits on
+  the speaker's face and slides to the next speaker; its wash rises over the words and falls on the
+  portrait from the side the tile is on. Below, folded groups say in one line how they are set.
+-->
+<style>
+  @property --light { syntax: "<color>"; inherits: true; initial-value: #999; }
+  @property --lamp  { syntax: "<number>"; inherits: true; initial-value: 0; }
+  @property --lx    { syntax: "<percentage>"; inherits: true; initial-value: 50%; }
+  @property --ly    { syntax: "<percentage>"; inherits: true; initial-value: 100%; }
+  @property --pa    { syntax: "<number>"; inherits: true; initial-value: 0; }        /* how much the pool lights a face */
+  @property --flare { syntax: "<number>"; inherits: true; initial-value: 0; }        /* a word being said */
+  @property --fx    { syntax: "<percentage>"; inherits: true; initial-value: 50%; }  /* where the light is, seen from the portrait */
+  @property --fy    { syntax: "<percentage>"; inherits: true; initial-value: -45%; }
+  @property --own   { syntax: "<number>"; inherits: true; initial-value: 0; }        /* 1 when the light belongs to the portrait */
+  @property --X     { syntax: "<length>"; inherits: false; initial-value: -999px; }  /* the pool of light, in a face's own coordinates */
+
+  :root {
+    --ground:   oklch(21.5% 0.003 260);
+    --sheet:    oklch(25% 0.003 260);    /* the one open group */
+    --field:    oklch(29.5% 0.003 260);  /* controls at rest */
+    --field-hi: oklch(34% 0.003 260);    /* under the pointer */
+    --rule:     oklch(30% 0.003 260);
+    --frame:    oklch(17% 0.003 260);    /* behind a face */
+    --ink:      oklch(94% 0.002 260);
+    --ink-2:    oklch(72% 0.003 260);    /* secondary */
+    --ink-3:    oklch(54% 0.003 260);    /* words not yet said, disabled; never alone as information */
+    --you:      oklch(90% 0.03 205);     /* pale, cool: your side of the screen */
+    --plain:    oklch(80% 0.004 260);    /* nobody */
+
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-small: "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ease: cubic-bezier(.3, .7, .2, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  html { background: var(--ground); }
+  body { margin: 0; overflow: hidden; font: 14px/1.4 var(--ui); color: var(--ink); }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* ── The window ───────────────────────────────────────────── */
+  .win { height: 100%; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--ground); color: var(--ink); user-select: none; cursor: default;
+    --light: var(--plain); --lamp: .35; --lx: 50%; --ly: 0%; --pa: 0; --fx: 50%; --fy: -45%; --own: 0;
+    --lit: color-mix(in oklab, var(--light) calc(var(--lamp) * 100%), var(--ink));
+    transition: --light .8s var(--ease), --lamp .8s var(--ease), --lx .8s var(--ease), --ly .8s var(--ease), --pa .8s var(--ease), --fx .8s var(--ease), --fy .8s var(--ease), --own .8s var(--ease); }
+  .win.enter { animation: enter .18s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes enter { from { opacity: 0; transform: translateY(10px); } }
+
+  /* ── Top: the light, and what is being said ───────────────── */
+  .top { flex: none; position: relative;
+    /* The wash: light from (--lx, --ly), the speaking face in the strip or your edge, fading into the ground. */
+    background:
+      radial-gradient(62% 150% at var(--lx) var(--ly),
+        color-mix(in oklab, var(--light) calc(var(--lamp) * 40%), var(--ground)) 0%,
+        color-mix(in oklab, var(--light) calc(var(--lamp) * 15%), var(--ground)) 42%,
+        var(--ground) 72%); }
+  header { padding: 18px 20px 12px; }
+  .cue { display: flex; align-items: baseline; gap: 6px; min-width: 0; min-height: 18px; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); white-space: nowrap; }
+  .cue b { font: 600 13px/1.4 var(--ui); color: var(--lit); transition: color .8s var(--ease); flex: none; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .cue span { overflow: hidden; text-overflow: ellipsis; }
+  .cue time { margin-left: auto; flex: none; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .line { margin: 4px 0 0; min-height: calc(4 * 1.4em); font: 500 18.5px/1.4 var(--ui-display); color: var(--ink); letter-spacing: -.01em; text-wrap: pretty;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+  /* While a long line is said it keeps its three lines and scrolls along with the voice. */
+  .said .line { position: relative; height: calc(4 * 1.4em); }
+  .said .line.live { display: block; overflow: hidden; }
+  .line .w { transition: color .5s ease-out; }
+  .line .w.later { color: var(--ink-3); }                       /* not yet said */
+  .line .w.now { color: var(--lit); transition: color .1s; }   /* the word in the light */
+  .line .w.unsaid { color: var(--ink-3); }                      /* cut off; what never got said stays dim */
+  .line.quiet { color: var(--ink-2); }
+
+  /* The portrait beside the line: whoever's words these are. */
+  .said { display: grid; grid-template-columns: 80px 1fr; column-gap: 14px; align-items: start; }
+  .said .cue, .said .line { grid-column: 2; }
+  .portrait { grid-row: 1 / 3; position: relative; width: 80px; height: 80px; --glow: calc(var(--lamp) * (.3 + .7 * var(--own))); }
+  .portrait .p { position: absolute; inset: 0; }
+  .portrait .pool { position: absolute; inset: -22px; pointer-events: none;
+    background: radial-gradient(closest-side at 50% 50%, color-mix(in oklab, var(--light) calc(var(--glow) * 30%), transparent), transparent); }
+  .portrait .pic { position: absolute; inset: 0; overflow: hidden;
+    -webkit-mask: linear-gradient(90deg, transparent, #000 15% 85%, transparent), linear-gradient(180deg, transparent, #000 15% 85%, transparent);
+    -webkit-mask-composite: source-in;
+    mask: linear-gradient(90deg, transparent, #000 15% 85%, transparent), linear-gradient(180deg, transparent, #000 15% 85%, transparent);
+    mask-composite: intersect;
+    filter: saturate(calc(.2 + .8 * var(--glow))) brightness(calc(.5 + .5 * var(--glow))); }
+  .portrait .img { position: absolute; inset: 0; background-repeat: no-repeat; }
+  .portrait .pic::after { /* the light on the face */
+    content: ""; position: absolute; inset: 0; mix-blend-mode: screen; opacity: calc(var(--glow) * .85);
+    background: radial-gradient(150% 150% at var(--fx) var(--fy), color-mix(in oklab, var(--light) 55%, transparent), transparent 62%); }
+  /* No character at all (the default voice): the light alone, where a face would be. */
+  .portrait .p.none .pool { inset: -8px; opacity: calc(.3 + .7 * var(--glow));
+    background: radial-gradient(circle at 50% 50%, var(--light) 0 9px, color-mix(in oklab, var(--light) 55%, transparent) 14px,
+      color-mix(in oklab, var(--light) 18%, transparent) 26px, color-mix(in oklab, var(--light) 5%, transparent) 38px, transparent 48px); }
+  .names .portrait { display: none; }
+  .names .said { grid-template-columns: 1fr; }
+  .names .said .cue, .names .said .line { grid-column: 1; }
+
+  .you { margin-top: 10px; }
+  #youTo { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
+  .you .line.live { color: var(--you); }
+.you .line { font: 400 14.5px/1.4 var(--ui); min-height: calc(2 * 1.4em); letter-spacing: 0; color: var(--ink); -webkit-line-clamp: 2; }
+  .you .line.quiet { color: var(--ink-2); }
+  .you .line.tail { display: block; height: calc(2 * 1.4em); overflow: hidden; }
+  .you .line .q { color: var(--ink-2); }
+  .fate { margin: 2px 0 0; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); min-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .act { height: 34px; border: 0; border-radius: 6px; background: color-mix(in oklab, var(--ink) 9%, transparent); display: flex; align-items: center; justify-content: center; gap: 8px;
+    font: 600 13.5px var(--ui); color: var(--ink); transition: background .15s, color .15s; }
+  .act:hover { background: color-mix(in oklab, var(--ink) 14%, transparent); }
+  .act svg { width: 16px; height: 16px; flex: none; }
+  .act.on { background: var(--ink); color: var(--ground); }
+  .act:disabled { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); cursor: default; }
+
+  /* ── The sessions: one row that adapts. Widths are set by script, so a tile grows and shrinks in place. */
+  .strip { display: flex; gap: 1px; padding: 0 8px 8px; align-items: flex-start; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    --ml: 0px; --mr: 0px;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--ml), #000 calc(100% - var(--mr)), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 var(--ml), #000 calc(100% - var(--mr)), transparent); }
+  .strip::-webkit-scrollbar { display: none; }
+  .strip:empty { padding-bottom: 0; }
+  .strip:empty + .empty { display: block; }
+  .empty { display: none; padding: 2px 20px 14px; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); }
+  .tile { flex: none; width: 120px; position: relative; padding: 4px 4px 6px; border-radius: 7px; overflow: hidden;
+    transition: width .55s var(--ease), background .3s var(--ease); }
+  .tile.floor { background: color-mix(in oklab, var(--c) 7%, transparent); }
+  .tile:hover { background: color-mix(in oklab, var(--ink) 4%, transparent); }
+  .tile.floor:hover { background: color-mix(in oklab, var(--c) 11%, transparent); }
+  .tile .txt { padding: 0 6px; }
+  .tile .hd { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .tile .hd small { flex: none; color: var(--ink-3); }
+  .tile.narrow .hd small { display: none; }   /* a tight tile keeps the name; the client is in the tooltip */
+  .tile .nm { display: block; min-width: 0; border: 0; padding: 0; background: none; text-align: left; font: 600 14.5px/1.3 var(--ui); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.floor .nm { color: color-mix(in oklab, var(--c) 80%, var(--ink)); }
+  .tile .nm:hover { text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; }
+  .tile small { display: block; font: 12px/1.35 var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .st { color: var(--ink-2); }
+  .tile.busy .st, .tile.live .st { color: var(--ink); }
+  .tile .st em { font-style: normal; color: var(--ink); }
+  .tile .tg { display: flex; gap: 2px; margin: 4px 0 0 -4px; }
+  .tile .tg button { width: 28px; height: 28px; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--ink-2); display: grid; place-items: center; transition: background .12s, color .12s; }
+  .tile .tg button:hover { background: color-mix(in oklab, var(--ink) 10%, transparent); color: var(--ink); }
+  .tile .tg button.off { color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); }
+  .tile .tg svg { width: 15px; height: 15px; pointer-events: none; }
+  .tile.excluded .nm, .tile.excluded small, .tile.excluded .snm { opacity: .5; }
+  .tile :focus-visible { outline-offset: -2px; }
+
+  /* Small: a face with a name. It opens into a full tile under the pointer or with keyboard focus. */
+  .tile.small { padding: 2px 2px 3px; }
+  .tile.small .face { width: 44px; margin-bottom: 3px; }
+  .tile.small .txt { display: none; }
+  .snm { display: none; font: 600 11px/1.3 var(--ui-small); color: var(--ink-2); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.small .snm { display: block; }
+  .tile.small.floor .snm, .tile.small.live .snm { color: color-mix(in oklab, var(--c) 80%, var(--ink)); }
+  .tile.small:hover .snm { color: var(--ink); }
+  /* One session: the face beside the words, a little larger, so the lone tile fills the row. */
+  .strip.one .tile { display: flex; gap: 10px; padding: 6px; }
+  .strip.one .face { width: 148px; height: 92px; flex: none; margin: 0; }
+  .strip.one .txt { flex: 1; min-width: 0; padding: 4px 0 0; }
+
+  /* The face. One pool of light sits at --X in each face's own pixels, so as it slides it passes from one
+     face to the next. Outside the pool a face is greyed and dimmed; inside it keeps its colours and takes a
+     soft cast of the light's colour from below. --pa: how much light the pool gives (0: nobody, or muted). */
+  .face { position: relative; display: block; width: 100%; height: 62px; margin-bottom: 7px; padding: 0; border: 0; border-radius: 4px; overflow: hidden; isolation: isolate; background: var(--frame); cursor: pointer;
+    transition: --X .8s var(--ease); }
+  .face > i { position: absolute; inset: 0; pointer-events: none; }
+  .face .pic { background-repeat: no-repeat; }
+  /* A session that plays no character: its light alone, where the face would be. */
+  .face.none .pic { background: radial-gradient(circle at 50% 50%, var(--c) 0 4px, color-mix(in oklab, var(--c) 45%, transparent) 8px,
+    color-mix(in oklab, var(--c) 12%, transparent) 18px, transparent 30px); }
+  .face .grey { mix-blend-mode: saturation;
+    background: radial-gradient(72px 110px at var(--X) 55%, oklch(50% 0 0 / calc((1 - var(--pa)) * .9)) 0 84%, oklch(50% 0 0 / .9) 97%); }
+  .face .shade {
+    background: radial-gradient(72px 110px at var(--X) 55%, oklch(19% 0.003 260 / calc((1 - var(--pa)) * .68)) 0 84%, oklch(19% 0.003 260 / .68) 97%); }
+  .face .lightcast { mix-blend-mode: soft-light;
+    background: radial-gradient(84px 90px at var(--X) 112%, color-mix(in oklab, var(--light) calc(var(--pa) * 55% + var(--flare) * 35%), transparent), transparent 100%); }
+  .face::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); pointer-events: none; }
+  @keyframes breathe { 50% { opacity: .45; } }
+
+  /* Characters off: sessions keep just their names, so the faces go and a lit edge marks the speaker. */
+  .names .face { display: none; }
+  .names .tile { padding: 10px 4px 6px; }
+  .names .tile.small { padding: 10px 2px 6px; }
+  .names .strip.one .tile { display: block; padding: 10px 4px 6px; }
+  .names .tile::before { content: ""; position: absolute; left: 10px; right: 10px; top: 0; height: 2px; border-radius: 1px; background: var(--c); opacity: 0; transition: opacity .5s var(--ease); }
+  .names .tile.floor::before { opacity: .9; }
+  .names .tile.live::before { animation: breathe 2s ease-in-out infinite; }
+
+  /* ── Folded groups: one line each, one open at a time ─────── */
+  main { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; border-top: 1px solid var(--rule); }
+  .notes { margin: 10px 20px 0; padding: 8px 12px; border-radius: 6px; background: var(--field); font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); white-space: pre-line; }
+  .notes:empty { display: none; }
+  .groups { padding-bottom: 6px; }
+  .g { transition: background .3s var(--ease); }
+  .g + .g { border-top: 1px solid var(--rule); }
+  .g.open { background: var(--sheet); }
+  .g > .head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 20px; border: 0; background: none; text-align: left; cursor: pointer; }
+  .g > .head:hover .name { text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; }
+  .g > .head:focus-visible { outline-offset: -2px; }
+  .head .t { flex: 1; min-width: 0; }
+  .head .name { display: block; font: 600 14px/1.35 var(--ui); color: var(--ink); }
+  .head .sum { display: block; font: 12.5px/1.35 var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .g.open .head .sum { display: none; }
+  .head svg { width: 12px; height: 12px; flex: none; color: var(--ink-2); transition: transform .3s var(--ease); }
+  .g.open .head svg { transform: rotate(90deg); }
+  .g > .body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s var(--ease); }
+  .g.open > .body { grid-template-rows: 1fr; }
+  .g > .body > div { overflow: hidden; padding: 0 20px; }
+  .g.open > .body > div { padding-bottom: 14px; }
+  .g:not(.open) > .body > div > * { visibility: hidden; transition: visibility 0s .3s; }
+
+  .row { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 5px 0; }
+  .row.col { flex-direction: column; align-items: stretch; gap: 6px; }
+  .row.col .pair { display: flex; gap: 8px; align-items: center; }
+  .lab { flex: 1; min-width: 0; font-size: 14px; }
+  .help { display: block; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin-top: 1px; }
+  .sub { padding-left: 14px; margin-left: 2px; border-left: 1px solid var(--rule); }
+
+  /* The transcript: what voice said and what you dictated, newest first. A line is the time, who, and the
+     words; a dictation adds where it went. An announcement (a hook) is a shade quieter than the agent itself. */
+  .log { padding: 2px 0 4px; }
+  .log > .help { margin: 4px 0 2px; }
+  .ln { display: grid; grid-template-columns: 38px 20px 1fr; column-gap: 9px; align-items: start; padding: 7px 0; }
+  .ln + .ln { border-top: 1px solid color-mix(in oklab, var(--rule) 70%, transparent); }
+  .ln time { font: 12px/1.5 var(--ui-small); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .ln .thumb, .ln .dot { margin-top: 1px; }
+  .ln > div { min-width: 0; }
+  .ln .who { display: flex; align-items: baseline; gap: 6px; min-width: 0; font: 12px/1.5 var(--ui-small); color: var(--ink-2); white-space: nowrap; }
+  .ln .who b { flex: none; font: 600 13px/1.4 var(--ui); color: var(--c); }
+  .ln .who span { overflow: hidden; text-overflow: ellipsis; }
+  .ln .who .thumb, .ln .who .dot { align-self: center; margin-top: 0; }
+  .ln .txt { font: 13.5px/1.4 var(--ui); color: var(--ink); text-wrap: pretty; overflow-wrap: anywhere; user-select: text; cursor: text; }
+  .ln.hook .txt { color: var(--ink-2); }
+  .ln .txt .q { color: var(--ink-3); }
+  .ln .out { margin-top: 1px; font: 12px/1.4 var(--ui-small); color: var(--ink-2); }
+  .dot { position: relative; display: inline-block; width: 20px; height: 20px; flex: none; }
+  .dot::after { content: ""; position: absolute; inset: 0; margin: auto; width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px color-mix(in oklab, var(--c) 55%, transparent); }
+  .who .dot { width: 14px; height: 14px; } .who .dot::after { width: 7px; height: 7px; }
+
+  /* Switch: off is a ring, on is solid ink with a knob the colour of the sheet. */
+  .switch { position: relative; width: 36px; height: 20px; flex: none; cursor: pointer; }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .switch span { position: absolute; inset: 0; border-radius: 10px; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background .2s, box-shadow .2s; pointer-events: none; }
+  .switch span::after { content: ""; position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-2); transition: transform .22s var(--ease), background .2s; }
+  .switch:hover span { box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+  .switch input:checked + span { background: var(--ink); box-shadow: none; }
+  .switch input:checked + span::after { transform: translateX(16px); background: var(--ground); }
+  .switch input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* Fields */
+  select, .key, .btn { height: 32px; border-radius: 6px; border: 0; background-color: var(--field); color: var(--ink); font-size: 13.5px; outline: none; transition: background-color .12s; }
+  select { appearance: none; width: 100%; max-width: 100%; padding: 0 28px 0 10px; text-overflow: ellipsis; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23b0b1b5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; }
+  option { background: var(--field); color: var(--ink); }
+  .row:not(.col) > select { width: 156px; flex: none; }
+  select:hover, .key:hover, .btn:hover { background-color: var(--field-hi); }
+  select:focus-visible, .key:focus-visible, .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .btn { flex: none; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+  .btn svg { width: 11px; height: 11px; }
+  .btn.wide { margin-top: 4px; }
+  .key { flex: none; min-width: 136px; padding: 0 11px; font-weight: 600; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+  .key.off { color: var(--ink-2); font-weight: 400; }
+  .key.capturing { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink); color: var(--ink-2); font-weight: 400; }
+
+  /* A few choices, one of them on: the on one is ink. */
+  .seg { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
+  .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 5px; background: none; font-size: 13px; font-weight: 600; color: var(--ink-2); transition: background .12s, color .12s; }
+  .seg button:hover { color: var(--ink); background: var(--field-hi); }
+  .seg button.on { background: var(--ink); color: var(--ground); }
+  .seg button:focus-visible { outline-offset: -2px; }
+  .seg button.on:focus-visible { outline-color: var(--ground); }
+
+  .slider { display: flex; align-items: center; gap: 12px; }
+  input[type=range] { appearance: none; flex: 1; height: 22px; margin: 0; background: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--ink) 0 var(--p, 50%), var(--field-hi) var(--p, 50%) 100%); }
+  input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 3px var(--sheet); }
+  input[type=range]:focus-visible { outline: none; }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--sheet), 0 0 0 5px var(--ink); }
+  input[type=range]:disabled { opacity: .35; cursor: default; }
+  .val { min-width: 40px; text-align: right; font: 13px var(--ui-small); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  /* A small face: the cast list, the menu, the transcript. Out of the light, so toned down like a face in
+     shadow; the line under it is the colour of the character's light. */
+  .thumb { position: relative; display: inline-block; flex: none; border-radius: 3px; overflow: hidden; background-color: var(--frame); background-repeat: no-repeat; vertical-align: middle;
+    filter: saturate(.35) brightness(.8); transition: filter .2s; }
+  .thumb::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--c); }
+  #youTo .thumb { width: 16px; height: 16px; }
+  #youTo .dot { width: 16px; height: 16px; } #youTo .dot::after { width: 8px; height: 8px; }
+
+  /* The characters: each with its face, the colour of its light, and where it is playing. */
+  .castlist { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; padding: 2px 0 4px; }
+  .castlist > div { display: grid; grid-template-columns: 44px 1fr; column-gap: 9px; align-items: center; padding: 5px 0; min-width: 0; }
+  .castlist .thumb { width: 44px; height: 30px; }
+  .castlist > div:hover .thumb { filter: none; }
+  .castlist b { display: block; font: 600 14px/1.3 var(--ui); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .castlist small { display: block; font: 12px/1.3 var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .castlist.off b, .castlist.off .thumb { opacity: .5; }
+  .castnote { margin: 2px 0 6px; }
+  .castnote:empty { display: none; }
+
+  /* The menu: which character a session plays. */
+  .menu { position: fixed; z-index: 10; min-width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; padding: 5px; border-radius: 8px; background: var(--field);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .07); animation: rise .16s var(--ease); scrollbar-width: thin; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+  .menu .title { padding: 5px 10px 6px; font: 12px var(--ui-small); color: var(--ink-2); }
+  .menu button { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; column-gap: 10px; width: 100%; padding: 5px 10px 5px 6px; border: 0; border-radius: 5px; background: none; text-align: left; color: var(--ink); }
+  .menu button:hover, .menu button:focus-visible { background: var(--field-hi); outline: none; }
+  .menu button:hover .thumb, .menu button:focus-visible .thumb { filter: none; }
+  .menu .thumb { width: 34px; height: 24px; }
+  .menu button span { font: 600 14px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu button small { font: 11.5px var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+  .menu button.now span::after { content: " (now)"; font: 11.5px var(--ui-small); font-weight: 400; color: var(--ink-2); }
+  .menu button.plain { grid-template-columns: 1fr; padding: 7px 10px; font: 13.5px var(--ui); color: var(--ink-2); }
+
+  footer { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 20px; border-top: 1px solid var(--rule); font: 12.5px var(--ui-small); color: var(--ink-2); }
+  .by { flex: none; white-space: nowrap; }
+#saved { margin-left: auto; transition: opacity .4s; opacity: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #saved.warn { color: var(--ink); }
+  #restart { height: 28px; font-size: 12.5px; }
+
+  input.text { height: 32px; border-radius: 6px; border: 0; background-color: var(--field); color: var(--ink); font: inherit; font-size: 13.5px; padding: 0 10px; outline: none; width: 100%; }
+  input.text:focus-visible { box-shadow: 0 0 0 2px var(--ink-3, #666); }
+  .clones:empty { display: none; }
+  .clones { display: grid; gap: 2px; margin: 2px 0 8px; }
+  .clones .cl { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; min-height: 34px; }
+  .clones .cl b { font-weight: 600; }
+  .clones .cl small { display: block; color: var(--ink-2); font-size: 12px; }
+  .clones .cl .btn { height: 28px; padding: 0 10px; font-weight: 500; }
+  .cloneacts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cloneacts .btn { justify-content: center; }
+  #cloneGroup.drop .body { outline: 1px dashed var(--ink-2); outline-offset: -4px; border-radius: 8px; }
+  /* The speaking popup (?popup=1): the top alone, shown and never touched. */
+  html.popup main, html.popup footer, html.popup .acts, html.popup .empty, html.popup .tg, html.popup .strip { display: none !important; }
+  html.popup, html.popup * { pointer-events: none !important; }
+  /* The top fills the popup, and your words get four lines, the end in view while you talk. */
+  html.popup .top { flex: 1; }
+  html.popup .you .line { -webkit-line-clamp: 4; min-height: calc(4 * 1.4em); }
+  html.popup .you .line.tail { height: calc(4 * 1.4em); }
+  html.popup body { overflow: hidden; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="win" id="win">
+
+  <div class="top" id="top">
+    <header aria-live="polite">
+      <div class="said">
+        <div class="portrait" id="portrait"></div>
+        <div class="cue"><b id="saidWho"></b><span id="saidWhat"></span><time id="saidWhen"></time></div>
+        <p class="line" id="line"></p>
+      </div>
+
+      <div class="you">
+        <div class="cue"><b>You</b><span id="youTo"></span><time id="youWhen"></time></div>
+        <p class="line" id="youLine"></p>
+        <p class="fate" id="youFate"></p>
+      </div>
+
+      <div class="acts">
+        <button class="act" id="mute" type="button" aria-pressed="false"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z"/><path id="muteGlyph" d="M13.5 7.5a3.5 3.5 0 0 1 0 5M15.5 5.5a6.5 6.5 0 0 1 0 9"/></svg><span>Mute</span></button>
+        <button class="act" id="stop" type="button" disabled><svg viewBox="0 0 20 20" fill="currentColor"><rect x="5.5" y="5.5" width="9" height="9" rx="1.5"/></svg><span>Stop speaking</span></button>
+      </div>
+    </header>
+
+    <div class="strip" id="agents" aria-label="Sessions"></div>
+    <div class="empty">No sessions yet. A Claude Code session appears when it starts; Codex after its first voice call.</div>
+  </div>
+
+  <main>
+    <div class="notes" id="notes"></div>
+
+    <div class="groups">
+      <section class="g" data-g="transcript">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Transcript</span><span class="sum" id="sumTranscript"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="log" id="log"></div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="characters">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Characters</span><span class="sum" id="sumCharacters"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row">
+            <label class="lab" for="personas">Give sessions characters<span class="help">Each session takes on its character's personality, voice and picture; off keeps just the names</span></label>
+            <label class="switch"><input type="checkbox" id="personas"><span></span></label>
+          </div>
+          <div class="castlist" id="chars"></div>
+          <p class="help castnote" id="castNote"></p>
+          <button class="btn wide" id="charManage" type="button">Manage characters…</button>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="speaking">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Speaking</span><span class="sum" id="sumSpeaking"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row col">
+            <label class="lab" for="preset">Default voice<span class="help" id="presetHint"></span></label>
+            <div class="pair"><select id="preset"></select><button class="btn" id="test" type="button"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3 1.5v9l7.5-4.5z"/></svg>Hear it</button></div>
+          </div>
+          <div class="row col">
+            <label class="lab" for="volume">Volume</label>
+            <div class="slider"><input type="range" id="volume" min="0" max="1.5" step="0.05" value="1"><span class="val" id="volumeVal"></span></div>
+          </div>
+          <div class="row">
+            <label class="lab" for="lang">Language<span class="help">When the agent does not say</span></label>
+            <select id="lang"><option value="en">English</option><option value="pl">Polish</option><option value="auto">Detect from text</option></select>
+          </div>
+          <div class="row">
+            <div class="lab">Stop speaking key</div>
+            <button class="key" id="stopKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
+          </div>
+          <div class="row">
+            <div class="lab">Mute key<span class="help">Click, then press the keys. Esc cancels, Backspace turns it off</span></div>
+            <button class="key" id="muteKey" type="button"></button>
+          </div>
+          <div class="row">
+            <label class="lab" for="voiceReplies">Answer by voice<span class="help">When you dictate, the agent says its answer and its questions aloud</span></label>
+            <label class="switch"><input type="checkbox" id="voiceReplies"><span></span></label>
+          </div>
+          <div class="row">
+            <label class="lab" for="speakingPopup">Show who speaks<span class="help">In the screen corner while an agent speaks</span></label>
+            <label class="switch"><input type="checkbox" id="speakingPopup"><span></span></label>
+          </div>
+          <div class="row">
+            <label class="lab" for="popupDictation">Show it while you dictate<span class="help">Your words in the corner as they are heard</span></label>
+            <label class="switch"><input type="checkbox" id="popupDictation"><span></span></label>
+          </div>
+          <div class="row" id="lingerRow">
+            <div class="lab">Stays after<span class="help">How long the corner keeps the last words</span></div>
+            <div class="seg" id="popupLinger" role="group" aria-label="Stays after"><button type="button" data-v="4">4 s</button><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button></div>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="announce">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Announcements</span><span class="sum" id="sumAnnounce"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row">
+            <label class="lab" for="hooks">Announce agent events<span class="help">When a session finishes a turn or needs you</span></label>
+            <label class="switch"><input type="checkbox" id="hooks"><span></span></label>
+          </div>
+          <div class="row">
+            <label class="lab" for="summary">Say what was finished<span class="help">In the agent's own words, when it answered in the voice's language</span></label>
+            <label class="switch"><input type="checkbox" id="summary"><span></span></label>
+          </div>
+          <div class="row col sub" id="summaryRow">
+            <div class="lab">How much</div>
+            <div class="seg" id="summaryPart" role="group" aria-label="How much" style="align-self: flex-start"><button type="button" data-v="start:1">First</button><button type="button" data-v="end:1">Last</button><button type="button" data-v="end:2">Last 2</button><button type="button" data-v="end:3">Last 3</button></div>
+          </div>
+          <div class="row">
+            <div class="lab">Codex goals<span class="help">A thread working toward a goal goes on by itself: wait before announcing its turn</span></div>
+            <div class="seg" id="goalWait" role="group" aria-label="Codex goals"><button type="button" data-v="0">Off</button><button type="button" data-v="3">3 s</button><button type="button" data-v="10">10 s</button></div>
+          </div>
+          <div class="row">
+            <label class="lab" for="project">Start with the project name</label>
+            <label class="switch"><input type="checkbox" id="project"><span></span></label>
+          </div>
+          <div class="row">
+            <label class="lab" for="hookPreset">Voice<span class="help">Without characters</span></label>
+            <select id="hookPreset"></select>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="dictation">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Dictation</span><span class="sum" id="sumDictation"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row">
+            <div class="lab">Hotkey<span class="help">Press to talk, press again or pause to send. Click to change</span></div>
+            <button class="key" id="dictateKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
+          </div>
+          <div class="row">
+            <label class="lab" for="dictateRouting">Pick the agent by name<span class="help">Start with a name, Claude, Codex or the project: "Clara, …". "Everyone, …" reaches all</span></label>
+            <label class="switch"><input type="checkbox" id="dictateRouting"><span></span></label>
+          </div>
+          <div class="row">
+            <div class="lab">Show it</div>
+            <div class="seg" id="dictateFeedback" role="group" aria-label="Show it"><button type="button" data-v="screen">Screen</button><button type="button" data-v="voice">Voice</button><button type="button" data-v="both">Both</button></div>
+          </div>
+          <div class="row sub" id="lookRow">
+            <label class="lab" for="dictateTheme">Look<span class="help">The animation in the screen corner; a change plays a demo</span></label>
+            <select id="dictateTheme"></select>
+          </div>
+          <div class="row sub" id="sizeRow">
+            <div class="lab">Size</div>
+            <div class="seg" id="overlayScale" role="group" aria-label="Size"><button type="button" data-v="1">100%</button><button type="button" data-v="1.5">150%</button><button type="button" data-v="2">200%</button></div>
+          </div>
+          <div class="row col">
+            <label class="lab" for="dictateTarget">Type into</label>
+            <select id="dictateTarget">
+              <option value="auto">The agent's terminal or app, else the window in front</option>
+              <option value="console">Only terminals</option>
+              <option value="window">Only the window in front</option>
+            </select>
+          </div>
+          <div class="row">
+            <label class="lab" for="dictateSubmit">Press Enter after typing<span class="help">Off: you check the text and send it yourself</span></label>
+            <label class="switch"><input type="checkbox" id="dictateSubmit"><span></span></label>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="sound">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Sound</span><span class="sum" id="sumSound"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row col">
+            <label class="lab" for="device">Speakers</label>
+            <select id="device"></select>
+          </div>
+          <div class="row">
+            <label class="lab" for="duckOn">Lower other apps while speaking</label>
+            <label class="switch"><input type="checkbox" id="duckOn"><span></span></label>
+          </div>
+          <div class="row col sub">
+            <label class="lab" for="duck">Down to</label>
+            <div class="slider"><input type="range" id="duck" min="0" max="0.9" step="0.05" value="0.35"><span class="val" id="duckVal"></span></div>
+          </div>
+          <div class="row col">
+            <label class="lab" for="mic">Microphone</label>
+            <select id="mic"></select>
+          </div>
+          <div class="row">
+            <label class="lab" for="barge">Stop when I start talking<span class="help">Use headphones, or voice may hear itself</span></label>
+            <label class="switch"><input type="checkbox" id="barge"><span></span></label>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="clone" id="cloneGroup">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Voice clone</span><span class="sum" id="sumClone"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="clones" id="clones"></div>
+          <div class="row col">
+            <label class="lab" for="cloneName">Name</label>
+            <input class="text" id="cloneName" type="text" maxlength="40" spellcheck="false" autocomplete="off">
+          </div>
+          <div class="row">
+            <label class="lab" for="cloneRights">I have the right to use this voice<span class="help">My own, or with the speaker's consent</span></label>
+            <label class="switch"><input type="checkbox" id="cloneRights"><span></span></label>
+          </div>
+          <div class="row">
+            <div class="lab">Recording length</div>
+            <div class="seg" id="cloneSecs"><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button><button type="button" data-v="20">20 s</button></div>
+          </div>
+          <div class="row cloneacts">
+            <button class="btn" id="cloneRecord" type="button">Record</button>
+            <button class="btn" id="cloneFile" type="button">Use a file…</button>
+            <input type="file" id="cloneInput" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden>
+          </div>
+          <p class="help" id="cloneMsg"></p>
+        </div></div>
+      </section>
+      <section class="g" data-g="models">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Listening and memory</span><span class="sum" id="sumModels"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row col">
+            <label class="lab" for="model">Speech recognition</label>
+            <select id="model"></select>
+          </div>
+          <div class="row">
+            <label class="lab" for="unload">Free idle models after</label>
+            <select id="unload"><option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="1h">1 hour</option><option value="0">Never</option></select>
+          </div>
+        </div></div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <span id="ver"></span>
+    <span id="saved"></span>
+    <button class="btn" id="restart" type="button" hidden>Restart</button>
+    <span class="by" title="voice, by ShiroTsuma. Licensed under the GNU GPL, version 3.">© 2026 ShiroTsuma, GPL-3.0</span>
+  </footer>
+</div>
+
+<script>
+if (new URLSearchParams(location.search).has('popup')) document.documentElement.classList.add('popup');
+const $ = id => document.getElementById(id);
+const host = window.chrome && window.chrome.webview;
+const win = $('win');
+const still = matchMedia('(prefers-reduced-motion: reduce)');
+let state = null, capturing = null;
+// What the status poll last said: the sessions (in the API's order, which stays put), the transcript
+// (oldest first) and the line being said now, if any.
+let lastStatus = {}, sessions = [], transcript = [], line = null;
+
+async function api(path, body) {
+  const res = await fetch('/settings/api/' + path, body === undefined ? {} :
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function fill(select, items, current, extra) {
+  select.innerHTML = '';
+  for (const it of (extra || []).concat(items)) {
+    const o = document.createElement('option');
+    o.value = it.value; o.textContent = it.label;
+    select.appendChild(o);
+  }
+  select.value = current;
+  if (select.value !== current && current) {
+    const o = document.createElement('option'); o.value = current; o.textContent = current + ' (not found)';
+    select.appendChild(o); select.value = current;
+  }
+}
+
+const pct = v => Math.round(v * 100) + '%';
+function paintRange(el) { el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
+const langNames = { en: 'English', pl: 'Polish', auto: 'language from text' };
+const cap = s => s ? s[0].toUpperCase() + s.slice(1) : '';
+const clientName = c => /codex/i.test(c || '') ? 'Codex' : /claude/i.test(c || '') ? 'Claude' : cap(c || '');
+const whereOf = (client, project) => [clientName(client), project].filter(Boolean).join(' in ');
+const ms = t => { const v = Date.parse(t); return isNaN(v) ? Date.now() : v; };
+const ago = t => { const n = Math.round((Date.now() - ms(t)) / 60000); return n < 1 ? 'just now' : n < 60 ? n + ' min ago' : n < 48 * 60 ? Math.round(n / 60) + ' h ago' : Math.round(n / 1440) + ' days ago'; };
+const clock = t => new Date(ms(t)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+// ── Characters and their light ─────────────────────────────────
+// Each character owns a light: its own color, or one from this palette by its place in the list
+// (Anna green, Rebekka rose, Clara blue, Diana mauve, then amber, teal and on).
+const PALETTE = ['oklch(76% 0.13 152)', 'oklch(74% 0.15 18)', 'oklch(73% 0.13 262)', 'oklch(76% 0.12 322)',
+  'oklch(80% 0.12 92)', 'oklch(75% 0.11 195)', 'oklch(75% 0.13 48)', 'oklch(80% 0.13 128)',
+  'oklch(72% 0.14 292)', 'oklch(78% 0.1 232)', 'oklch(77% 0.12 352)', 'oklch(80% 0.07 70)'];
+const YOU = 'var(--you)', PLAIN = 'var(--plain)';
+const chars = () => (state && state.characters) || [];
+const charOf = name => name ? chars().find(c => (c.name || '').toLowerCase() === String(name).toLowerCase()) : null;
+const colourOfChar = c => c.color || PALETTE[Math.max(0, chars().indexOf(c)) % PALETTE.length];
+const colourOf = name => { const c = charOf(name); return c ? colourOfChar(c) : PLAIN; };
+const personasOn = () => !!(state && state.serve && state.serve.personas);
+const sessionAt = pid => sessions.findIndex(s => s.pid === pid);
+const sessionOf = pid => sessions.find(s => s.pid === pid);
+const avatarURL = c => '/settings/avatar/' + c.image;
+
+// No picture: the shape of the voice. A spectrogram of a short phrase, low pitches at the bottom: the
+// voice's resonances as ribbons that swell on each syllable and glide between vowels, drawn in the
+// character's colour. The pitch, pace and glide are seeded by the name.
+const printCache = {};
+const bell = (d, w) => Math.exp(-(d / w) * (d / w));
+function seeded(text, salt) {
+  let seed = [...String(text)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, salt);
+  return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+function voiceprint(c) {
+  const colour = colourOfChar(c), key = c.name + '|' + colour;
+  if (printCache[key]) return printCache[key];
+  const p = seeded(c.name, 11);
+  const v = { f0: 165 + p() * 85, pace: .75 + p() * .7, glide: -.15 + p() * .35 };
+  const W = 226, H = 124, fmax = 3400, r = seeded(c.name, 7);
+  const vowel = () => [320 + r() * 480, 950 + r() * 1350, 2350 + r() * 650];
+  const syl = []; let t = .04 + r() * .03, paused = false;
+  while (t < .97) {
+    const len = (.07 + r() * .07) / v.pace;
+    syl.push({ c: t + len / 2, w: len / 2.3, loud: .65 + r() * .35, F: vowel(), fric: r() < .35 });
+    t += len + (!paused && t > .4 && r() < .5 ? (paused = true, .07 / v.pace) : .004);
+  }
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H);
+  const ph = r() * 6;
+  for (let x = 0; x < W; x++) {
+    const tt = (x + .5) / W;
+    let env = 0, wsum = 0, F = [0, 0, 0], hiss = 0;
+    for (const g of syl) {
+      env = Math.max(env, bell(tt - g.c, g.w * 1.3) * g.loud);
+      const wt = bell(tt - g.c, g.w * 1.6) + 1e-6; wsum += wt;
+      F = F.map((f, i) => f + g.F[i] * wt);
+      if (g.fric) hiss += bell(tt - (g.c - g.w * 1.4), g.w * .7);
+    }
+    F = F.map(f => f / wsum);
+    const f0 = v.f0 * (1 + v.glide * (tt - .5) + .07 * Math.sin(tt * 7 + ph));
+    for (let y = 0; y < H; y++) {
+      const f = (1 - (y + .5) / H) * fmax, hn = f / f0, n = Math.round(hn), d = hn - n;
+      const comb = n >= 1 ? .78 + .22 * Math.exp(-d * d / .03) : 0;
+      const bw = .55 + .45 * env;
+      const res = .2 * Math.exp(-f / 600) + bell(f - F[0], 210 * bw) + .75 * bell(f - F[1], 260 * bw) + .5 * bell(f - F[2], 300 * bw);
+      let I = env * comb * res * Math.exp(-f / 3600) * 1.6;
+      I += Math.min(1, hiss) * .12 * bell(f - 3000, 600) * (.6 + .4 * r());
+      img.data[(y * W + x) * 4 + 3] = Math.min(255, Math.pow(I * 1.25, .62) * 255);
+    }
+  }
+  for (let i = 0; i < img.data.length; i += 4) img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+  ctx.putImageData(img, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = colour;
+  ctx.fillRect(0, 0, W, H);
+  return printCache[key] = cv.toDataURL();
+}
+// A picture is a 256px square, already cropped; faces sit in its upper part, so a wide frame shows
+// the band a little above the middle. The portrait shows nearly the whole square, head and shoulders,
+// with only a slight crop so the dissolving edges do not eat the face.
+function paintFace(el, c, portrait) {
+  if (c.image) {
+    el.style.backgroundImage = 'url("' + avatarURL(c) + '")';
+    el.style.backgroundSize = portrait ? '108%' : 'cover';
+    el.style.backgroundPosition = portrait ? '50% 30%' : '50% 22%';
+  } else {
+    el.style.backgroundImage = 'url("' + voiceprint(c) + '")';
+    el.style.backgroundSize = '100% 100%'; el.style.backgroundPosition = '0 0';
+  }
+}
+function thumb(c, w, h) {
+  const t = document.createElement('i'); t.className = 'thumb';
+  t.style.setProperty('--c', colourOfChar(c));
+  t.style.width = w + 'px'; t.style.height = h + 'px';
+  paintFace(t, c);
+  return t;
+}
+// The small mark of a name: the face if it is a character, else the dot of its light (yours is pale).
+function mark(name, size, you) {
+  const c = !you && charOf(name);
+  if (c) return thumb(c, size, size);
+  const d = document.createElement('i'); d.className = 'dot';
+  d.style.setProperty('--c', you ? YOU : PLAIN);
+  return d;
+}
+
+// ── Text measured, so a narrow tile picks shorter words instead of cutting them ──
+const measure = document.createElement('canvas').getContext('2d');
+const SMALL_FONT = '12px "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", sans-serif';
+const NAME_FONT = '600 14.5px "Segoe UI Variable Text", "Segoe UI", sans-serif';
+function textW(text, font) { measure.font = font; return measure.measureText(text).width; }
+// A session's state, longest first; parts are [plain, emphasised, plain].
+function stateWords(a, live) {
+  const q = a.waiting > 0 ? a.waiting + ' queued' : '';
+  if (live) return q ? [['speaking, ', q, ''], ['speaking', '', '']] : [['speaking', '', '']];
+  if (a.busy) return q ? [['working, ', q, ''], ['', q, ''], ['working', '', '']] : [['working', '', '']];
+  return q ? [['', q, ' for it'], ['', q, '']] : [['waiting for you', '', ''], ['waiting', '', ''], ['idle', '', '']];
+}
+function fitWords(options, avail) {
+  for (const o of options) if (textW(o.join(''), SMALL_FONT) <= avail) return o;
+  return options[options.length - 1];
+}
+
+// ── The row of sessions: its geometry ──────────────────────────
+// Up to three sessions are full tiles. More: the ones that matter now stay full and the rest shrink to a
+// face with a name; a small one opens while the pointer rests on it or it has focus. Widths come from here,
+// so the light knows where every face is, including one the row has to scroll to.
+const SMALL = 48, FULL_MIN = 100, GAP = 1, ONE_W = 148, ONE_H = 92;
+const ui = new Map();   // pid -> { hover, focus }
+const uiOf = pid => { if (!ui.has(pid)) ui.set(pid, {}); return ui.get(pid); };
+let L = { owner: null, level: .35 };   // the light: owner 'pid:N', 'voice', 'you' or null; toward 'pid:N'
+const pidKey = pid => pid ? 'pid:' + pid : 'voice';
+const livePid = () => line && line.pid || 0;
+function matters(s) {
+  const k = 'pid:' + s.pid, u = uiOf(s.pid);
+  return s.pid === livePid() || k === L.owner || k === L.toward || s.busy || s.waiting > 0 || u.hover || u.focus;
+}
+function geometry() {
+  const strip = $('agents'), W = strip.clientWidth - 16, n = sessions.length, one = n === 1;
+  const ex = sessions.map(s => n <= 3 || matters(s));
+  const S = ex.filter(x => !x).length, F = n - S;
+  const fullW = one ? W : Math.max(FULL_MIN, (W - S * SMALL - (n - 1) * GAP) / Math.max(F, 1));
+  let left = 0; const g = [];
+  sessions.forEach((s, i) => {
+    const small = !ex[i], w = small ? SMALL : fullW;
+    g.push({ small, w, left, faceLeft: one ? 6 : small ? 2 : 4, faceW: one ? ONE_W : small ? 44 : w - 8, faceH: one ? ONE_H : 62 });
+    left += w + GAP;
+  });
+  g.total = left - GAP; g.W = W;
+  return g;
+}
+// Where the light is in the row, and in the window: the pool on the faces, the wash on the top, the side
+// the portrait is lit from. scrollTo: the index of the session the row should slide into view.
+function place(scrollTo) {
+  const strip = $('agents'), g = geometry(), topW = $('top').clientWidth;
+  let sl = strip.scrollLeft;
+  const over = g.total > g.W;
+  if (scrollTo != null && scrollTo >= 0 && over) {
+    const x = 8 + g[scrollTo].left, w = g[scrollTo].w;
+    const target = Math.max(0, Math.min(Math.max(sl, x + w + 8 - strip.clientWidth), x - 8));
+    if (Math.abs(target - sl) > 1) { strip.scrollTo({ left: target, behavior: still.matches ? 'auto' : 'smooth' }); sl = target; }
+  } else if (!over) sl = 0;
+  sessions.forEach((s, i) => { const t = tiles.get(s.pid); if (t) t.style.width = g[i].w + 'px'; });
+  // The pool, on the face of whoever the light is on (or, after you dictated, whoever you spoke to).
+  const k = indexOfKey(L.owner === 'you' ? L.toward : L.owner);
+  const poolX = k >= 0 ? 8 + g[k].left + g[k].faceLeft + g[k].faceW / 2 : null;
+  sessions.forEach((s, i) => {
+    const t = tiles.get(s.pid), f = t && t.querySelector('.face');
+    if (f) f.style.setProperty('--X', poolX == null ? '-999px' : (poolX - (8 + g[i].left + g[i].faceLeft)).toFixed(1) + 'px');
+  });
+  // The wash, from the speaking face; the portrait lit from that side.
+  const o = indexOfKey(L.owner);
+  let lx = '50%', ly = '0%', fx = '50%', fy = '-45%';
+  if (o >= 0) {
+    const x = 8 + g[o].left + g[o].faceLeft + g[o].faceW / 2 - sl;
+    lx = Math.max(0, Math.min(100, x / topW * 100)).toFixed(1) + '%'; ly = faceY(o);
+    fx = Math.max(-40, Math.min(140, (x - 20) / 80 * 100)).toFixed(0) + '%'; fy = '135%';
+  }
+  win.style.setProperty('--lx', lx); win.style.setProperty('--ly', ly);
+  win.style.setProperty('--fx', fx); win.style.setProperty('--fy', fy);
+  strip.style.setProperty('--ml', over && sl > 1 ? '24px' : '0px');
+  strip.style.setProperty('--mr', over && sl + g.W + 16 < g.total + 15 ? '24px' : '0px');
+}
+const indexOfKey = k => k && k.startsWith('pid:') ? sessionAt(+k.slice(4)) : -1;
+function faceY(i) {
+  const tile = $('agents').children[i], face = tile && tile.querySelector('.face');
+  const el = face && face.offsetHeight ? face : tile;   // with characters off the tile has no face
+  if (!el || !el.offsetHeight) return '100%';
+  const t = $('top').getBoundingClientRect(), f = el.getBoundingClientRect();
+  return ((f.top + f.height / 2 - t.top) / t.height * 100).toFixed(1) + '%';
+}
+
+// ── The light ──────────────────────────────────────────────────
+// Whoever has the floor casts the light. It rises from their face in the row, washes up over the words, and
+// falls on their portrait beside them; the pool slides from face to face as the floor passes.
+// Speaking: full. Spoke last: turned down. You dictated last: your pale light, from the top edge, on the
+// face you spoke to. Nothing yet: a faint plain wash, every face in shadow. Muted: off.
+function lightTarget() {
+  // You are dictating: the light is yours, breathing with the microphone.
+  const d = lastStatus.dictation;
+  if (d) return { owner: 'you', level: d.state === 'listening' ? .65 + .35 * Math.min(1, (d.level || 0) * 3) : .8, toward: null };
+  if (line) return { owner: pidKey(line.pid), name: line.name, level: 1 };
+  const last = transcript[transcript.length - 1];
+  if (!last) return { owner: null, level: .35 };
+  if (last.kind === 'dictated') return { owner: 'you', level: .5, toward: last.pid ? 'pid:' + last.pid : null };
+  return { owner: pidKey(last.pid), name: last.name, level: .55 };
+}
+function lightColour(t) {
+  if (t.owner === 'you') return YOU;
+  if (!t.owner || t.owner === 'voice') return PLAIN;
+  const s = sessionOf(+t.owner.slice(4));
+  return colourOf(s ? s.name : t.name);
+}
+function applyLight() {
+  const muted = !!lastStatus.muted;
+  const j = indexOfKey(L.owner === 'you' ? L.toward : L.owner);
+  win.style.setProperty('--pa', muted || j < 0 ? 0 : Math.min(1, L.level * 1.3) * (L.owner === 'you' ? .8 : 1));
+  win.style.setProperty('--light', lightColour(L));
+  win.style.setProperty('--lamp', muted ? 0 : L.level);
+  win.style.setProperty('--own', L.owner && L.owner === portraitKey ? 1 : 0);
+}
+// Each word said makes the lit face flare a little, as a voice would.
+function flare() { if (!still.matches && indexOfKey(L.owner) >= 0) win.animate([{ '--flare': 1 }, { '--flare': 0 }], { duration: 420, easing: 'ease-out' }); }
+
+// ── The portrait ───────────────────────────────────────────────
+// Whoever's line is at the top. When it changes it crosses with the light: out the way the light is going,
+// in from where it came. A character without a picture shows the shape of its voice; a voice with no
+// character at all is the light alone.
+let portraitKey, portraitSig, portraitIdx = -1;
+function showPortrait(key, name) {
+  const c = key && key !== 'voice' ? charOf(name) : null;
+  const sig = key + '|' + (c ? c.name + '|' + (c.image || '') + '|' + colourOfChar(c) : '');
+  if (portraitSig === sig) return;
+  const box = $('portrait'), idx = indexOfKey(key);
+  const p = document.createElement('div'); p.className = 'p' + (c ? '' : ' none');
+  p.title = !key ? '' : c ? c.name : key === 'voice' ? 'The default voice, no character' : (name || 'This session') + ' plays no character';
+  const pool = document.createElement('div'); pool.className = 'pool'; p.append(pool);
+  if (c) { const pic = document.createElement('div'); pic.className = 'pic'; const img = document.createElement('i'); img.className = 'img'; paintFace(img, c, true); pic.append(img); p.append(pic); }
+  const dir = portraitSig === undefined || idx < 0 || portraitIdx < 0 ? 0 : Math.sign(idx - portraitIdx);
+  const old = box.querySelector('.p:last-child');
+  box.append(p);
+  const dur = still.matches || !old ? 0 : 800, easing = 'cubic-bezier(.3, .7, .2, 1)';
+  box.querySelectorAll('.p').forEach(o => { if (o !== p && o !== old) o.remove(); });
+  if (old) {
+    if (!dur) old.remove();
+    else old.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${dir * 22}px)` }], { duration: dur, easing, fill: 'forwards' }).onfinish = () => old.remove();
+  }
+  if (dur) p.animate([{ opacity: 0, transform: `translateX(${-dir * 22}px)` }, { opacity: 1, transform: 'none' }], { duration: dur, easing });
+  portraitKey = key; portraitSig = sig; portraitIdx = idx;
+}
+
+// ── The top: what is being said, and what you said ─────────────
+// Words with their place in the text, counted in runes (code points) like the API's done/from/to.
+function tokens(text) {
+  const cps = Array.from(text || ''), out = [];
+  let i = 0;
+  while (i < cps.length) {
+    while (i < cps.length && /\s/.test(cps[i])) i++;
+    if (i >= cps.length) break;
+    const s = i;
+    while (i < cps.length && !/\s/.test(cps[i])) i++;
+    out.push({ w: cps.slice(s, i).join(''), s, e: i });
+  }
+  return out;
+}
+function words(el, toks, quoted) {
+  el.textContent = '';
+  if (quoted) { const q = document.createElement('span'); q.className = 'q'; q.textContent = '“'; el.append(q); }
+  const spans = toks.map((t, i) => {
+    const s = document.createElement('span'); s.className = 'w'; s.textContent = t.w;
+    if (i) el.append(' ');
+    el.append(s); return s;
+  });
+  if (quoted) { const q = document.createElement('span'); q.className = 'q'; q.textContent = '”'; el.append(q); }
+  return spans;
+}
+function saidCue(who, what, when) { $('saidWho').textContent = who; $('saidWhat').textContent = what; $('saidWhen').textContent = when || ''; }
+const defaultVoice = () => lastStatus.preset || (state && state.default_preset) || 'voice';
+// A session that changed character since the line shows as the character it is now.
+const nameNow = l => (l.pid && sessionOf(l.pid) && sessionOf(l.pid).name) || l.name;
+const speakerName = l => l.pid ? (nameNow(l) || 'A session') : defaultVoice();
+const speakerWhere = l => l.pid ? whereOf(l.client, l.project) : 'the default voice';
+
+// The line being said fills in as it is heard: runes before done are said; the sentence [from, to) plays
+// from at for seconds, so its words light up in proportion to the time gone; after to, not yet.
+let shown = null, spans = [], toks = [], nowIdx = -1, fillRaf = 0, reached = 0, stopped = null, followTop = 0;
+function fillTick() {
+  fillRaf = 0;
+  if (!line || shown !== 'line:' + line.id) return;
+  const from = line.from | 0, to = Math.max(from, line.to | 0), dur = Math.max(.05, +line.seconds || 0) * 1000;
+  const f = Math.max(0, Math.min(1, (Date.now() - ms(line.at)) / dur));
+  const p = Math.max(from + f * (to - from), line.done | 0);
+  let cur = -1;
+  toks.forEach((t, i) => { const said = t.s < p; spans[i].classList.toggle('later', !said); if (said) cur = i; });
+  const n = f < 1 && cur >= 0 && toks[cur].e > from ? cur : -1;
+  if (n !== nowIdx) {
+    if (nowIdx >= 0 && spans[nowIdx]) spans[nowIdx].classList.remove('now');
+    if (n >= 0) { spans[n].classList.add('now'); flare(); }
+    nowIdx = n;
+  }
+  // A line longer than four lines scrolls so the words being said stay in view, one line of context above.
+  const el = $('line'), w = cur >= 0 ? spans[cur] : null;
+  if (w && el.scrollHeight > el.clientHeight + 1) {
+    const lh = w.offsetHeight || 26, bottom = w.offsetTop + lh;
+    if (bottom > el.scrollTop + el.clientHeight || w.offsetTop < el.scrollTop) {
+      const top = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, w.offsetTop - lh));
+      if (Math.abs(top - followTop) > 1) { followTop = top; el.scrollTo({ top, behavior: still.matches ? 'auto' : 'smooth' }); }
+    }
+  }
+  reached = p;
+  if (document.visibilityState === 'visible') fillRaf = requestAnimationFrame(fillTick);
+}
+function renderSaid() {
+  const muted = !!lastStatus.muted;
+  if (line) {
+    const key = 'line:' + line.id;
+    if (shown !== key) {
+      shown = key; toks = tokens(line.text); nowIdx = -1; reached = 0; followTop = 0;
+      $('line').className = 'line live'; $('line').scrollTop = 0; $('line').title = '';
+      spans = words($('line'), toks);
+      spans.forEach(s => s.classList.add('later'));
+    }
+    saidCue(speakerName(line), 'is speaking', speakerWhere(line));
+    showPortrait(pidKey(line.pid), nameNow(line));
+    if (!fillRaf) fillTick();
+    return;
+  }
+  if (fillRaf) { cancelAnimationFrame(fillRaf); fillRaf = 0; }
+  let last = null;
+  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'said') { last = transcript[i]; break; }
+  if (!last) {
+    // Nothing said yet: the voice that would speak, and the light alone where a face would be.
+    const key = 'quiet:' + defaultVoice() + ':' + muted;
+    if (shown !== key) {
+      shown = key; spans = []; toks = [];
+      $('line').className = 'line quiet'; $('line').scrollTop = 0; $('line').title = '';
+      $('line').textContent = (muted ? 'Muted. ' : 'Quiet. ') + 'Default voice ' + defaultVoice() + ', ' + cap(langNames[(state && state.default_lang) || 'en'] || 'English') + '.';
+    }
+    saidCue('voice', 'has not spoken yet', '');
+    showPortrait('voice', '');
+    return;
+  }
+  const cut = stopped && stopped.id && stopped.id === last.id;
+  const key = 'rest:' + (last.id || '') + ':' + last.at + ':' + (cut ? 'cut' : '');
+  if (shown !== key) {
+    shown = key; nowIdx = -1;
+    toks = tokens(last.text);
+    $('line').className = 'line'; $('line').scrollTop = 0; $('line').title = last.text;
+    spans = words($('line'), toks);
+    // What was not said stays dim: you see where it was cut off.
+    if (cut) toks.forEach((t, i) => { if (t.s >= stopped.p) spans[i].classList.add('unsaid'); });
+  }
+  const verb = cut ? 'was stopped' : last.source === 'hook' ? 'announced' : 'said';
+  saidCue(speakerName(last), muted ? verb + '; voice is muted now' : verb, ago(last.at));
+  showPortrait(pidKey(last.pid), nameNow(last));
+}
+function renderYou() {
+  const d = lastStatus.dictation, to = $('youTo');
+  if (d) {
+    // Who it is for is known once it is written down; until then, just you.
+    to.dataset.key = ''; to.textContent = '';
+    $('youWhen').textContent = 'now';
+    // The words heard so far, phrase by phrase; the end stays in view.
+    const el = $('youLine');
+    el.className = d.text ? 'line live tail' : 'line quiet live';
+    el.textContent = d.text || (d.state === 'listening' ? 'Listening…' : 'Writing it down…');
+    if (d.text) el.scrollTop = el.scrollHeight;
+    $('youFate').textContent = d.text ? (d.state === 'listening' ? 'Listening…' : 'Writing it down…') : '';
+    return;
+  }
+  let last = null;
+  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'dictated') { last = transcript[i]; break; }
+  if (!last) {
+    to.textContent = 'nothing dictated yet'; $('youWhen').textContent = '';
+    const hk = state && state.serve && state.serve.dictate_hotkey;
+    $('youLine').className = 'line quiet';
+    $('youLine').textContent = hk && hk !== 'none' ? 'Press ' + hk.replace(/\+/g, ' + ') + ' and speak.' : 'Dictation has no hotkey yet; set one under Dictation.';
+    $('youFate').textContent = '';
+    return;
+  }
+  const key = (last.at || '') + '|' + last.pid + '|' + last.name;
+  if (to.dataset.key !== key) {
+    to.dataset.key = key; to.replaceChildren();
+    if (last.pid && last.name) to.append('to ', mark(last.name, 16), last.name);
+    $('youLine').className = 'line';
+    words($('youLine'), tokens(last.text), true);
+    $('youFate').textContent = cap(last.outcome || '');
+    $('youFate').title = cap(last.outcome || '');
+  }
+  $('youWhen').textContent = ago(last.at);
+}
+
+// ── Sessions ──────────────────────────────────────────────────
+const micIcon = off => '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="7" y="2.5" width="6" height="10" rx="3"/><path d="M4.5 10a5.5 5.5 0 0 0 11 0M10 15.5v2"/>' + (off ? '<path d="M3 3l14 14"/>' : '') + '</svg>';
+const speakerIcon = off => '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z"/>' + (off ? '<path d="M13.5 8l4 4M17.5 8l-4 4"/>' : '<path d="M13.5 7.5a3.5 3.5 0 0 1 0 5"/>') + '</svg>';
+
+// The tiles stay the same elements between polls, so a tile can grow or shrink in place and the pool of
+// light can slide along a face. A tile is rewritten only when something it shows changed.
+const tiles = new Map();
+function menuAt(pid, el) { const a = sessionOf(pid); if (!a) return; const r = el.getBoundingClientRect(); characterMenu(a, r.left, r.bottom + 4); }
+function makeTile(pid) {
+  const tile = document.createElement('div');
+  const face = document.createElement('button'); face.type = 'button'; face.className = 'face';
+  face.innerHTML = '<i class="pic"></i><i class="grey"></i><i class="shade"></i><i class="lightcast"></i>';
+  face.addEventListener('click', e => { e.stopPropagation(); menuAt(pid, face); });
+  const snm = document.createElement('div'); snm.className = 'snm';
+  const txt = document.createElement('div'); txt.className = 'txt';
+  const hd = document.createElement('div'); hd.className = 'hd';
+  const nm = document.createElement('button'); nm.type = 'button'; nm.className = 'nm';
+  nm.addEventListener('click', e => { e.stopPropagation(); menuAt(pid, nm); });
+  const client = document.createElement('small');
+  hd.append(nm, client);
+  const where = document.createElement('small'); where.className = 'where';
+  const st = document.createElement('small'); st.className = 'st';
+  const tg = document.createElement('div'); tg.className = 'tg';
+  tg.append(toggle(pid, 'no_input'), toggle(pid, 'no_speech'));
+  txt.append(hd, where, st, tg);
+  tile.append(face, snm, txt);
+  tile.addEventListener('contextmenu', e => { e.preventDefault(); const a = sessionOf(pid); if (a) characterMenu(a, e.clientX, e.clientY); });
+  // A small tile opens under the pointer (after a beat, so sweeping across the row does not ripple it) or with focus.
+  let hoverTimer;
+  const u = uiOf(pid);
+  tile.addEventListener('pointerenter', () => { clearTimeout(hoverTimer); hoverTimer = setTimeout(() => { if (!u.hover) { u.hover = true; renderStrip(); } }, 140); });
+  tile.addEventListener('pointerleave', () => { clearTimeout(hoverTimer); hoverTimer = setTimeout(() => { if (u.hover) { u.hover = false; renderStrip(); } }, 220); });
+  tile.addEventListener('focusin', () => { if (!u.focus) { u.focus = true; renderStrip(); } });
+  tile.addEventListener('focusout', e => { if (!tile.contains(e.relatedTarget) && u.focus) { u.focus = false; renderStrip(); } });
+  tiles.set(pid, tile);
+  return tile;
+}
+function updateTile(tile, a, gi, one) {
+  const c = charOf(a.name), colour = colourOf(a.name), key = 'pid:' + a.pid;
+  const live = a.pid === livePid(), floor = live || key === L.owner || key === L.toward && L.owner === 'you';
+  // The room for words: a full tile less its padding, or beside the face for a lone tile.
+  const avail = one ? gi.w - 12 - (personasOn() ? ONE_W + 10 : 0) : gi.w - 20;
+  const sig = JSON.stringify([a.name, a.client, a.project, a.busy, a.waiting, a.no_input, a.no_speech, gi.small, Math.round(avail), live, floor, colour, c && c.image, personasOn()]);
+  if (tile.dataset.sig === sig) return;
+  tile.dataset.sig = sig;
+  const client = clientName(a.client), wordsFit = fitWords(stateWords(a, live), avail);
+  const narrow = !gi.small && textW(a.name, NAME_FONT) + 6 + textW(client, SMALL_FONT) > avail;
+  const full = (live ? 'speaking' : a.busy ? 'working' : 'waiting for you') + (a.waiting > 0 ? ', ' + a.waiting + ' queued for it' : '')
+    + (a.no_input ? ', dictation does not reach it' : '') + (a.no_speech ? ', muted' : '');
+  tile.className = 'tile' + (gi.small ? ' small' : '') + (narrow ? ' narrow' : '') + (a.busy ? ' busy' : '') + (a.no_input ? ' excluded' : '')
+    + (live ? ' live' : '') + (floor ? ' floor' : '');
+  tile.style.setProperty('--c', colour);
+  const where = whereOf(a.client, a.project);
+  tile.title = a.name + ', ' + where + ', ' + full + '. Right-click to change the character';
+  const face = tile.querySelector('.face');
+  face.classList.toggle('none', !c);
+  face.setAttribute('aria-label', (gi.small ? a.name + ', ' + where + ', ' + full + '. ' : '') + (c ? a.name + (c.image ? "'s picture" : '') : a.name + ' plays no character') + ': change character');
+  face.title = '';
+  const pk = c ? c.name + '|' + (c.image || '') + '|' + colour : '';
+  if (face.dataset.pic !== pk) {
+    const pic = face.firstChild;
+    pic.removeAttribute('style');
+    if (c) paintFace(pic, c);
+    face.dataset.pic = pk;
+  }
+  tile.querySelector('.snm').textContent = a.name;
+  const nm = tile.querySelector('.nm'); nm.textContent = a.name; nm.setAttribute('aria-label', a.name + ': change character');
+  tile.querySelector('.hd small').textContent = client;
+  const w = tile.querySelector('.where'); w.textContent = a.project || client; w.title = where;
+  const st = tile.querySelector('.st'); st.textContent = wordsFit[0];
+  if (wordsFit[1]) { const em = document.createElement('em'); em.textContent = wordsFit[1]; st.append(em, wordsFit[2]); }
+  st.title = full;
+  const [mic, spk] = tile.querySelectorAll('.tg button');
+  setToggle(mic, a.no_input, a.no_input ? 'Dictation does not reach ' + a.name + ' (click to allow)' : 'Your dictation can reach ' + a.name + ' (click to exclude)', micIcon);
+  setToggle(spk, a.no_speech, a.no_speech ? a.name + ' is muted (click to let it speak)' : a.name + ' may speak (click to mute)', speakerIcon);
+}
+let lastScrollKey = null;
+function renderStrip() {
+  const box = $('agents'), n = sessions.length;
+  box.classList.toggle('one', n === 1);
+  for (const [pid, t] of tiles) if (!sessions.some(s => s.pid === pid)) { t.remove(); tiles.delete(pid); ui.delete(pid); }
+  sessions.forEach((a, i) => { const t = tiles.get(a.pid) || makeTile(a.pid); if (box.children[i] !== t) box.insertBefore(t, box.children[i] || null); });
+  const g = geometry();
+  sessions.forEach((a, i) => updateTile(tiles.get(a.pid), a, g[i], n === 1));
+  // When the light moves to a face beyond the edge, the row slides it into view.
+  const target = L.owner === 'you' ? L.toward : L.owner, scrollKey = target + '|' + n;
+  place(scrollKey !== lastScrollKey ? indexOfKey(target) : null);
+  lastScrollKey = scrollKey;
+}
+// toggle is one of a session's switches; a click flips it and saves at once.
+function toggle(pid, key) {
+  const b = document.createElement('button'); b.type = 'button'; b.dataset.key = key;
+  b.addEventListener('click', async e => {
+    e.stopPropagation();
+    const a = sessionOf(pid); if (!a) return;
+    try { setSessions(await api('session', { pid, [key]: !a[key] })); } catch (err) { saved(err.message, 'warn'); }
+  });
+  return b;
+}
+function setToggle(b, off, title, icon) {
+  b.title = title; b.setAttribute('aria-label', title); b.setAttribute('aria-pressed', !off);
+  b.className = off ? 'off' : '';
+  const html = icon(off);
+  if (b.dataset.html !== html) { b.innerHTML = html; b.dataset.html = html; }
+}
+// voice lists sessions most recently active first; the strip keeps the order
+// it first saw them in, so a session changes size but never moves.
+let seenOrder = [];
+function ordered(list) {
+  const pids = list.map(a => a.pid);
+  seenOrder = seenOrder.filter(p => pids.includes(p));
+  for (const p of pids) if (!seenOrder.includes(p)) seenOrder.push(p);
+  return seenOrder.map(p => list.find(a => a.pid === p));
+}
+function setSessions(list) { if (Array.isArray(list)) { sessions = ordered(list); view(); } }
+
+// characterMenu lists the characters at (x, y); picking one switches session a.
+function characterMenu(a, x, y) {
+  closeMenus();
+  const list = chars();
+  const menu = document.createElement('div'); menu.className = 'menu'; menu.setAttribute('role', 'menu');
+  const title = document.createElement('div'); title.className = 'title';
+  title.textContent = list.length ? a.name + ' becomes…' : 'No characters yet';
+  menu.append(title);
+  for (const c of list) {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
+    b.className = c.name === a.name ? 'now' : '';
+    b.append(thumb(c, 34, 24));
+    b.insertAdjacentHTML('beforeend', '<span></span><small></small>');
+    b.querySelector('span').textContent = c.name;
+    // A character playing elsewhere moves here; that session gets a free name.
+    const other = sessions.find(s => s.pid !== a.pid && s.name === c.name);
+    b.querySelector('small').textContent = other ? 'in ' + (other.project || clientName(other.client)) : (c.traits || []).slice(0, 2).join(', ');
+    if (other) b.title = c.name + ' plays in ' + whereOf(other.client, other.project) + ' now; picking it moves it here';
+    b.addEventListener('click', async () => {
+      closeMenus();
+      if (c.name === a.name) return;
+      try { setSessions(await api('session', { pid: a.pid, character: c.name })); saved('Saved', 'ok'); } catch (e) { saved(e.message, 'warn'); }
+    });
+    menu.append(b);
+  }
+  const manage = document.createElement('button'); manage.type = 'button'; manage.className = 'plain'; manage.setAttribute('role', 'menuitem');
+  manage.textContent = 'Manage characters…';
+  manage.addEventListener('click', () => { closeMenus(); openCharacters(); });
+  menu.append(manage);
+  document.body.append(menu);
+  // Keep it on screen.
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  menu.querySelector('button').focus();
+  setTimeout(() => document.addEventListener('click', function close(e) {
+    if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); }
+  }), 0);
+}
+const closeMenus = () => document.querySelectorAll('.menu').forEach(m => m.remove());
+// Esc closes an open menu first, before it closes the window.
+addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const menus = document.querySelectorAll('.menu');
+  if (menus.length) {
+    menus.forEach(m => m.remove());
+    e.stopImmediatePropagation(); e.preventDefault();
+  }
+}, true);
+
+// The row scrolls sideways: the wheel moves it, and the light keeps to its face as it moves.
+{
+  const strip = $('agents');
+  strip.addEventListener('wheel', e => { if (!e.deltaX && strip.scrollWidth > strip.clientWidth + 1) { strip.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+  let raf = 0;
+  strip.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; place(); }); });
+}
+
+// ── Characters: each with its face, the colour of its light, and where it is playing ──
+let castSig = null;
+function characterList() {
+  const on = personasOn(), list = chars();
+  const sig = JSON.stringify([on, list, sessions.map(s => [s.name, s.client, s.project])]);
+  if (sig === castSig) return;
+  castSig = sig;
+  const box = $('chars'); box.textContent = '';
+  box.classList.toggle('off', !on);
+  for (const c of list) {
+    const s = sessions.find(x => x.name === c.name);
+    const d = document.createElement('div');
+    d.title = c.name + ((c.traits || []).length ? ': ' + c.traits.join(', ') : '') + (c.description ? '. ' + c.description : '') ;
+    d.append(thumb(c, 44, 30));
+    d.insertAdjacentHTML('beforeend', '<span style="min-width:0"><b></b><small></small></span>');
+    d.querySelector('b').textContent = c.name;
+    d.querySelector('small').textContent = s ? whereOf(s.client, s.project) : (c.traits || []).join(', ');
+    box.append(d);
+  }
+  $('castNote').textContent = list.length ? '' : 'No characters yet.';
+}
+const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+function openCharacters() { if (host) host.postMessage('characters'); }
+$('charManage').addEventListener('click', openCharacters);
+$('personas').addEventListener('change', () => {
+  if (state) state.serve.personas = $('personas').checked;
+  win.classList.toggle('names', !$('personas').checked);
+  save({ serve: { personas: $('personas').checked } });
+  castSig = null; characterList(); summaries(); view();
+});
+
+// ── The transcript group: newest first ────────────────────────
+let logSig = null;
+function renderLog() {
+  const last = transcript[transcript.length - 1];
+  const sig = transcript.length + '|' + (last ? last.at + last.id : '') + '|' + Math.floor(Date.now() / 60000) + '|' + JSON.stringify(chars().map(c => [c.name, c.image, c.color])) + '|' + (stopped && stopped.id);
+  if (sig === logSig) return;
+  logSig = sig;
+  const box = $('log'); box.textContent = '';
+  if (!transcript.length) {
+    box.innerHTML = '<p class="help">Nothing yet.</p>';
+  }
+  for (let k = transcript.length - 1; k >= 0; k--) {
+    const l = transcript[k], you = l.kind === 'dictated';
+    const cut = !you && stopped && stopped.id && stopped.id === l.id;
+    const ln = document.createElement('div');
+    ln.className = 'ln ' + (you ? 'dictated' : 'said') + (!you && l.source === 'hook' ? ' hook' : '');
+    const t = document.createElement('time'); t.textContent = clock(l.at); t.title = ago(l.at);
+    const body = document.createElement('div');
+    const who = document.createElement('div'); who.className = 'who';
+    const b = document.createElement('b');
+    const detail = document.createElement('span');
+    if (you) {
+      b.textContent = 'You'; b.style.setProperty('--c', YOU);
+      who.append(b);
+      if (l.pid && l.name) { detail.textContent = l.name; who.append('to ', mark(l.name, 14), detail); }
+    } else {
+      b.textContent = l.pid ? l.name || 'A session' : 'Default voice'; b.style.setProperty('--c', l.pid ? colourOf(l.name) : PLAIN);
+      const w = l.pid ? whereOf(l.client, l.project) : '';
+      detail.textContent = (cut ? 'was stopped' : l.source === 'hook' ? 'announced' : 'said') + (w ? ', ' + w : '');
+      who.append(b, detail);
+    }
+    const txt = document.createElement('div'); txt.className = 'txt';
+    if (you) { txt.innerHTML = '<span class="q">“</span><span></span><span class="q">”</span>'; txt.children[1].textContent = l.text; }
+    else txt.textContent = l.text;
+    body.append(who, txt);
+    if (you && l.outcome) { const out = document.createElement('div'); out.className = 'out'; out.textContent = cap(l.outcome); body.append(out); }
+    ln.append(t, you ? mark('', 20, true) : l.pid ? mark(l.name, 20) : mark('', 20), body);
+    box.append(ln);
+  }
+  $('sumTranscript').textContent = transcript.length
+    ? transcript.length + (transcript.length === 1 ? ' line' : ' lines') + ', last: ' + (last.kind === 'dictated' ? 'you' : last.pid ? last.name || 'a session' : 'the default voice') + ' ' + ago(last.at)
+    : 'Nothing yet';
+}
+
+// ── Folded groups: one open at a time ─────────────────────────
+document.querySelectorAll('.g').forEach(g => {
+  const head = g.querySelector('.head'), inner = g.querySelector('.body > div');
+  inner.inert = true;
+  head.addEventListener('click', () => {
+    const open = !g.classList.contains('open');
+    document.querySelectorAll('.g.open').forEach(o => { o.classList.remove('open'); o.querySelector('.head').setAttribute('aria-expanded', 'false'); o.querySelector('.body > div').inert = true; });
+    if (open) {
+      g.classList.add('open'); head.setAttribute('aria-expanded', 'true'); inner.inert = false;
+      setTimeout(() => g.scrollIntoView({ block: 'nearest', behavior: still.matches ? 'auto' : 'smooth' }), 310);
+    }
+  });
+});
+
+// Each folded group says in one line how it is set.
+const keyText = v => !v || v === 'none' ? 'off' : v;
+const optText = id => { const o = $(id).selectedOptions[0]; return o ? o.textContent : ''; };
+function summaries() {
+  if (!state) return;
+  const list = chars();
+  const free = list.filter(c => !sessions.some(s => s.name === c.name)).map(c => c.name);
+  $('sumCharacters').textContent = !$('personas').checked ? 'Off; sessions keep just their names'
+    : !list.length ? 'On; no characters yet'
+    : 'On; ' + (free.length ? andList(free) + ' not in a session' : 'all ' + list.length + ' in sessions');
+  $('sumSpeaking').textContent = [$('preset').value, pct($('volume').value), optText('lang').replace('Detect from text', 'language from text'),
+    'stop ' + keyText($('stopKey').dataset.value), 'mute ' + keyText($('muteKey').dataset.value)].join(', ');
+  const part = { 'start:1': 'the first sentence', 'end:1': 'the last sentence', 'end:2': 'the last 2 sentences', 'end:3': 'the last 3 sentences' }[segValue('summaryPart')] || 'the last sentences';
+  const goal = segValue('goalWait');
+  $('sumAnnounce').textContent = !$('hooks').checked ? 'Off'
+    : ($('summary').checked ? 'Says ' + part : 'Says only who finished') + ($('project').checked ? ', project first' : '') + (!goal || goal === '0' ? '' : ', Codex goals wait ' + goal + ' s');
+  const fb = segValue('dictateFeedback');
+  const tgt = { auto: "into the agent's terminal", console: 'into terminals only', window: 'into the window in front' }[$('dictateTarget').value];
+  $('sumDictation').textContent = keyText($('dictateKey').dataset.value) + ', ' + ($('dictateRouting').checked ? 'to the agent you name' : tgt) + ', '
+    + ({ screen: 'shown on screen', voice: 'told by voice', both: 'shown and told' }[fb] || 'shown on screen') + ($('dictateSubmit').checked ? ', Enter pressed' : '');
+  $('sumSound').textContent = ($('device').value === 'default' ? 'System speakers' : $('device').value) + ($('duckOn').checked ? ', others down to ' + pct($('duck').value) : '') + ($('barge').checked ? ', stops when you talk' : '');
+  $('sumModels').textContent = optText('model').split(' — ')[0] + ($('unload').value === '0' ? ', kept loaded' : ', freed after ' + optText('unload'));
+  $('sumClone').textContent = !clones.length ? 'No cloned voices yet' : clones.length + (clones.length === 1 ? ' voice: ' : ' voices: ') + andList(clones.map(c => c.name));
+}
+
+// ── Voice clone ────────────────────────────────────────────────
+// Cloned voices: record one from the microphone or take a sound file. The
+// rights switch must be on; voice refuses otherwise.
+let clones = [], cloneBusy = false;
+async function loadClones() {
+  try {
+    const r = await api('clone', { action: 'list' });
+    const cols = r.columns || [];
+    clones = (r.rows || []).map(row => Object.fromEntries(cols.map((c, i) => [c, row[i]])));
+  } catch (e) { clones = []; }
+  const box = $('clones'); box.textContent = '';
+  for (const c of clones) {
+    const d = document.createElement('div'); d.className = 'cl';
+    d.innerHTML = '<span><b></b><small></small></span>';
+    d.querySelector('b').textContent = c.name;
+    d.querySelector('small').textContent = [c.seconds ? Math.round(c.seconds) + ' s' : '', c.engine].filter(Boolean).join(', ');
+    const hear = document.createElement('button'); hear.className = 'btn'; hear.type = 'button'; hear.textContent = 'Hear it';
+    hear.addEventListener('click', () => cloneAct({ action: 'preview', name: c.name }, 'Playing ' + c.name + '…'));
+    const rm = document.createElement('button'); rm.className = 'btn'; rm.type = 'button'; rm.textContent = 'Remove';
+    rm.addEventListener('click', () => {
+      if (rm.dataset.sure) cloneAct({ action: 'remove', name: c.name }, 'Removing ' + c.name + '…');
+      else { rm.dataset.sure = '1'; rm.textContent = 'Remove ' + c.name + '?'; setTimeout(() => { delete rm.dataset.sure; rm.textContent = 'Remove'; }, 3000); }
+    });
+    d.append(hear, rm);
+    box.append(d);
+  }
+  if (state) summaries();
+}
+function cloneMsg(text, warn) { const m = $('cloneMsg'); m.textContent = text || ''; m.classList.toggle('warn', !!warn); }
+async function cloneAct(args, busyText) {
+  if (cloneBusy) return;
+  cloneBusy = true; cloneMsg(busyText);
+  ['cloneRecord', 'cloneFile'].forEach(id => $(id).disabled = true);
+  try {
+    const r = await api('clone', args);
+    const notes = [].concat(r.quality || [], r.warning || []);
+    cloneMsg(args.action === 'remove' ? 'Removed ' + args.name + '.'
+      : args.action === 'preview' ? ''
+      : 'Added ' + (r.name || args.name) + '; it is the voice preset ' + r.preset + '.' + (notes.length ? ' ' + notes.join(' ') : ''));
+    if (args.action !== 'preview') { await loadClones(); render(await api('state')); }
+  } catch (e) { cloneMsg(e.message, true); }
+  finally { cloneBusy = false; ['cloneRecord', 'cloneFile'].forEach(id => $(id).disabled = false); }
+}
+function cloneArgs() {
+  const name = $('cloneName').value.trim();
+  if (!name) { cloneMsg('Give the voice a name first.', true); $('cloneName').focus(); return null; }
+  if (!$('cloneRights').checked) { cloneMsg('Confirm you have the right to use this voice first.', true); return null; }
+  return { name, rights_confirmed: true };
+}
+async function cloneFrom(file) {
+  const a = cloneArgs(); if (!a || !file) return;
+  const data = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = fail; r.readAsDataURL(file); });
+  const ext = (file.name.match(/\.[a-z0-9]+$/i) || ['.wav'])[0];
+  cloneAct({ ...a, action: 'add', file: data, ext }, 'Cloning ' + file.name + '…');
+}
+// wireClone hooks up the clone controls; it runs after on() and onSeg() exist.
+function wireClone() {
+  on('cloneRecord', 'click', () => {
+    const a = cloneArgs(); if (!a) return;
+    const secs = +(segValue('cloneSecs') || 12);
+    cloneAct({ ...a, action: 'record', seconds: secs }, 'Recording for ' + secs + ' s: read something aloud in your normal voice.');
+  });
+  on('cloneFile', 'click', () => { if (cloneArgs()) $('cloneInput').click(); });
+  on('cloneInput', 'change', e => { cloneFrom(e.target.files[0]); e.target.value = ''; });
+  const cloneGroup = $('cloneGroup');
+  cloneGroup.addEventListener('dragover', e => { e.preventDefault(); cloneGroup.classList.add('drop'); });
+  cloneGroup.addEventListener('dragleave', () => cloneGroup.classList.remove('drop'));
+  cloneGroup.addEventListener('drop', e => { e.preventDefault(); cloneGroup.classList.remove('drop'); cloneFrom(e.dataTransfer.files[0]); });
+  onSeg('cloneSecs', () => {});
+  seg('cloneSecs', '12');
+}
+
+// ── Settings ──────────────────────────────────────────────────
+function render(s) {
+  state = s;
+  const o = s.options;
+  notes(s.notes);
+  const presets = o.presets.map(p => ({ value: p.name, label: p.name }));
+  fill($('preset'), presets, s.default_preset);
+  hint();
+  $('volume').value = s.volume; $('volumeVal').textContent = pct(s.volume); paintRange($('volume'));
+  $('lang').value = s.default_lang || 'en';
+  fill($('device'), o.outputs.map(d => ({ value: d, label: d })), s.device || 'default', [{ value: 'default', label: 'System default' }]);
+  fill($('mic'), o.inputs.map(d => ({ value: d, label: d })), s.listen.input_device || 'default', [{ value: 'default', label: 'System default' }]);
+  const duck = s.serve.duck;
+  $('duckOn').checked = duck < 1; $('duck').value = duck < 1 ? duck : 0.35; duckUI();
+  $('barge').checked = !!s.serve.barge_in;
+  $('speakingPopup').checked = !!s.serve.speaking_popup;
+  seg('popupLinger', String(s.serve.popup_linger || 8));
+  $('popupDictation').checked = !!s.serve.popup_dictation;
+  $('lingerRow').hidden = !s.serve.speaking_popup;
+  $('voiceReplies').checked = !!s.serve.voice_replies;
+  setKey($('stopKey'), s.serve.stop_hotkey); setKey($('muteKey'), s.serve.mute_hotkey); setKey($('dictateKey'), s.serve.dictate_hotkey);
+  $('dictateTarget').value = s.serve.dictate_target || 'auto'; $('dictateSubmit').checked = !!s.serve.dictate_submit;
+  seg('dictateFeedback', s.serve.dictate_feedback || 'screen'); overlayUI();
+  seg('overlayScale', String(s.serve.dictate_overlay_scale || 1.5));
+  fill($('dictateTheme'), (o.themes || []).map(t => ({ value: t.name, label: t.label })), s.serve.dictate_theme || 'reference');
+  $('dictateRouting').checked = !!s.serve.dictate_routing;
+  $('personas').checked = !!s.serve.personas;
+  win.classList.toggle('names', !s.serve.personas);
+  $('hooks').checked = s.hooks.enabled !== false;
+  $('summary').checked = s.hooks.summary !== false;
+  seg('summaryPart', (s.hooks.summary_from || 'end') + ':' + (s.hooks.summary_sentences || 2)); summaryUI();
+  seg('goalWait', String(s.hooks.codex_goal_wait ?? 3));
+  $('project').checked = s.hooks.announce_project !== false;
+  fill($('hookPreset'), presets, s.hooks.preset || '', [{ value: '', label: 'Same as default' }]);
+  fill($('model'), o.models.map(m => ({ value: m.dir, label: m.label })), s.listen.model);
+  $('unload').value = s.serve.unload_after || '15m';
+  $('ver').textContent = s.version ? 'voice ' + s.version : '';
+  // Until the first status poll, the sessions and the transcript come from the state.
+  if (lastStatus.agents === undefined && Array.isArray(s.agents)) sessions = ordered(s.agents);
+  if (lastStatus.transcript === undefined && Array.isArray(s.transcript)) transcript = s.transcript;
+  castSig = logSig = shown = null; portraitSig = undefined;
+  characterList(); summaries(); view();
+}
+
+// seg marks the choice with value v in the segmented control id; segValue reads it.
+function seg(id, v) {
+  $(id).querySelectorAll('button').forEach(b => { const on = b.dataset.v === String(v); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+}
+const segValue = id => ($(id).querySelector('button.on') || {}).dataset?.v;
+// The overlay's look and size matter only when dictation shows on screen.
+function overlayUI() { const screen = segValue('dictateFeedback') !== 'voice'; $('lookRow').hidden = $('sizeRow').hidden = !screen; }
+function summaryUI() { $('summaryRow').hidden = !$('summary').checked; }
+function notes(list) { $('notes').textContent = (list || []).join('\n'); }
+function hint() { $('presetHint').textContent = ((state && state.options.presets.find(p => p.name === $('preset').value)) || {}).description || ''; }
+function duckUI() {
+  const on = $('duckOn').checked;
+  $('duck').disabled = !on; $('duckVal').textContent = on ? pct($('duck').value) : 'off'; paintRange($('duck'));
+}
+
+function setKey(el, v) {
+  el.dataset.value = v || 'none';
+  const off = !v || v === 'none';
+  el.textContent = off ? 'Off' : v.replace(/\+/g, ' + ');
+  el.classList.toggle('off', off);
+}
+
+// Changes save on their own; edits within a short pause go out together.
+let pending = {}, timer = null;
+function merge(dst, src) {
+  for (const k in src) {
+    if (src[k] && typeof src[k] === 'object') merge(dst[k] = dst[k] || {}, src[k]);
+    else dst[k] = src[k];
+  }
+}
+function save(patch, wait) {
+  merge(pending, patch);
+  clearTimeout(timer);
+  timer = setTimeout(flush, wait || 150);
+  summaries();
+}
+let savedTimer = null;
+function saved(text, kind) {
+  const s = $('saved'); s.textContent = text; s.className = kind || ''; s.style.opacity = text ? 1 : 0; s.title = text;
+  clearTimeout(savedTimer);
+  if (kind === 'ok') savedTimer = setTimeout(() => s.style.opacity = 0, 1600);
+}
+async function flush() {
+  const body = pending; pending = {};
+  try {
+    const r = await api('save', body);
+    state = r.state; notes(r.state.notes); poll();
+    if (r.restart) { $('restart').hidden = false; saved('Needs a restart', 'warn'); }
+    else saved('Saved', 'ok');
+  } catch (e) { saved(e.message, 'warn'); }
+}
+
+const on = (id, ev, fn) => $(id).addEventListener(ev, fn);
+on('preset', 'change', () => { hint(); save({ default_preset: $('preset').value }); });
+on('volume', 'input', () => { $('volumeVal').textContent = pct($('volume').value); paintRange($('volume')); save({ volume: +$('volume').value }, 350); });
+on('lang', 'change', () => save({ default_lang: $('lang').value }));
+on('device', 'change', () => save({ device: $('device').value }));
+on('mic', 'change', () => save({ listen: { input_device: $('mic').value } }));
+on('duckOn', 'change', () => { duckUI(); save({ serve: { duck: $('duckOn').checked ? +$('duck').value : 1 } }); });
+on('duck', 'input', () => { duckUI(); save({ serve: { duck: +$('duck').value } }, 350); });
+on('barge', 'change', () => save({ serve: { barge_in: $('barge').checked } }));
+on('speakingPopup', 'change', () => { $('lingerRow').hidden = !$('speakingPopup').checked; save({ serve: { speaking_popup: $('speakingPopup').checked } }); });
+on('voiceReplies', 'change', () => save({ serve: { voice_replies: $('voiceReplies').checked } }));
+on('dictateTarget', 'change', () => save({ serve: { dictate_target: $('dictateTarget').value } }));
+on('dictateSubmit', 'change', () => save({ serve: { dictate_submit: $('dictateSubmit').checked } }));
+// A click on a segment picks it and saves what fn makes of its value.
+const onSeg = (id, fn) => on(id, 'click', e => {
+  const b = e.target.closest('button');
+  if (!b || b.classList.contains('on')) return;
+  seg(id, b.dataset.v); fn(b.dataset.v);
+});
+onSeg('dictateFeedback', v => { overlayUI(); save({ serve: { dictate_feedback: v } }); });
+onSeg('overlayScale', v => save({ serve: { dictate_overlay_scale: +v } }));
+onSeg('goalWait', v => save({ hooks: { codex_goal_wait: +v } }));
+onSeg('popupLinger', v => save({ serve: { popup_linger: +v } }));
+on('popupDictation', 'change', () => save({ serve: { popup_dictation: $('popupDictation').checked } }));
+onSeg('summaryPart', v => { const [from, n] = v.split(':'); save({ hooks: { summary_from: from, summary_sentences: +n } }); });
+on('dictateTheme', 'change', () => save({ serve: { dictate_theme: $('dictateTheme').value } }));
+on('dictateRouting', 'change', () => save({ serve: { dictate_routing: $('dictateRouting').checked } }));
+on('hooks', 'change', () => save({ hooks: { enabled: $('hooks').checked } }));
+on('summary', 'change', () => { summaryUI(); save({ hooks: { summary: $('summary').checked } }); });
+on('project', 'change', () => save({ hooks: { announce_project: $('project').checked } }));
+on('hookPreset', 'change', () => save({ hooks: { preset: $('hookPreset').value } }));
+on('model', 'change', () => save({ listen: { model: $('model').value } }));
+on('unload', 'change', () => save({ serve: { unload_after: $('unload').value } }));
+
+// ── Hotkeys: click, then press the keys. Esc cancels, Backspace turns off, a modifier is needed ──
+const keyFields = { stopKey: 'stop_hotkey', muteKey: 'mute_hotkey', dictateKey: 'dictate_hotkey' };
+const codeNames = { Space: 'Space', Enter: 'Enter', Tab: 'Tab', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
+  Insert: 'Insert', Delete: 'Delete', Pause: 'Pause', ScrollLock: 'ScrollLock', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+  Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' };
+
+function endCapture(el, value) {
+  capturing = null;
+  el.classList.remove('capturing');
+  const changed = value !== undefined && value !== el.dataset.value;
+  setKey(el, value === undefined ? el.dataset.value : value);
+  if (changed) {
+    save({ serve: { [keyFields[el.id]]: el.dataset.value } });
+    if (el.id === 'dictateKey' && state) { state.serve.dictate_hotkey = el.dataset.value; renderYou(); }
+  }
+}
+for (const id in keyFields) {
+  const el = $(id);
+  el.addEventListener('click', () => {
+    if (capturing && capturing !== el) endCapture(capturing);
+    capturing = el; el.classList.add('capturing'); el.textContent = 'Press keys…';
+  });
+  el.addEventListener('blur', () => { if (capturing === el) endCapture(el); });
+  el.addEventListener('keydown', e => {
+    if (capturing !== el) return;
+    e.preventDefault(); e.stopPropagation();
+    if (e.code === 'Escape') { endCapture(el); return; }
+    if (e.code === 'Backspace' || e.code === 'Delete' && !e.ctrlKey && !e.altKey) { endCapture(el, 'none'); return; }
+    let key = null;
+    if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
+    else if (/^Digit\d$/.test(e.code)) key = e.code.slice(5);
+    else if (/^F\d{1,2}$/.test(e.code)) key = e.code;
+    else key = codeNames[e.code] || null;
+    // Injected keys (remote desktop, automation) can come without a scan code.
+    const k = e.keyCode;
+    if (!key && !e.code) key = k >= 65 && k <= 90 || k >= 48 && k <= 57 ? String.fromCharCode(k) : k >= 112 && k <= 135 ? 'F' + (k - 111) : null;
+    const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Win'].filter(Boolean);
+    if (!key) { el.textContent = mods.length ? mods.join(' + ') + ' + …' : 'Press keys…'; return; }
+    if (!mods.length) { el.textContent = 'Add Ctrl, Alt, Shift or Win'; return; }
+    endCapture(el, mods.concat(key).join('+'));
+  });
+}
+
+// ── Status: polled; faster while voice speaks, so the words keep up ──
+function status(st) {
+  lastStatus = st || {};
+  if (Array.isArray(st.agents)) sessions = ordered(st.agents);
+  if (Array.isArray(st.transcript)) transcript = st.transcript;
+  if (line && (!st.line || st.line.id !== line.id) && stopRequested === line.id) stopped = { id: line.id, p: reached };
+  line = st.line && st.line.text ? st.line : null;
+  const m = $('mute');
+  m.classList.toggle('on', !!st.muted);
+  m.setAttribute('aria-pressed', !!st.muted);
+  m.querySelector('span').textContent = st.muted ? 'Unmute' : 'Mute';
+  $('muteGlyph').setAttribute('d', st.muted ? 'M13.5 7.5l5 5M18.5 7.5l-5 5' : 'M13.5 7.5a3.5 3.5 0 0 1 0 5M15.5 5.5a6.5 6.5 0 0 1 0 9');
+  $('stop').disabled = !st.speaking;
+  view();
+}
+// view draws the top, the row and the transcript from what the last poll said.
+function view() {
+  L = lightTarget();
+  renderSaid();
+  renderYou();
+  renderStrip();
+  applyLight();
+  characterList();
+  renderLog();
+  if (state) summaries();
+}
+
+let polling = false;
+async function poll() {
+  if (polling) return;
+  polling = true;
+  try { status(await api('status')); } catch (e) {} finally { polling = false; }
+}
+let stopRequested = null;
+on('mute', 'click', async () => { try { status(await api('control', { Action: lastStatus.muted ? 'unmute' : 'mute' })); } catch (e) { saved(e.message, 'warn'); } });
+on('stop', 'click', async () => {
+  stopRequested = line ? line.id : null;
+  try { status(await api('control', { Action: 'stop' })); } catch (e) { saved(e.message, 'warn'); }
+});
+on('test', 'click', async () => {
+  try { await api('test', { Preset: $('preset').value, Text: 'Hi, this is how I sound.' }); setTimeout(poll, 300); }
+  catch (e) { saved(e.message, 'warn'); }
+});
+on('restart', 'click', async () => {
+  await api('restart', {}).catch(() => {});
+  $('restart').hidden = true;
+  saved('Restarting…', 'warn');
+});
+addEventListener('resize', () => place());
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !capturing && host) host.postMessage('close');
+});
+
+wireClone();
+
+// The flyout calls this each time it opens again.
+async function onPanelShow() {
+  win.classList.remove('enter'); void win.offsetWidth; win.classList.add('enter');
+  document.querySelector('main').scrollTop = 0;
+  closeMenus();
+  if (capturing) endCapture(capturing);
+  try { render(await api('state')); } catch (e) { saved(e.message, 'warn'); }
+  poll();
+  if (!document.documentElement.classList.contains('popup')) loadClones();
+}
+let ticks = 0;
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  ticks++;
+  // While voice speaks, often, so the next sentence starts filling in when it is heard; else once a second.
+  if (line || lastStatus.speaking || lastStatus.dictation || ticks % 4 === 0) poll();
+  // An older voice without sessions in the status: refresh them from the state now and then.
+  if (lastStatus.agents === undefined && ticks % 12 === 0) api('state').then(s => setSessions(s.agents)).catch(() => {});
+}, 250);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && line && !fillRaf) fillTick(); });
+onPanelShow();
+</script>
+</body>
+</html>

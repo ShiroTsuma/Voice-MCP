@@ -1,0 +1,99 @@
+# Copy to config.toml next to voice.exe. Everything here is optional: entries
+# override built-in engines and presets with the same name or add new ones.
+
+# default_preset = "neutral"
+# max_chars = 400        # longer text is cut at a sentence boundary
+# default_lang = "en"    # language when a request names none; "auto" detects
+# volume = 1.0           # master volume, multiplied by each preset's volume
+# device = ""            # output device name substring, see `voice devices`;
+#                        # empty = system default. VOICE_DEVICE overrides it.
+
+# The tray icon's settings window writes settings.toml next to this file;
+# values there override this one.
+
+# Background process (voice serve): owns audio, models and hotkeys.
+# [serve]
+# unload_after = "15m"       # free idle models; "0" keeps them loaded
+# duck = 0.35                # other apps' volume while voice speaks; 1 = off
+# stop_hotkey = "Ctrl+Alt+End"
+# mute_hotkey = "Ctrl+Alt+M"
+# barge_in = false           # stop when you start talking (use headphones)
+# dictate_hotkey = "Ctrl+Alt+D"  # press, speak, pause (or press again): typed into the agent
+# dictate_submit = false     # true: press Enter after it, so the agent starts at once
+# dictate_target = "auto"    # auto: a desktop agent app in front gets it typed into its
+#                            # window, otherwise the last terminal agent that used voice
+#                            # (its console, whatever is in front); console; window
+# dictate_feedback = "screen" # screen: blobs in the bottom right corner (recording,
+#                            # transcribing, waiting messages, delivered); voice; both
+
+# A voice per agent, for hooks and MCP calls: the name matches the client as a
+# substring (Claude Code is "claude-code", Codex "codex-mcp-client").
+# [clients]
+# claude = "calm-mature"
+# codex = "narrator"
+
+# `voice hook claude` (Claude Code Notification/Stop hooks) and
+# `voice hook codex` (Codex notify) announce events with these phrases.
+# [hooks]
+# enabled = true
+# preset = ""              # empty: VOICE_PRESET or default_preset
+# skip_after_speech = 20   # seconds; stay quiet if the agent just spoke
+# min_turn_seconds = 30    # Claude Stop: only after turns at least this long
+# summary = true           # say the first sentence of the agent's last message
+# announce_project = true  # start with the project folder name
+# [hooks.phrases]
+# permission = ["I need your permission for something."]
+# input = ["I'm waiting for you."]
+# done = ["All done. Take a look when you can."]
+
+# voice_listen and `voice listen`: speech to text from the microphone.
+# Needs `voice models pull runtime vad asr-parakeet` (or asr-whisper).
+# [listen]
+# model = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"  # fast, 25 European languages
+# model = "sherpa-onnx-whisper-turbo"  # ~100 languages, slower on CPU
+# language = ""          # Whisper only; empty detects
+# input_device = ""      # microphone name substring, see `voice devices`
+# end_silence = 1.2      # seconds of silence that end an answer
+
+# Any program that writes WAV can be an engine. Placeholders:
+# {text} {voice} {lang} {speed} {wpm} {out}. Without {text} the text goes to
+# stdin; with {out} the WAV is read from that file instead of stdout.
+# [engines.piper]
+# type = "exec"
+# command = "piper"
+# args = ["--model", "{voice}", "--output_file", "{out}"]
+# lang_voices = { en = "en_US-amy-medium.onnx" }
+
+# Storage: models and the GPU sidecar take several GB. data_root moves all
+# of it (default: the folder of voice.exe); each *_dir moves one part and is
+# relative to data_root when relative. `voice paths` shows where things are.
+# data_root = 'D:\voice-data'
+# models_dir = ""        # TTS and speech recognition models   <data_root>\models
+# runtime_dir = ""       # sherpa-onnx DLLs                     <data_root>\runtime
+# voices_dir = ""        # cloned voices                        <data_root>\voices
+# state_dir = ""         # phrase cache, shared mute            <data_root>\data
+# sidecar_dir = ""       # Python venv and GPU model weights    <data_root>\sidecar
+
+# Neural models run through sherpa-onnx (`voice models pull runtime kokoro`).
+# [engines.kokoro-int8]
+# type = "sherpa"
+# model = "kokoro-int8-multi-lang-v1_0"   # directory under models_dir
+# lang = "en-us"                          # en-us | en-gb
+# threads = 4
+
+# [presets.calm]
+# extends = "calm-mature"
+# description = "Even slower, darker"
+# speed = 0.8            # 1.0 = engine default
+# pitch = -2.0           # semitones
+# volume = 0.8
+# dsp = ["highpass:90", "lowpass:6000", "compress:soft", "reverb:room"]
+#                        # lowpass/highpass:<Hz>, compress:soft|medium|hard,
+#                        # reverb:small|room|hall, gain:<dB>
+# chime = "soft"         # soft | bell | none
+# voice = "af_nicole"    # `voice voices -engine kokoro` lists them; a Kokoro
+#                        # mix like { af_nicole = 0.8, af_heart = 0.2 } also
+#                        # works, but strong blends can sound mechanical,
+#                        # especially with pitch, speed or reverb changes
+# fallback = ["sapi"]
+# lang.pl = { engine = "piper-justyna", speed = 0.85, pitch = -2.0 }

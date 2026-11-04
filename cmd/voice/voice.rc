@@ -1,0 +1,28 @@
+// Icon and name shown by Explorer, Task Manager and the volume mixer.
+// Compiled by assets/make-icon.ps1 into rsrc_windows_amd64.syso.
+1 ICON "../../internal/tray/voice.ico"
+2 ICON "../../internal/tray/voice-muted.ico"
+
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", "voice"
+      VALUE "ProductName", "voice"
+      VALUE "InternalName", "voice"
+      VALUE "OriginalFilename", "voice.exe"
+      VALUE "FileVersion", "1.0"
+      VALUE "ProductVersion", "1.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
