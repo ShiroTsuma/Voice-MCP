@@ -77,6 +77,7 @@ type Serve struct {
 	PopupLinger         *float64 `toml:"popup_linger,omitempty" json:"popup_linger,omitempty"`
 	ReaderWindow        *string  `toml:"reader_window,omitempty" json:"reader_window,omitempty"`
 	ReaderAppear        *string  `toml:"reader_appear,omitempty" json:"reader_appear,omitempty"`
+	ReaderHotkey        *string  `toml:"reader_hotkey,omitempty" json:"reader_hotkey,omitempty"`
 	VoiceReplies        *bool    `toml:"voice_replies,omitempty" json:"voice_replies,omitempty"`
 	UnloadAfter         *string  `toml:"unload_after,omitempty" json:"unload_after,omitempty"`
 	PreloadVoices       *bool    `toml:"preload_voices,omitempty" json:"preload_voices,omitempty"`

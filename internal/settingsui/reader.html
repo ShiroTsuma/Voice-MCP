@@ -59,12 +59,26 @@
   .block .live .w.now { background: color-mix(in oklab, var(--light) 32%, transparent); color: var(--ink);
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--light) 32%, transparent); }
   #empty { margin: auto; color: var(--ink-3); }
+
+  /* Who speaks: the character's picture, or their initial in their colour. */
+  .pic { flex: none; width: 22px; height: 22px; border-radius: 50%; object-fit: cover; align-self: center;
+    display: inline-grid; place-items: center; font: 600 11px/1 var(--ui); color: var(--ground);
+    background: var(--light); box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--light) 60%, transparent); }
+  .msg.live .head .pic, .msg.last .head .pic { width: 30px; height: 30px; font-size: 14px; }
+  .head { align-items: center; }
+  .text .who .pic { width: 20px; height: 20px; margin: 0 8px 0 1px; vertical-align: -4px; font-size: 10px; --light: var(--c, var(--plain)); }
+
+  /* Opened with its hotkey: it scrolls, and says how it goes away. */
+  .pinned #list { overflow-y: auto; scrollbar-width: thin; scrollbar-color: oklch(40% 0.003 260) transparent; }
+  #hint { flex: none; padding: 8px 32px 12px; font-size: 12px; color: var(--ink-3); display: none; }
+  .pinned #hint { display: block; }
   @media (prefers-reduced-motion: reduce) { .msg, .win.enter { animation: none; } .w { transition: none; } }
 </style>
 </head>
 <body class="words">
 <div class="win enter" id="win">
   <div id="list"><div id="empty">Nothing said yet.</div></div>
+  <div id="hint"></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -89,6 +103,17 @@ const charOf = n => n ? chars().find(c => (c.name || '').toLowerCase() === Strin
 const colourOf = n => { const c = charOf(n); return c ? (c.color || PALETTE[chars().indexOf(c) % PALETTE.length]) : null; };
 const agentOf = pid => (status.agents || []).find(a => a.pid === pid);
 const nameOf = l => (l.pid && agentOf(l.pid) && agentOf(l.pid).name) || l.name || (l.pid ? 'A session' : 'voice');
+const pinned = () => !!status.reader_pinned;
+// A picture of whoever name is: the character's portrait, else their initial on their colour.
+function pic(name) {
+  const c = charOf(name);
+  if (c && c.image) {
+    const img = document.createElement('img'); img.className = 'pic'; img.alt = ''; img.src = '/settings/avatar/' + c.image;
+    return img;
+  }
+  const s = document.createElement('span'); s.className = 'pic'; s.textContent = (String(name || '?').trim()[0] || '?').toUpperCase();
+  return s;
+}
 const appear = () => (state && state.serve && state.serve.reader_appear) === 'block' ? 'block' : 'words';
 
 // Words with their place in the text, counted in runes like the API's done/from/to.
@@ -137,7 +162,8 @@ function build(l) {
   where.textContent = you ? (l.name ? 'to ' + l.name : '') : [clientName(l.client), l.project].filter(Boolean).join(' in ');
   const st = document.createElement('span'); st.className = 'state';
   const when = document.createElement('time'); when.textContent = clock(l.at);
-  head.append(who, where, st, when);
+  if (you) head.append(who, where, st, when);
+  else head.append(pic(nameOf(l)), who, where, st, when);
   const text = document.createElement('div'); text.className = 'text';
   const toks = tokens(l.text), spans = [];
   toks.forEach((t, i) => {
@@ -149,6 +175,7 @@ function build(l) {
       if (i) text.append(Object.assign(document.createElement('span'), { className: 'br' }));
       s.classList.add('who');
       const c = colourOf(t.w.slice(0, -1)); if (c) s.style.setProperty('--c', c);
+      text.append(pic(t.w.slice(0, -1)));
     } else if (i) text.append(' ');
     text.append(s); spans.push(s);
   });
@@ -158,7 +185,13 @@ function build(l) {
 
 function render() {
   const list = $('list');
-  const t = (status.transcript || []).filter(l => l.kind === 'said' || l.kind === 'dictated').slice(-8);
+  // Opened to read back, all the transcript keeps; else the last few.
+  const t = (status.transcript || []).filter(l => l.kind === 'said' || l.kind === 'dictated').slice(pinned() ? -50 : -8);
+  document.body.classList.toggle('pinned', pinned());
+  if (!pinned()) away = false;
+  const key = state && state.serve && state.serve.reader_hotkey;
+  const hint = 'Scroll to read back' + (key && key !== 'none' ? ' · ' + key.replace(/\+/g, ' + ') + ' hides it' : '');
+  if ($('hint').textContent !== hint) $('hint').textContent = hint;
   $('empty').hidden = t.length > 0;
   const keep = new Set(t.map(keyOf));
   for (const [k, v] of views) if (!keep.has(k)) { v.el.remove(); views.delete(k); }
@@ -234,8 +267,17 @@ function tick() {
 // The words being said stay in view near the bottom, as in a log: the view moves on only when they
 // reach the last lines, by a few lines at a time. With nothing said now it moves only to bring a new
 // message's end into view, never back up, so it does not jump when the voice stops.
+// Scrolled back to read, the view stays where the user put it until they scroll to the end again.
+// Only the user's own scrolling counts (the wheel or the scroll bar), not the window following along.
+let away = false, touchedAt = 0;
+$('list').addEventListener('scroll', () => {
+  const list = $('list');
+  if (pinned() && Date.now() - touchedAt < 1000) { away = list.scrollTop < list.scrollHeight - list.clientHeight - 60; followTop = list.scrollTop; }
+}, { passive: true });
+for (const ev of ['wheel', 'pointerdown']) $('list').addEventListener(ev, () => { touchedAt = Date.now(); }, { passive: true });
 function follow(el) {
   const list = $('list'), h = list.clientHeight;
+  if (pinned() && away) return;
   let top = list.scrollTop;
   if (el) {
     const r = el.getBoundingClientRect(), lr = list.getBoundingClientRect(), y = r.bottom - lr.top;
@@ -264,8 +306,9 @@ async function poll() {
 async function loadState() {
   try {
     state = await api('state');
-    document.body.className = appear();
-    const sig = JSON.stringify(chars().map(c => [c.name, c.color]));
+    document.body.classList.toggle('block', appear() === 'block');
+    document.body.classList.toggle('words', appear() === 'words');
+    const sig = JSON.stringify(chars().map(c => [c.name, c.color, c.image]));
     if (sig !== stateSig) { stateSig = sig; for (const v of views.values()) v.el.remove(); views.clear(); liveKey = null; live = null; }
   } catch (e) {}
 }

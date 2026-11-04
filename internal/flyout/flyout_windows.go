@@ -52,6 +52,8 @@ var (
 	procLoadImage        = user32.NewProc("LoadImageW")
 	procSendMessage      = user32.NewProc("SendMessageW")
 	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
+	procGetWindowLong    = user32.NewProc("GetWindowLongPtrW")
+	procSetWindowLong    = user32.NewProc("SetWindowLongPtrW")
 )
 
 const (
@@ -194,6 +196,22 @@ func (w *Window) ShowPassive() error {
 		}
 		w.place(swpShowWindow | swpNoActivate)
 		w.chromium.Show()
+	})
+}
+
+// SetClickThrough lets a Passive window take the mouse (false), so its page
+// can be scrolled, or lets clicks and the wheel pass through it again (true).
+// It still never takes the focus.
+func (w *Window) SetClickThrough(on bool) error {
+	return w.do(func() {
+		const gwlExStyle = ^uintptr(19) // -20
+		ex, _, _ := procGetWindowLong.Call(w.hwnd, gwlExStyle)
+		if on {
+			ex |= wsExTransparent
+		} else {
+			ex &^= wsExTransparent
+		}
+		procSetWindowLong.Call(w.hwnd, gwlExStyle, ex)
 	})
 }
 

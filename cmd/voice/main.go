@@ -269,7 +269,7 @@ func loadConfig(path, device string) (*preset.Config, error) {
 			*p = ""
 		}
 	}
-	for _, p := range []*string{&cfg.Serve.StopHotkey, &cfg.Serve.MuteHotkey, &cfg.Serve.DictateHotkey} {
+	for _, p := range []*string{&cfg.Serve.StopHotkey, &cfg.Serve.MuteHotkey, &cfg.Serve.DictateHotkey, &cfg.Serve.ReaderHotkey} {
 		if *p == "none" {
 			*p = ""
 		}

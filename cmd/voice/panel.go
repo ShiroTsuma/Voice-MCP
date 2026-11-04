@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -70,6 +71,8 @@ func (b *backend) panelShown() {
 			popup.Hide()
 		}
 		if reader != nil {
+			readerPinned.Store(false)
+			reader.SetClickThrough(true)
 			reader.Hide()
 		}
 	}
@@ -80,7 +83,7 @@ func (b *backend) panelStatus() map[string]any {
 	// The line being said, with who says it (from the transcript), so the
 	// window fills it in as it is heard; the transcript's newest lines too.
 	transcript := b.ctl.agents.Transcript()
-	out := map[string]any{"preset": st.Preset, "muted": st.Muted, "speaking": st.Speaking, "transcript": transcript, "agents": b.ctl.liveAgents()}
+	out := map[string]any{"preset": st.Preset, "muted": st.Muted, "speaking": st.Speaking, "transcript": transcript, "agents": b.ctl.liveAgents(), "reader_pinned": readerPinned.Load()}
 	if d := b.ctl.Dictation(); d != nil {
 		out["dictation"] = d
 	}
@@ -309,7 +312,8 @@ func (b *backend) lingerLocked() {
 		if popup != nil {
 			popup.Hide()
 		}
-		if reader != nil {
+		// Opened with its hotkey, the reading window stays until the key hides it.
+		if reader != nil && !readerPinned.Load() {
 			reader.Hide()
 		}
 	})
@@ -321,7 +325,33 @@ func (b *backend) lingerLocked() {
 var (
 	readerOnce sync.Once
 	reader     *flyout.Window
+	// readerPinned: the hotkey opened the window; it takes the mouse wheel and
+	// stays until the hotkey hides it.
+	readerPinned atomic.Bool
 )
+
+// toggleReader is the reading window's hotkey: it opens the window to read
+// and scroll back, or hides it.
+func (b *backend) toggleReader() {
+	popupMu.Lock()
+	defer popupMu.Unlock()
+	w := b.reader()
+	if w.Visible() && readerPinned.Load() {
+		readerPinned.Store(false)
+		w.SetClickThrough(true)
+		w.Hide()
+		return
+	}
+	readerPinned.Store(true)
+	if err := w.ShowPassive(); err != nil {
+		logf("reading window: %v", err)
+		return
+	}
+	w.SetClickThrough(false)
+	if popup != nil {
+		popup.Hide()
+	}
+}
 
 func (b *backend) reader() *flyout.Window {
 	readerOnce.Do(func() {

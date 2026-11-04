@@ -181,7 +181,7 @@ When characters speak, the agent passes the whole scene in **one** `voice_speak`
 
 Kokoro's 54 voices suit a crowd of side characters (they run on the CPU at once); keep the GPU voices for one or two leads.
 
-The corner popup is small for a scene. Under **Reading window** in the settings, voice opens a large window in the middle of the screen instead, for long messages and scenes or always, with the recent messages as a log: each speaker of a scene on its own line in their colour, and your dictation as it is heard. **Words appear** shows each word as it is said, or the whole message at once with the word being said marked.
+The corner popup is small for a scene. Under **Reading window** in the settings, voice opens a large window in the middle of the screen instead, for long messages and scenes or always, with the recent messages as a log: each speaker of a scene on its own line in their colour, and your dictation as it is heard. **Words appear** shows each word as it is said, or the whole message at once with the word being said marked. Like a game overlay, **Reading window key** shows it any time to scroll back through the transcript with the mouse wheel, and hides it again; opened so, it stays until the key hides it.
 ## Add your own voice
 
 A voice comes in three layers, each in `config.toml` next to `voice.exe` (create it from `config.example.toml`):

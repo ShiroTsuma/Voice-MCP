@@ -562,6 +562,10 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="lab">Words appear<span class="help">One by one as they are said, or the whole message at once with the word being said marked</span></div>
             <div class="seg" id="readerAppear" role="group" aria-label="Words appear"><button type="button" data-v="words">As said</button><button type="button" data-v="block">At once</button></div>
           </div>
+          <div class="row">
+            <div class="lab">Reading window key<span class="help">Shows the reading window to scroll back, and hides it again. Click, then press the keys</span></div>
+            <button class="key" id="readerKey" type="button"></button>
+          </div>
         </div></div>
       </section>
 
@@ -1459,7 +1463,7 @@ if (fullMode) {
     klon: ['clone'], postac: ['character'], charakter: ['character'], dyktow: ['dictation', 'dictate'], ogloszen: ['announce'], zapowiedz: ['announce'],
     model: ['model'], pamiec: ['memory', 'idle'], laduj: ['load'], zaladuj: ['load'], wycisz: ['mute', 'duck'], przerw: ['stop', 'interrupt'],
     tempo: ['speed'], szybkosc: ['speed'], predkosc: ['speed'], wysokosc: ['pitch'], efekt: ['effects'], integrac: ['integrations'], motyw: ['theme'],
-    popup: ['corner', 'popup', 'reading'], okienk: ['corner', 'popup', 'reading'], okno: ['window', 'reading'], czyta: ['reading'], wyraz: ['words'], pojawi: ['appear'], scen: ['scenes'], transkryp: ['transcript'], nagryw: ['record'], wysyl: ['submit', 'enter'],
+    popup: ['corner', 'popup', 'reading'], okienk: ['corner', 'popup', 'reading'], okno: ['window', 'reading'], czyta: ['reading'], wyraz: ['words'], pojawi: ['appear'], scen: ['scenes'], przewij: ['scroll'], nakladk: ['reading'], overlay: ['reading'], transkryp: ['transcript'], nagryw: ['record'], wysyl: ['submit', 'enter'],
   };
   const index = [];
   for (const s of sections) {
@@ -1770,7 +1774,7 @@ function render(s) {
   seg('readerWindow', s.serve.reader_window || 'off'); seg('readerAppear', s.serve.reader_appear || 'words');
   $('appearRow').hidden = (s.serve.reader_window || 'off') === 'off';
   $('voiceReplies').checked = !!s.serve.voice_replies;
-  setKey($('stopKey'), s.serve.stop_hotkey); setKey($('muteKey'), s.serve.mute_hotkey); setKey($('dictateKey'), s.serve.dictate_hotkey);
+  setKey($('stopKey'), s.serve.stop_hotkey); setKey($('muteKey'), s.serve.mute_hotkey); setKey($('dictateKey'), s.serve.dictate_hotkey); setKey($('readerKey'), s.serve.reader_hotkey);
   $('dictateTarget').value = s.serve.dictate_target || 'auto'; $('dictateSubmit').checked = !!s.serve.dictate_submit;
   const fbNow = s.serve.dictate_feedback || 'screen';
   $('cornerDictate').checked = fbNow !== 'voice'; $('dictateSay').checked = fbNow !== 'screen';
@@ -2076,7 +2080,7 @@ on('unload', 'change', () => save({ serve: { unload_after: $('unload').value } }
 on('preload', 'change', () => save({ serve: { preload_voices: $('preload').checked } }));
 
 // ── Hotkeys: click, then press the keys. Esc cancels, Backspace turns off, a modifier is needed ──
-const keyFields = { stopKey: 'stop_hotkey', muteKey: 'mute_hotkey', dictateKey: 'dictate_hotkey' };
+const keyFields = { stopKey: 'stop_hotkey', muteKey: 'mute_hotkey', dictateKey: 'dictate_hotkey', readerKey: 'reader_hotkey' };
 const codeNames = { Space: 'Space', Enter: 'Enter', Tab: 'Tab', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
   Insert: 'Insert', Delete: 'Delete', Pause: 'Pause', ScrollLock: 'ScrollLock', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
   Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' };

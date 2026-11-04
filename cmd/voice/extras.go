@@ -21,6 +21,7 @@ const (
 	hotkeyStop = iota + 1
 	hotkeyMute
 	hotkeyDictate
+	hotkeyReader
 	hotkeyCancel // Esc, only while dictating
 )
 
@@ -39,8 +40,10 @@ type controller struct {
 	// onSpeaking learns when speech starts and ends, onDictating when the user
 	// starts and stops dictating (the speaking popup).
 	onSpeaking, onDictating func(on bool)
-	sessions                *audio.Sessions
-	keys                    hotkey.Set
+	// onReaderKey runs on the reading window's hotkey.
+	onReaderKey func()
+	sessions    *audio.Sessions
+	keys        hotkey.Set
 
 	mu        sync.Mutex
 	duck      float64
@@ -113,6 +116,11 @@ func (c *controller) apply() {
 		{hotkeyStop, sv.StopHotkey, c.sp.Stop},
 		{hotkeyMute, sv.MuteHotkey, func() { c.sp.SetMuted(!c.sp.Status().Muted) }},
 		{hotkeyDictate, sv.DictateHotkey, c.dictate},
+		{hotkeyReader, sv.ReaderHotkey, func() {
+			if fn := c.onReaderKey; fn != nil {
+				go fn()
+			}
+		}},
 	} {
 		if err := c.keys.Register(k.id, k.spec, k.fn); err != nil {
 			logf("%v", err)
