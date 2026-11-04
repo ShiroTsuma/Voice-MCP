@@ -20,6 +20,7 @@ import (
 	"voice/internal/integrate"
 	"voice/internal/integrations"
 	"voice/internal/models"
+	"voice/internal/pyruntime"
 	"voice/internal/service"
 )
 
@@ -41,9 +42,10 @@ type integrationFile struct {
 	Link  string `toml:"link"`
 	Order int    `toml:"order"` // within its group, lower first
 
-	Uses    string `toml:"uses"`    // a handler: claude-hooks, claude-mod, codex, session-api, model, sidecar, builtin
-	Model   string `toml:"model"`   // uses = "model": the name in `voice models`
-	Backend string `toml:"backend"` // uses = "sidecar": chatterbox, xtts, f5
+	Uses     string   `toml:"uses"`     // a handler: claude-hooks, claude-mod, codex, session-api, model, sidecar, python, builtin
+	Requires []string `toml:"requires"` // integrations installed first (their ids)
+	Model    string   `toml:"model"`    // uses = "model": the name in `voice models`
+	Backend  string   `toml:"backend"`  // uses = "sidecar": chatterbox, xtts, f5
 
 	Check struct {
 		Path    string   `toml:"path"`    // installed when this exists (relative to the file's folder)
@@ -106,7 +108,7 @@ func readIntegrationFile(path string) integrationFile {
 }
 
 func makeIntegration(f integrationFile, handlers map[string]handler) integrations.Integration {
-	it := integrations.Integration{ID: f.ID, Group: f.Group, Title: f.Title, About: f.About, Size: f.Size, Link: f.Link}
+	it := integrations.Integration{ID: f.ID, Group: f.Group, Title: f.Title, About: f.About, Size: f.Size, Link: f.Link, Requires: f.Requires}
 	if f.Uses == "model" && it.Size == "" {
 		if m, ok := models.Find(f.Model); ok {
 			it.Size = fmt.Sprintf("%d MB", m.SizeMB)
@@ -337,6 +339,36 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			},
 		},
 
+		"python": {
+			status: func(integrationFile) integrations.Status {
+				if pyruntime.Installed(httpengine.SidecarDir) {
+					return integrations.Status{State: integrations.On, Detail: "Python " + pyruntime.Version + " in " + pyruntime.Dir(httpengine.SidecarDir),
+						Actions: []integrations.Action{{ID: "remove", Label: "Remove"}}}
+				}
+				return integrations.Status{State: integrations.Missing, Actions: []integrations.Action{{ID: "install", Label: "Download", Long: true, Primary: true}}}
+			},
+			do: func(ctx context.Context, _ integrationFile, action string, log func(string)) error {
+				if action == "remove" {
+					log("Removing " + pyruntime.Dir(httpengine.SidecarDir))
+					return os.RemoveAll(pyruntime.Dir(httpengine.SidecarDir))
+				}
+				log(fmt.Sprintf("Downloading Python %s (%d MB) from python-build-standalone, checked against its pinned SHA-256…", pyruntime.Version, pyruntime.SizeMB))
+				last := -1
+				err := pyruntime.Install(ctx, httpengine.SidecarDir, func(done, total int64) {
+					if total > 0 {
+						if p := int(done * 100 / total); p/20 != last/20 {
+							last = p
+							log(fmt.Sprintf("%d%%", p))
+						}
+					}
+				})
+				if err == nil {
+					log("Python is ready in " + pyruntime.Dir(httpengine.SidecarDir))
+				}
+				return err
+			},
+		},
+
 		"sidecar": {
 			status: func(f integrationFile) integrations.Status { return sidecarStatus(f.Backend) },
 			do: func(ctx context.Context, f integrationFile, action string, log func(string)) error {
@@ -350,7 +382,11 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					return nil
 				}
 				log("Setting up " + f.Title + ": a Python environment, PyTorch for this GPU, then the backend. This takes a while.")
-				cmd := exec.CommandContext(ctx, exe, "sidecar", "setup", f.Backend)
+				args := []string{"sidecar"}
+				if pyruntime.Installed(httpengine.SidecarDir) { // the Python voice brings, when it is there
+					args = append(args, "-python", pyruntime.Exe(httpengine.SidecarDir))
+				}
+				cmd := exec.CommandContext(ctx, exe, append(args, "setup", f.Backend)...)
 				return runLogged(cmd, log)
 			},
 		},
@@ -405,7 +441,7 @@ func sidecarStatus(name string) integrations.Status {
 				Actions: []integrations.Action{{ID: "install", Label: "Install separately", Long: true}}}
 		}
 	}
-	return integrations.Status{State: integrations.Missing, Detail: "Needs Python 3.12", Actions: install}
+	return integrations.Status{State: integrations.Missing, Actions: install}
 }
 
 // runLogged runs cmd with a hidden console and sends each line of its output

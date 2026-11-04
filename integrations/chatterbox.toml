@@ -6,3 +6,4 @@ about = "Expressive speech and cloning, Polish included; NVIDIA or AMD."
 size = "5-10 GB"
 uses = "sidecar"
 backend = "chatterbox"
+requires = ["python"]

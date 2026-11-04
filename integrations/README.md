@@ -12,6 +12,7 @@ title = "My TTS"
 about = "One sentence: what it gives the user."
 size  = "1.2 GB"            # optional, shown for downloads
 link  = "https://…"         # optional, "More" opens it
+requires = ["python"]       # optional: integrations installed first, in the same job
 ```
 
 An integration either names a handler that does the work in voice's code:
@@ -24,6 +25,7 @@ An integration either names a handler that does the work in voice's code:
 | `session-api` | | lists agents connected through the [session API](../docs/http-api.md) |
 | `model` | `model = "kokoro"` | a model from `voice models`: its state and a Download button |
 | `sidecar` | `backend = "chatterbox"` | a GPU backend: its state and an Install button (`voice sidecar setup`) |
+| `python` | | the Python voice brings for the GPU backends |
 | `builtin` | | always there, nothing to do |
 
 or describes itself with a check and commands, without `uses`:

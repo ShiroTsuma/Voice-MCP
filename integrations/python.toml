@@ -1,0 +1,6 @@
+id = "python"
+group = "gpu"
+order = 1
+title = "Python for GPU voices"
+about = "A Python 3.12 that voice brings along for the GPU backends, so you need no Python of your own. Installed on its own when a backend needs it."
+uses = "python"

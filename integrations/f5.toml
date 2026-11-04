@@ -6,3 +6,4 @@ about = "Cloning that needs the clip's transcript; NVIDIA only, non-commercial w
 size = "5-10 GB"
 uses = "sidecar"
 backend = "f5"
+requires = ["python"]

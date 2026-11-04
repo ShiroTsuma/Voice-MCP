@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -83,5 +84,41 @@ func TestGroupsJSON(t *testing.T) {
 	b, _ := json.Marshal(Groups[0])
 	if string(b) != `{"id":"agents","title":"Agents","about":"The programs voice talks for and takes dictation to"}` {
 		t.Fatalf("%s", b)
+	}
+}
+
+func TestRequires(t *testing.T) {
+	pyOn := false
+	var order []string
+	r := &Registry{}
+	r.Add(Integration{ID: "python", Group: "gpu", Title: "Python",
+		Status: func() Status {
+			if pyOn {
+				return Status{State: On}
+			}
+			return Status{State: Missing, Actions: []Action{{ID: "install", Long: true, Primary: true}}}
+		},
+		Do: func(_ context.Context, _ string, log func(string)) error {
+			order = append(order, "python")
+			pyOn = true
+			return nil
+		}})
+	r.Add(Integration{ID: "xtts", Group: "gpu", Title: "XTTS", Requires: []string{"python"},
+		Status: func() Status {
+			return Status{State: Missing, Actions: []Action{{ID: "install", Long: true, Primary: true}}}
+		},
+		Do: func(_ context.Context, _ string, log func(string)) error { order = append(order, "xtts"); return nil }})
+
+	if v := r.List()[1]; v.Status.Detail != "Installs Python first" {
+		t.Fatalf("detail %q", v.Status.Detail)
+	}
+	if _, err := r.Start("xtts", "install"); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(2 * time.Second); len(order) < 2 && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if strings.Join(order, ",") != "python,xtts" {
+		t.Fatalf("order %v", order)
 	}
 }

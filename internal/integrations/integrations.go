@@ -53,6 +53,9 @@ type Integration struct {
 	About string // one sentence: what it gives the user
 	Size  string // what it takes on disk, when it is a download
 	Link  string // where to read more
+	// Requires names integrations this one needs: a long action installs
+	// the missing ones first (their primary action), in the same job.
+	Requires []string
 	// Status reports the state; Do runs one of the actions Status offered.
 	Status func() Status
 	Do     func(ctx context.Context, action string, log func(string)) error
@@ -135,6 +138,14 @@ func (r *Registry) List() []View {
 	for _, i := range items {
 		v := View{ID: i.ID, Group: i.Group, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link}
 		v.Status = safeStatus(i)
+		if missing := r.missing(i, items); len(missing) > 0 && v.Status.State != On {
+			names := make([]string, len(missing))
+			for k, m := range missing {
+				names[k] = m.Title
+			}
+			v.Status.Detail = strings.TrimSpace(v.Status.Detail + " · Installs " + strings.Join(names, ", ") + " first")
+			v.Status.Detail = strings.TrimPrefix(v.Status.Detail, "· ")
+		}
 		if j, ok := jobs[i.ID]; ok {
 			v.Job = &j
 			if !j.Done {
@@ -211,6 +222,10 @@ func (r *Registry) Start(id, action string) (Job, error) {
 		}
 		r.mu.Unlock()
 	}
+	r.mu.Lock()
+	all := append([]Integration(nil), r.items...)
+	r.mu.Unlock()
+	needs := r.missing(i, all)
 	run := func() {
 		err := func() (err error) {
 			defer func() {
@@ -218,6 +233,24 @@ func (r *Registry) Start(id, action string) (Job, error) {
 					err = fmt.Errorf("%v", p)
 				}
 			}()
+			// What it requires goes first, by that integration's primary action.
+			for _, dep := range needs {
+				var first *Action
+				for _, a := range safeStatus(dep).Actions {
+					if a.Primary {
+						a := a
+						first = &a
+						break
+					}
+				}
+				if first == nil || dep.Do == nil {
+					return fmt.Errorf("%s needs %s, which cannot be installed from here", i.Title, dep.Title)
+				}
+				log(dep.Title + " first:")
+				if err := dep.Do(context.Background(), first.ID, log); err != nil {
+					return fmt.Errorf("%s: %w", dep.Title, err)
+				}
+			}
 			return i.Do(context.Background(), action, log)
 		}()
 		r.mu.Lock()
@@ -235,6 +268,19 @@ func (r *Registry) Start(id, action string) (Job, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return j.copy(), nil
+}
+
+// missing are the integrations i requires that are not set up.
+func (r *Registry) missing(i Integration, all []Integration) []Integration {
+	var out []Integration
+	for _, id := range i.Requires {
+		for _, x := range all {
+			if x.ID == id && safeStatus(x).State != On {
+				out = append(out, x)
+			}
+		}
+	}
+	return out
 }
 
 func (j *Job) copy() Job {
