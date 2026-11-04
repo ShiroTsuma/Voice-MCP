@@ -117,10 +117,13 @@ func (e UserError) Error() string { return e.Msg }
 func userErr(format string, args ...any) error { return UserError{fmt.Sprintf(format, args...)} }
 
 type Service struct {
-	Speaker  *core.Speaker
-	Config   *preset.Config
-	Listener *listen.Listener
-	Agents   *Agents // agent processes that used voice; nil records nothing
+	// ListenView, when set, shows on screen that an agent (who) opened the
+	// microphone, as dictation is shown; the signs it returns follow it.
+	ListenView func(who string) ListenSigns
+	Speaker    *core.Speaker
+	Config     *preset.Config
+	Listener   *listen.Listener
+	Agents     *Agents // agent processes that used voice; nil records nothing
 	// Deliver passes dictated text to an agent and says where it went.
 	Deliver func(text string) string
 	// DeliverTo passes a message to one agent the way dictation reaches it,
@@ -326,12 +329,30 @@ func (s *Service) Listen(ctx context.Context, a ListenArgs) (any, error) {
 		}
 		return time.Duration(min(v, 45) * float64(time.Second))
 	}
-	res, err := s.Listener.Listen(ctx, listen.Options{Wait: secs(a.WaitSeconds, 15), MaxSpeech: secs(a.MaxSeconds, 30)})
+	opts := listen.Options{Wait: secs(a.WaitSeconds, 15), MaxSpeech: secs(a.MaxSeconds, 30)}
+	// The user must see when an agent hears them: the same signs as their own
+	// dictation (the corner ring with their voice, their words as heard).
+	if view := s.ListenView; view != nil {
+		v := view(dirOr(s.Agents.Name(a.PID), "an agent"))
+		opts.Level, opts.Recorded = v.Level, v.Recorded
+		opts.Partial = func(t string) { v.Partial(VocabularyFor(s.Config, s.Agents).Correct(t)) }
+		defer v.End()
+	}
+	res, err := s.Listener.Listen(ctx, opts)
 	if err != nil {
 		return nil, UserError{err.Error()}
 	}
 	res.Text = VocabularyFor(s.Config, s.Agents).Correct(res.Text)
 	return res, nil
+}
+
+// ListenSigns are what the screen shows while an agent listens: the
+// microphone level, the end of recording, the words heard so far, the end.
+type ListenSigns struct {
+	Level    func(float64)
+	Recorded func()
+	Partial  func(string)
+	End      func()
 }
 
 func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {

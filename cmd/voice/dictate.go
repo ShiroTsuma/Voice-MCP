@@ -181,6 +181,31 @@ func (c *controller) cornerPreparing(on bool, tint uint32) {
 	})
 }
 
+// agentListening shows that an agent opened the microphone (voice_listen)
+// as the user's own dictation shows: the corner ring with their voice, the
+// popup with their words as heard, then transcribing. The log keeps who.
+func (c *controller) agentListening(who string) service.ListenSigns {
+	logf("listen: %s opened the microphone", who)
+	c.show(func(s *overlay.State) { s.Recording, s.Level = true, 0 })
+	c.setDictation("listening", 0)
+	return service.ListenSigns{
+		Level: func(v float64) {
+			c.show(func(s *overlay.State) { s.Level = v })
+			c.setDictation("listening", v)
+		},
+		Recorded: func() {
+			c.show(func(s *overlay.State) { s.Recording, s.Transcribing = false, true })
+			c.setDictation("transcribing", 0)
+		},
+		Partial: c.setDictationText,
+		End: func() {
+			c.show(func(s *overlay.State) { s.Recording, s.Transcribing = false, false })
+			c.setDictation("", 0)
+			logf("listen: %s closed the microphone", who)
+		},
+	}
+}
+
 // show changes the overlay, when dictation reports on screen.
 func (c *controller) show(change func(*overlay.State)) {
 	if screen, _ := c.feedback(); screen {

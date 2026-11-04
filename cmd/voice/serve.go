@@ -157,7 +157,7 @@ func runServe(args []string) error {
 		return err
 	}
 
-	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents}
+	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents, ListenView: ctl.agentListening}
 	var once sync.Once
 	extra := func(mux *http.ServeMux, info daemon.Info) {
 		b.info = info
