@@ -49,11 +49,17 @@ type Request struct {
 	MaxChars int
 }
 
-// ScriptLine is one line of a script and the preset that says it.
+// ScriptLine is one line of a script and the preset that says it. Pause is
+// silence after it in seconds (0: a short breath when the voice changes); a
+// line with a pause and no text is just a break.
 type ScriptLine struct {
 	Text   string
 	Preset string
+	Pause  float64
 }
+
+// maxPause caps one break in a script, in seconds.
+const maxPause = 10
 
 type Result struct {
 	Engine  string  // engine that produced the audio
@@ -76,16 +82,19 @@ type item struct {
 	preset preset.Resolved
 	cache  bool
 	saveTo string
-	parts  []part // the text by voice: one part, or a script's lines
+	parts  []part  // the text by voice: one part, or a script's lines
+	lead   float64 // silence before the first part, in seconds
 	done   chan Result
 
 	line Line // progress, under Speaker.mu
 }
 
-// part is a stretch of an utterance in one voice.
+// part is a stretch of an utterance in one voice; pause is the silence after
+// it, in seconds (0: lineGap when the next voice differs).
 type part struct {
 	text   string
 	preset preset.Resolved
+	pause  float64
 }
 
 type Speaker struct {
@@ -167,13 +176,21 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	}
 	var texts []string
 	var kept []ScriptLine
+	lead := 0.0 // a break before the first line
 	for _, l := range lines {
+		pause := min(max(l.Pause, 0), maxPause)
 		t := Truncate(Clean(l.Text), maxChars)
 		if strings.TrimSpace(t) == "" {
+			// A break alone: after the line before it, or before the first.
+			if k := len(kept) - 1; k >= 0 {
+				kept[k].Pause = min(kept[k].Pause+pause, maxPause)
+			} else {
+				lead = min(lead+pause, maxPause)
+			}
 			continue
 		}
 		texts = append(texts, t)
-		kept = append(kept, ScriptLine{Text: t, Preset: l.Preset})
+		kept = append(kept, ScriptLine{Text: t, Preset: l.Preset, Pause: pause})
 	}
 	if len(kept) == 0 {
 		return Ticket{}, errors.New("nothing speakable left after removing markdown, code and links")
@@ -222,15 +239,17 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 				note = n
 			}
 		}
-		// Lines in the same voice in a row are one part: they render together.
-		if k := len(parts) - 1; k >= 0 && parts[k].preset.Name == p.Name {
+		// Lines in the same voice in a row are one part: they render together,
+		// unless a break was asked for between them.
+		if k := len(parts) - 1; k >= 0 && parts[k].preset.Name == p.Name && parts[k].pause == 0 {
 			parts[k].text += " " + l.Text
+			parts[k].pause = l.Pause
 			continue
 		}
-		parts = append(parts, part{text: l.Text, preset: p})
+		parts = append(parts, part{text: l.Text, preset: p, pause: l.Pause})
 	}
 	s.nextID++
-	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts,
+	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead,
 		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, done: make(chan Result, 1)}
 	if req.Interrupt {
 		s.dropLocked(ErrInterrupted)
@@ -686,9 +705,20 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				return false
 			}
 		}
+		if it.lead > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, it.lead), gap: true}) {
+			return
+		}
 		for n, v := range vs {
-			if n > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, lineGap), gap: true}) {
-				return // a turn in the dialogue: a short breath between voices
+			// Between parts: the break the script asked for, else a short breath
+			// when the voice changes (a turn in the dialogue).
+			if n > 0 {
+				gap := vs[n-1].pause
+				if gap == 0 && vs[n-1].preset.Name != v.preset.Name {
+					gap = lineGap
+				}
+				if gap > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, gap), gap: true}) {
+					return
+				}
 			}
 			engines := v.choice.Engines
 			send := func(pcm []float32) bool {

@@ -39,6 +39,14 @@ func TestScriptLines(t *testing.T) {
 	if said != "Narrator: The door creaks open. clara: Who's there? Just me." {
 		t.Fatalf("transcript: %q", said)
 	}
+	// A pause on a line, and a break alone, are kept for the speaker.
+	lines, said, err = s.script(SpeakArgs{Lines: []SpeakLine{{Text: "One.", Pause: 1}, {Pause: 2}, {Text: "Two."}}})
+	if err != nil || len(lines) != 3 || lines[0].Pause != 1 || lines[1].Pause != 2 || lines[1].Text != "" || said != "One. Two." {
+		t.Fatalf("pauses: %+v %q %v", lines, said, err)
+	}
+	if _, _, err := s.script(SpeakArgs{Lines: []SpeakLine{{Pause: 2}}}); err == nil {
+		t.Fatal("a script of breaks alone was taken")
+	}
 	if _, _, err := s.script(SpeakArgs{Lines: []SpeakLine{{Text: "Hi", Voice: "nobody"}}}); err == nil {
 		t.Fatal("an unknown voice was taken")
 	}

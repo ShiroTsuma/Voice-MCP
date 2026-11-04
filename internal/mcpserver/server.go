@@ -40,11 +40,14 @@ var (
 			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code. Required unless lines is given."},
 			"lines": map[string]any{
 				"type":        "array",
-				"description": "Only for a scene or dialogue the user asked to hear in several voices: the lines in order, each with its own voice (a character or a preset; omitted: yours), spoken as one flowing piece instead of text. One call for the whole scene, not one per line.",
+				"description": "Only for a scene or dialogue the user asked to hear in several voices: the lines in order, each with its own voice (a character or a preset; omitted: yours), spoken as one flowing piece instead of text. One call for the whole scene, not one per line. A line may end with a pause (seconds of silence after it, up to 10); a line with only a pause is a break between beats or scenes.",
 				"items": map[string]any{
-					"type":                 "object",
-					"required":             []string{"text"},
-					"properties":           map[string]any{"text": map[string]any{"type": "string"}, "voice": map[string]any{"type": "string"}},
+					"type": "object",
+					"properties": map[string]any{
+						"text":  map[string]any{"type": "string"},
+						"voice": map[string]any{"type": "string"},
+						"pause": map[string]any{"type": "number", "minimum": 0, "maximum": 10, "description": "Seconds of silence after this line (default: a short breath when the voice changes)."},
+					},
 					"additionalProperties": false,
 				},
 			},

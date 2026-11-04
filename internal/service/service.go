@@ -163,8 +163,10 @@ func (l *SpeakLines) UnmarshalJSON(b []byte) error {
 
 // SpeakLine is one line of a script.
 type SpeakLine struct {
-	Text  string `json:"text"`
+	Text  string `json:"text,omitempty"`
 	Voice string `json:"voice,omitempty"`
+	// Pause: seconds of silence after the line; alone, a break.
+	Pause float64 `json:"pause,omitempty"`
 }
 
 // script turns a call's lines into the speaker's, each with its preset, and
@@ -181,6 +183,9 @@ func (s *Service) script(a SpeakArgs) ([]core.ScriptLine, string, error) {
 	var said []string
 	for _, l := range a.Lines {
 		if strings.TrimSpace(l.Text) == "" {
+			if l.Pause > 0 {
+				out = append(out, core.ScriptLine{Pause: l.Pause}) // a break alone
+			}
 			continue
 		}
 		p := own
@@ -192,9 +197,9 @@ func (s *Service) script(a SpeakArgs) ([]core.ScriptLine, string, error) {
 		} else {
 			said = append(said, l.Text)
 		}
-		out = append(out, core.ScriptLine{Text: l.Text, Preset: p})
+		out = append(out, core.ScriptLine{Text: l.Text, Preset: p, Pause: l.Pause})
 	}
-	if len(out) == 0 {
+	if len(said) == 0 {
 		return nil, "", userErr("lines has no text")
 	}
 	return out, strings.Join(said, " "), nil
