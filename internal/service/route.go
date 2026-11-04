@@ -65,11 +65,16 @@ func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool)
 		client := clientKind(a.Client)
 		for i, addr := range addresses(a.Name, client, a.Project) {
 			n := matchWords(norm, addr)
-			if n == 0 || n >= len(words) {
+			if n == 0 || n >= len(words) || possessive(words[n-1]) {
+				continue // "Rebekka's change broke it" is about her
+			}
+			// "Rebekka powiedziała, że ..." is about her too; "Rebekka, ..." or
+			// "Rebekka zrób ..." speaks to her.
+			if !setOff(words[n-1]) && subjectVerb[norm[n]] {
 				continue
 			}
 			score := n*2 + len(addr) // more words, then more specific names
-			if i == 0 && a.Name != "" {
+			if i <= 1 && a.Name != "" && (i == 0 || vocativeOf(normalize(a.Name)) != "") {
 				score += 100 // a session's own name beats its client or project
 			}
 			if score > bestScore {
@@ -86,7 +91,11 @@ func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool)
 	bestScore = 0
 	for _, a := range agents {
 		name := normalize(a.Name)
-		if name == "" || len(words) < 2 || matchWords(norm[len(norm)-1:], []string{name}) == 0 {
+		if name == "" || len(words) < 2 {
+			continue
+		}
+		last := norm[len(norm)-1:]
+		if matchWords(last, []string{name}) == 0 && (vocativeOf(name) == "" || matchWords(last, []string{vocativeOf(name)}) == 0) {
 			continue
 		}
 		if score := len(name); score > bestScore {
@@ -94,6 +103,9 @@ func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool)
 		}
 	}
 	if bestN == 0 {
+		if pid, ok := calledMidway(words, norm, agents); ok {
+			return []uint32{pid}, text, false
+		}
 		return nil, text, false
 	}
 	rest = strings.TrimRight(strings.Join(words[:len(words)-bestN], " "), " ,:;-–—")
@@ -103,11 +115,121 @@ func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool)
 	return []uint32{best}, rest, false
 }
 
+// Words right before a name that make it the object of the sentence, not the
+// one spoken to: "tell Rebekka", "with Anna", "zapytaj Rebekę", "do Clary".
+var aboutBefore = map[string]bool{
+	"tell": true, "ask": true, "told": true, "asked": true, "with": true, "to": true, "and": true, "or": true,
+	"from": true, "for": true, "of": true, "by": true, "about": true, "like": true, "than": true, "as": true,
+	"let": true, "call": true, "called": true, "named": true, "the": true, "a": true, "an": true,
+	"powiedz": true, "zapytaj": true, "napisz": true, "przekaz": true, "daj": true, "z": true, "ze": true,
+	"do": true, "od": true, "dla": true, "i": true, "oraz": true, "albo": true, "lub": true, "o": true,
+	"niz": true, "jak": true, "przez": true, "u": true, "niech": true,
+}
+
+// Words right after a name that make it the subject: "Anna said", "Rebekka
+// zrobiła".
+var aboutAfter = map[string]bool{
+	"said": true, "says": true, "is": true, "was": true, "will": true, "has": true, "had": true, "did": true,
+	"does": true, "can": true, "could": true, "should": true, "would": true, "thinks": true, "wrote": true,
+	"made": true, "and": true, "or": true,
+	"powiedziala": true, "powiedzial": true, "mowi": true, "zrobila": true, "zrobil": true, "napisala": true,
+	"napisal": true, "ma": true, "jest": true, "byla": true, "byl": true, "bedzie": true, "i": true, "oraz": true,
+}
+
+// Words shortly before a name that speak to someone: "do you think Anna".
+var youWords = map[string]bool{
+	"you": true, "your": true, "ya": true, "hey": true, "hi": true, "please": true,
+	"ty": true, "cie": true, "ciebie": true, "tobie": true, "ci": true, "twoim": true, "twoja": true, "twoj": true,
+	"hej": true, "sluchaj": true, "prosze": true, "wiesz": true, "myslisz": true, "mozesz": true,
+	"sadzisz": true, "widzisz": true, "zrobisz": true, "sprawdzisz": true, "dasz": true, "powiesz": true,
+}
+
+// calledMidway finds a session's name said inside a sentence to the one it
+// addresses ("do you think, Anna, that ...", "a ty, Rebekko, co myślisz?").
+// A name counts when it is said in the vocative (Anno, Rebekko), followed by
+// a comma, or right after words that speak to someone, and not when the
+// sentence is about it ("tell Rebekka", "Anna said"). Names of two sessions
+// in one sentence address nobody: guessing would be worse.
+func calledMidway(words, norm []string, agents []AgentInfo) (uint32, bool) {
+	var found uint32
+	hits := 0
+	for _, a := range agents {
+		name := normalize(a.Name)
+		if name == "" {
+			continue
+		}
+		vocative := vocativeOf(name)
+		if vocative != "" {
+			vocative = sound(vocative)
+		}
+		for i := 1; i < len(norm)-1; i++ {
+			w := norm[i]
+			if w == "" {
+				continue
+			}
+			raw := words[i]
+			if possessive(raw) {
+				continue // "Anna's change"
+			}
+			called := vocative != "" && sound(w) == vocative
+			if !called && sound(w) == sound(name) && !aboutBefore[norm[i-1]] {
+				// A comma or question mark after the name sets it off ("think,
+				// Rebekka, should we", "think Rebecca? Should we"); a comma
+				// before only is a clause boundary as often ("Yesterday,
+				// Rebekka fixed it").
+				comma := setOff(raw)
+				spoken := false
+				for j := max(0, i-3); j < i; j++ {
+					spoken = spoken || youWords[norm[j]]
+				}
+				called = comma || (spoken && !aboutAfter[norm[i+1]])
+			}
+			if called {
+				if hits == 0 || found != a.PID {
+					hits++
+				}
+				found = a.PID
+				break
+			}
+		}
+	}
+	return found, hits == 1
+}
+
+// Verbs right after a name at the start that make the sentence about it.
+var subjectVerb = map[string]bool{
+	"said": true, "says": true, "wrote": true, "made": true, "thinks": true, "was": true, "did": true,
+	"powiedziala": true, "powiedzial": true, "mowi": true, "mowila": true, "zrobila": true, "zrobil": true,
+	"napisala": true, "napisal": true, "byla": true, "byl": true, "uwaza": true, "twierdzi": true,
+}
+
+// setOff: a word followed by a comma, question or exclamation mark.
+func setOff(raw string) bool {
+	return strings.HasSuffix(raw, ",") || strings.HasSuffix(raw, "?") || strings.HasSuffix(raw, "!")
+}
+
+// vocativeOf is the Polish vocative of a name ending in -a (Anna → anno,
+// Rebekka → rebekko), normalized; "" for other names.
+func vocativeOf(name string) string {
+	if strings.HasSuffix(name, "a") && len(name) > 2 {
+		return name[:len(name)-1] + "o"
+	}
+	return ""
+}
+
+func possessive(raw string) bool {
+	raw = strings.TrimRight(raw, ".,!?;:")
+	return strings.HasSuffix(raw, "'s") || strings.HasSuffix(raw, "’s")
+}
+
 // addresses are the word sequences that name an agent.
 func addresses(name, client, project string) [][]string {
 	var out [][]string
 	if n := normalize(name); n != "" {
 		out = append(out, []string{n})
+		if v := vocativeOf(n); v != "" {
+			out = append(out, []string{v}) // "Anno, ..."
+		}
 	}
 	proj := projectWords(project)
 	for _, c := range clientAliases[client] {

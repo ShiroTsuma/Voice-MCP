@@ -37,6 +37,31 @@ func TestRoute(t *testing.T) {
 		{"do wszystkich, kończymy", "Kończymy", []uint32{1, 2, 3}, true},
 		{"Popraw błąd w parserze", "Popraw błąd w parserze", nil, false},
 		{"Codex", "Codex", nil, false}, // only a name: not an address
+
+		// A session's name inside the sentence.
+		{"Do you think Annie that we should do X or Y?", "Do you think Annie that we should do X or Y?", []uint32{1}, false},
+		{"So what do you think, Rebekka, should we ship it?", "So what do you think, Rebekka, should we ship it?", []uint32{3}, false},
+		{"I wonder, Rebecca, if this is done.", "I wonder, Rebecca, if this is done.", []uint32{3}, false},
+		{"Czy myślisz Rebekka, że to zadziała?", "Czy myślisz Rebekka, że to zadziała?", []uint32{3}, false},
+		{"A ty Rebekko co o tym sądzisz?", "A ty Rebekko co o tym sądzisz?", []uint32{3}, false}, // vocative
+		{"Słuchaj Rebeko, zrób deploy jutro", "Słuchaj Rebeko, zrób deploy jutro", []uint32{3}, false},
+		{"Please tell Rebekka that the build is green", "Please tell Rebekka that the build is green", nil, false},
+		{"Yesterday, Rebekka fixed the parser", "Yesterday, Rebekka fixed the parser", nil, false},
+		{"I think Rebekka said it was done", "I think Rebekka said it was done", nil, false},
+		{"zapytaj Rebekkę o logi", "zapytaj Rebekkę o logi", nil, false},
+		{"pracowałem z Rebekką nad tym", "pracowałem z Rebekką nad tym", nil, false},
+		{"Rebekka's change broke the tests", "Rebekka's change broke the tests", nil, false},
+		{"Is the change of Rebekka's done", "Is the change of Rebekka's done", nil, false},
+		{"Do you think Annie, that Rebekka was right?", "Do you think Annie, that Rebekka was right?", []uint32{1}, false},
+		{"What do you think Annie, should Rebekka, do it?", "What do you think Annie, should Rebekka, do it?", nil, false}, // two names called
+		{"So what do you think Rebecca? Should we ship it today?", "So what do you think Rebecca? Should we ship it today?", []uint32{3}, false},
+
+		// Found by speaking test sentences to the recognizers.
+		{"Rebekko, zrób deploy", "Zrób deploy", []uint32{3}, false}, // the vocative first
+		{"Zrób deploy, Rebekko.", "Zrób deploy", []uint32{3}, false},
+		{"Rebekka powiedziała, że to już działa.", "Rebekka powiedziała, że to już działa.", nil, false},
+		{"Rebecca said it works", "Rebecca said it works", nil, false},
+		{"Rebeka zrób deploy jutro", "Zrób deploy jutro", []uint32{3}, false},
 	}
 	for _, c := range cases {
 		to, rest, all := Route(c.text, agents)
