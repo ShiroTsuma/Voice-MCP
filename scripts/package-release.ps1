@@ -38,7 +38,7 @@ try {
 
     # An explicit list: never the checkout's local state (config, models, logs).
     $files = @('README.md', 'LICENSE', 'config.example.toml', 'skills/voice/SKILL.md', 'sidecar/setup.ps1', 'sidecar/backends.json') +
-        @(git ls-files 'claude-plugin/**' 'sidecar/voice_sidecar/**' 'sidecar/profiles/**' 'sidecar/requirements/**' 'integrations/**')
+        @(git ls-files 'claude-plugin/**' 'sidecar/voice_sidecar/**' 'sidecar/profiles/**' 'sidecar/requirements/**' 'integrations/**' 'wordlists/**')
     foreach ($relative in $files) {
         $target = Join-Path $stageRoot $relative
         New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null

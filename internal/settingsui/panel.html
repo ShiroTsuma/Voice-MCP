@@ -352,7 +352,20 @@
   .cloneacts .btn { justify-content: center; }
   .cloneacts .btn.primary { background: var(--ink); color: var(--ground); }
   #cloneGroup.drop .body { outline: 1px dashed var(--ink-2); outline-offset: -4px; border-radius: 8px; }
-  .words { width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--field); color: var(--ink);
+  /* Word lists and the user's words. */
+.wls { display: flex; flex-direction: column; gap: 2px; }
+.wl { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); }
+.wl:first-child { border-top: 0; }
+.wl .t { flex: 1; min-width: 0; }
+.wl b { display: block; font-size: 13.5px; font-weight: 600; }
+.wl small { display: block; font: 12px/1.4 var(--ui-small); color: var(--ink-2); }
+.wl .btn { height: 26px; padding: 0 9px; font-weight: 500; }
+.wrows { display: flex; flex-direction: column; gap: 6px; }
+.wrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) 28px; gap: 6px; align-items: center; }
+.wrow .x { height: 28px; width: 28px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font-size: 16px; }
+.wrow .x:hover { background: var(--field); color: var(--ink); }
+.wrows .none { font: 12.5px var(--ui-small); color: var(--ink-3); }
+.words { width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--field); color: var(--ink);
     font: 13px/1.45 var(--ui); outline: none; user-select: text; }
   .words:focus { box-shadow: inset 0 0 0 1.5px var(--ink-2); }
   .words::placeholder { color: var(--ink-3); }
@@ -665,8 +678,21 @@
           </div>
 
           <div class="row col">
-            <label class="lab" for="words">Words to get right<span class="help">One per line: names and terms (character and project names are known already), or <i>heard -> meant</i> for what the recognizer keeps mishearing</span></label>
-            <textarea id="words" class="words" rows="4" spellcheck="false" placeholder="README&#10;Codex&#10;rytmi -> README"></textarea>
+            <div class="lab">Word lists<span class="help">Terms recognition gets wrong, put right after it hears them. Character, session and project names are known already.</span></div>
+            <div class="wls" id="wordLists"></div>
+            <div class="pair">
+              <button class="btn" id="wlImport" type="button">Import a list…</button>
+              <input type="file" id="wlFile" accept=".json,application/json" hidden>
+              <span class="help" id="wlMsg"></span>
+            </div>
+          </div>
+          <div class="row col">
+            <div class="lab">Your words<span class="help">The word as it should be written, and what recognition writes instead, separated by commas. Leave that empty to match by sound: Rebecca becomes Rebekka.</span></div>
+            <div class="wrows" id="myWords"></div>
+            <div class="pair">
+              <button class="btn" id="wordAdd" type="button">Add a word</button>
+              <button class="btn" id="wordsExport" type="button">Save as a list…</button>
+            </div>
           </div>
           <div class="row">
             <label class="lab" for="unload">Free idle models after</label>
@@ -1600,7 +1626,8 @@ function render(s) {
   const o = s.options;
   notes(s.notes);
   fillCloneEngines(s);
-  if (document.activeElement !== $('words')) $('words').value = ((s.listen && s.listen.words) || []).join('\n');
+  renderWordLists(s);
+  if (!$('myWords').contains(document.activeElement)) renderMyWords((s.listen && s.listen.words) || []);
   renderLangs(s.languages || []);
   // Base voices in the list; a tuned default (voice-default) shows as its base plus the tuning.
   const presets = o.presets.filter(p => !p.extends).map(p => ({ value: p.name, label: p.name }));
@@ -1715,7 +1742,8 @@ function setKey(el, v) {
 let pending = {}, timer = null;
 function merge(dst, src) {
   for (const k in src) {
-    if (src[k] && typeof src[k] === 'object') merge(dst[k] = dst[k] || {}, src[k]);
+    // A list replaces what was there (words, languages); only tables merge.
+    if (src[k] && typeof src[k] === 'object' && !Array.isArray(src[k])) merge(dst[k] = (dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) ? dst[k] : {}, src[k]);
     else dst[k] = src[k];
   }
 }
@@ -1749,7 +1777,100 @@ for (const [id, key] of [['tReverb', 'reverb'], ['tCompress', 'compress']])
   on(id, 'click', e => { const b = e.target.closest('button'); if (b) retune(() => { tune[key] = b.dataset.v; }); });
 on('tSoft', 'change', e => retune(() => { tune.soft = e.target.checked; }));
 // The words list saves when the field is left.
-on('words', 'change', () => save({ listen: { words: $('words').value.split('\n').map(w => w.trim()).filter(Boolean) } }));
+// ── Word lists: voice's own (turn on or off) and imported ones (also remove) ──
+function renderWordLists(s) {
+  const box = $('wordLists'), lists = s.wordlists || [];
+  box.replaceChildren(...lists.map(w => {
+    const row = document.createElement('div'); row.className = 'wl';
+    const sw = document.createElement('label'); sw.className = 'switch'; sw.title = w.on ? 'On' : 'Off';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = w.on; cb.setAttribute('aria-label', w.title);
+    cb.onchange = () => {
+      const on = lists.filter(x => x.id === w.id ? cb.checked : x.on).map(x => x.id);
+      save({ listen: { lists: on } });
+    };
+    sw.append(cb, document.createElement('span'));
+    const t = document.createElement('div'); t.className = 't';
+    const b = document.createElement('b'); b.textContent = w.title;
+    // Which speech the list is for; a note when that is none of the user's languages.
+    const langs = w.languages || [], mine = s.languages || [];
+    const fit = !langs.length ? '' : 'for ' + andList(langs.map(langName)) + ' speech' + (mine.length && !langs.some(l => mine.includes(l)) ? ', not one of your languages' : '');
+    const sm = document.createElement('small'); sm.textContent = [w.words + ' words', fit, w.imported ? 'imported' : '', w.about].filter(Boolean).join(' · ');
+    t.append(b, sm);
+    row.append(sw, t);
+    if (w.imported) {
+      const drop = document.createElement('button'); drop.type = 'button'; drop.className = 'btn'; drop.textContent = 'Remove';
+      drop.onclick = async () => {
+        if (!confirm('Remove the list ' + w.title + '?')) return;
+        try { render((await api('wordlists', { action: 'remove', id: w.id })).state); } catch (e) { $('wlMsg').textContent = e.message; }
+      };
+      row.append(drop);
+    }
+    return row;
+  }));
+}
+on('wlImport', 'click', () => $('wlFile').click());
+on('wlFile', 'change', async () => {
+  const f = $('wlFile').files[0]; $('wlFile').value = '';
+  if (!f) return;
+  try {
+    const r = await api('wordlists', { action: 'import', name: f.name, data: await f.text() });
+    $('wlMsg').textContent = 'Imported ' + f.name + '.';
+    render(r.state);
+  } catch (e) { $('wlMsg').textContent = e.message; }
+});
+
+// ── Your words: rows of a word and what recognition writes instead ──
+// Stored as config.toml has them: "word", and "heard -> word" for each form.
+function wordsToRows(list) {
+  const rows = new Map();
+  for (const e of list) {
+    const [heard, meant] = e.includes('->') ? e.split('->').map(x => x.trim()) : [null, e.trim()];
+    if (!meant) continue;
+    if (!rows.has(meant)) rows.set(meant, []);
+    if (heard) rows.get(meant).push(heard);
+  }
+  return [...rows].map(([word, heard]) => ({ word, heard }));
+}
+function rowsToWords() {
+  const out = [];
+  for (const r of $('myWords').querySelectorAll('.wrow')) {
+    const word = r.querySelector('.w').value.trim();
+    if (!word) continue;
+    const heard = r.querySelector('.h').value.split(',').map(x => x.trim()).filter(Boolean);
+    if (heard.length) heard.forEach(h => out.push(h + ' -> ' + word)); else out.push(word);
+  }
+  return out;
+}
+function wordRow(word, heard) {
+  const r = document.createElement('div'); r.className = 'wrow';
+  const w = document.createElement('input'); w.className = 'text w'; w.value = word; w.placeholder = 'README'; w.spellcheck = false; w.setAttribute('aria-label', 'Written as');
+  const h = document.createElement('input'); h.className = 'text h'; h.value = heard.join(', '); h.placeholder = 'rytmi, read me'; h.spellcheck = false; h.setAttribute('aria-label', 'Heard as');
+  const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×'; x.title = 'Remove'; x.setAttribute('aria-label', 'Remove ' + (word || 'this word'));
+  x.onclick = () => { r.remove(); saveWords(); if (!$('myWords').querySelector('.wrow')) renderMyWords([]); };
+  w.onchange = h.onchange = saveWords;
+  r.append(w, h, x);
+  return r;
+}
+function renderMyWords(list) {
+  const rows = wordsToRows(list), box = $('myWords');
+  if (!rows.length) { const e = document.createElement('div'); e.className = 'none'; e.textContent = 'None yet.'; box.replaceChildren(e); return; }
+  box.replaceChildren(...rows.map(r => wordRow(r.word, r.heard)));
+}
+function saveWords() { save({ listen: { words: rowsToWords() } }); }
+on('wordAdd', 'click', () => {
+  const box = $('myWords'), none = box.querySelector('.none');
+  if (none) none.remove();
+  const r = wordRow('', []); box.append(r); r.querySelector('.w').focus();
+});
+on('wordsExport', 'click', () => {
+  const words = {};
+  for (const { word, heard } of wordsToRows(rowsToWords())) words[word] = heard;
+  const list = { id: 'my-words', title: 'My words', languages: (state && state.languages) || [], words };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' }));
+  a.download = 'my-words.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 
 // Languages: common ones as toggles, plus any saved that the list lacks.
 const LANGS = ['en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl', 'cs', 'uk', 'ru', 'zh', 'ja', 'ko'];

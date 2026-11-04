@@ -238,6 +238,43 @@ func Register(mux *http.ServeMux, d Deps) {
 		job, err := d.Integrations.Start(in.ID, in.Action)
 		reply(w, job, err)
 	})
+	// Word lists: import one (a JSON file the window read) or remove an
+	// imported one; turning lists on and off is a save of listen.lists.
+	api("wordlists", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Action, ID, Name, Data string }
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			reply(w, nil, err)
+			return
+		}
+		var err error
+		switch in.Action {
+		case "import":
+			var wl service.WordList
+			if wl, err = service.ImportWordList([]byte(in.Data), in.Name); err == nil {
+				// An imported list is on right away, next to the ones on now.
+				on := []string{wl.ID}
+				if lists, ok := d.State()["wordlists"].([]map[string]any); ok {
+					for _, l := range lists {
+						if id, _ := l["id"].(string); l["on"] == true && id != wl.ID {
+							on = append(on, id)
+						}
+					}
+				}
+				if err = settings.Update(d.SettingsPath, func(s *settings.Settings) { s.Listen.Lists = &on }); err == nil {
+					_, err = d.Reload()
+				}
+			}
+		case "remove":
+			err = service.RemoveWordList(in.ID)
+		default:
+			err = fmt.Errorf("unknown action %q", in.Action)
+		}
+		if err != nil {
+			reply(w, nil, err)
+			return
+		}
+		reply(w, map[string]any{"state": d.State()}, nil)
+	})
 	api("control", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Action string }
 		json.NewDecoder(r.Body).Decode(&in)
@@ -323,6 +360,9 @@ func merge(s *settings.Settings, in settings.Settings) {
 	set(&s.Serve.UnloadAfter, in.Serve.UnloadAfter)
 	set(&s.Listen.Model, in.Listen.Model)
 	set(&s.Listen.InputDevice, in.Listen.InputDevice)
+	if in.Listen.Lists != nil {
+		s.Listen.Lists = in.Listen.Lists
+	}
 	if in.Languages != nil {
 		s.Languages = in.Languages
 		s.Listen.Languages = nil

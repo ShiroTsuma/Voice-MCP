@@ -83,6 +83,8 @@ type Listen struct {
 	InputDevice *string `toml:"input_device,omitempty" json:"input_device,omitempty"`
 	// Words replaces config.toml's list when set.
 	Words *[]string `toml:"words,omitempty" json:"words,omitempty"`
+	// Lists: the word lists turned on, by id.
+	Lists *[]string `toml:"lists,omitempty" json:"lists,omitempty"`
 	// Languages: where earlier versions kept the top-level languages; read
 	// as long as those are unset, cleared when they are saved.
 	Languages *[]string `toml:"languages,omitempty" json:"languages,omitempty"`

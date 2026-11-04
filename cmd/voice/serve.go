@@ -124,6 +124,10 @@ func runServe(args []string) error {
 	}}
 	agents.Logf = logf
 	agents.Load(filepath.Join(core.DataDir(), "agents.json"))
+	// Word lists: voice's own next to voice.exe, imported ones in the data folder.
+	for _, err := range service.LoadWordLists(filepath.Join(exeDir(), "wordlists"), filepath.Join(core.DataDir(), "wordlists")) {
+		logf("word lists: %v", err)
+	}
 	ctl := startExtras(ctx, cfg, sp, l, agents)
 	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device + "\x00" + cfg.Listen.InputDevice}
 	ctl.onSpeaking, ctl.onDictating = b.speaking, b.dictating
@@ -373,7 +377,8 @@ func (b *backend) state() map[string]any {
 		},
 		"listen":     map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice, "words": cfg.Listen.Words},
 		"languages":  cfg.Languages,
-		"characters": cfg.Characters,            // who sessions become; the settings window edits the list
+		"characters": cfg.Characters, // who sessions become; the settings window edits the list
+		"wordlists":  wordListsState(cfg),
 		"transcript": b.ctl.agents.Transcript(), // what voice said and what the user dictated, oldest first
 		"hooks": map[string]any{
 			"enabled": boolOr(cfg.Hooks.Enabled, true), "summary": boolOr(cfg.Hooks.Summary, true),
@@ -416,4 +421,19 @@ func floatOr(p *float64, def float64) float64 {
 		return def
 	}
 	return *p
+}
+
+// wordListsState is each word list as the settings window shows it, with
+// whether it is on.
+func wordListsState(cfg *preset.Config) []map[string]any {
+	on := map[string]bool{}
+	for _, w := range service.ListsOn(cfg.Listen.Lists, cfg.Languages) {
+		on[w.ID] = true
+	}
+	out := []map[string]any{}
+	for _, w := range service.WordLists() {
+		out = append(out, map[string]any{"id": w.ID, "title": w.Title, "about": w.About, "languages": w.Languages,
+			"words": w.Count(), "imported": w.Imported, "on": on[w.ID]})
+	}
+	return out
 }

@@ -54,6 +54,8 @@
 # language = ""          # Whisper only; empty detects
 # input_device = ""      # microphone name substring, see `voice devices`
 # end_silence = 1.2      # seconds of silence that end an answer
+# words = ["Rebekka", "rytmi -> README"]   # your own: a word, or heard -> meant
+# lists = ["it-pl", "it-en"]   # word lists turned on (wordlists\*.json); unset: the ones in your languages
 
 # Any program that writes WAV can be an engine. Placeholders:
 # {text} {voice} {lang} {speed} {wpm} {out}. Without {text} the text goes to

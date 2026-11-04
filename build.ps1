@@ -33,6 +33,8 @@ try {
     Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'sidecar\voice_sidecar'), (Join-Path $PSScriptRoot 'sidecar\setup.ps1'), (Join-Path $PSScriptRoot 'sidecar\backends.json') $sidecar
     # The Integrations window's entries live next to voice.exe.
     Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'integrations') (Split-Path $Output -Parent)
+# So do the word lists dictation can use.
+Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'wordlists') (Split-Path $Output -Parent)
     Write-Host "built $Output ($version)"
 }
 finally {

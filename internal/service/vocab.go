@@ -3,6 +3,9 @@ package service
 import (
 	"regexp"
 	"strings"
+	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"voice/internal/preset"
 )
@@ -73,7 +76,11 @@ func (v *Vocabulary) Correct(text string) string {
 		return text
 	}
 	for _, r := range v.replace {
-		text = r.re.ReplaceAllString(text, "${1}"+strings.ReplaceAll(r.with, "$", "$$")+"${2}")
+		text = r.re.ReplaceAllStringFunc(text, func(m string) string {
+			sm := r.re.FindStringSubmatch(m)
+			heard := m[len(sm[1]) : len(m)-len(sm[2])]
+			return sm[1] + keepCapital(heard, r.with) + sm[2]
+		})
 	}
 	if len(v.words) == 0 {
 		return text
@@ -92,16 +99,23 @@ func (v *Vocabulary) Correct(text string) string {
 			for _, l := range locs[i : i+n] {
 				plain += normalize(text[l[0]:l[1]])
 			}
-			for _, w := range v.words {
-				if w.n != n || !vocabMatch(plain, w.plain) {
-					continue
+			// An entry spelled exactly so wins over one that only sounds
+			// alike: "GitHuba" stays, not "GitHub".
+			for _, exact := range []bool{true, false} {
+				for _, w := range v.words {
+					if w.n != n || (exact && plain != w.plain) || (!exact && !vocabMatch(plain, w.plain)) {
+						continue
+					}
+					out.WriteString(text[last:locs[i][0]])
+					out.WriteString(keepCapital(text[locs[i][0]:locs[i][1]], w.text))
+					last = locs[i+n-1][1]
+					i += n
+					matched = true
+					break
 				}
-				out.WriteString(text[last:locs[i][0]])
-				out.WriteString(w.text)
-				last = locs[i+n-1][1]
-				i += n
-				matched = true
-				break
+				if matched {
+					break
+				}
 			}
 		}
 		if !matched {
@@ -125,11 +139,15 @@ func vocabMatch(heard, entry string) bool {
 }
 
 // VocabularyFor is the vocabulary dictation and listening use now: the
-// user's words, the characters' names, the sessions' names and projects.
+// user's words, the word lists turned on, the characters' names, the
+// sessions' names and projects.
 func VocabularyFor(cfg *preset.Config, agents *Agents) *Vocabulary {
 	var entries []string
 	if cfg != nil {
 		entries = append(entries, cfg.Listen.Words...)
+		for _, w := range ListsOn(cfg.Listen.Lists, cfg.Languages) {
+			entries = append(entries, w.Entries()...)
+		}
 		for _, ch := range cfg.Characters {
 			entries = append(entries, ch.Name)
 		}
@@ -142,5 +160,35 @@ func VocabularyFor(cfg *preset.Config, agents *Agents) *Vocabulary {
 			entries = append(entries, a.Project)
 		}
 	}
-	return NewVocabulary(entries)
+	return cachedVocabulary(entries)
+}
+
+// The vocabulary is asked for with every live word of a dictation; the last
+// one is kept while its entries stay the same.
+var vocabCache struct {
+	sync.Mutex
+	key string
+	v   *Vocabulary
+}
+
+func cachedVocabulary(entries []string) *Vocabulary {
+	key := strings.Join(entries, "\x00")
+	vocabCache.Lock()
+	defer vocabCache.Unlock()
+	if vocabCache.v == nil || vocabCache.key != key {
+		vocabCache.key, vocabCache.v = key, NewVocabulary(entries)
+	}
+	return vocabCache.v
+}
+
+// keepCapital gives with the capital heard starts with, so a sentence's
+// first word keeps it ("Zmerdżuj" becomes "Zmerge'uj"); a word written with
+// capitals of its own (README) stays as it is.
+func keepCapital(heard, with string) string {
+	hr, _ := utf8.DecodeRuneInString(heard)
+	wr, size := utf8.DecodeRuneInString(with)
+	if unicode.IsUpper(hr) && unicode.IsLower(wr) {
+		return string(unicode.ToUpper(wr)) + with[size:]
+	}
+	return with
 }

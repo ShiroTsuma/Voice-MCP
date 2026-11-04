@@ -120,7 +120,10 @@ type Listen struct {
 	InputDevice string   `toml:"input_device"` // microphone name substring; empty = default
 	EndSilence  *float64 `toml:"end_silence"`  // seconds of silence that end an answer
 	// Words the recognizer should get right: names, terms, or "heard -> meant".
-	Words   []string `toml:"words"`
+	Words []string `toml:"words"`
+	// Lists are the word lists turned on (their ids); unset, the default
+	// ones in a language the user speaks.
+	Lists   []string `toml:"lists"`
 	Threads int      `toml:"threads"`
 	// Languages recognition keeps to: the top-level languages (set at load).
 	// [listen] languages from earlier versions is read when that is unset.
@@ -340,6 +343,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if l.Languages != nil {
 		c.Listen.Languages = l.Languages
+	}
+	if l.Lists != nil {
+		c.Listen.Lists = l.Lists
 	}
 	if l.Words != nil {
 		c.Listen.Words = l.Words

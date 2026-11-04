@@ -401,7 +401,18 @@ Only clone a voice you have the right to use.
 
 `[listen] model` picks the recognizer: Parakeet TDT v3 (default; fast, 25 European languages) or Whisper turbo (about 100 languages, several times slower on CPU). Silero VAD ends the recording after `end_silence` seconds of quiet.
 
-Recognizers mishear names they have never heard. voice corrects the text afterwards, with any recognizer: a word that sounds like a character's or session's name, or a project named like an identifier (`MCP-Tools`, `isaac64`), is written as that name ("Rebecca" becomes "Rebekka", "MCP tools" becomes "MCP-Tools"). Add your own words under Listening and memory → Words to get right (`[listen] words` in `config.toml`), one per line; `heard -> meant` replaces what the recognizer keeps writing wrong (`rytmi -> README`). Dictation, its live words and `voice_listen` all use it.
+Recognizers mishear names they have never heard. voice corrects the text afterwards, with any recognizer: a word that sounds like a character's or session's name, or a project named like an identifier (`MCP-Tools`, `isaac64`), is written as that name ("Rebecca" becomes "Rebekka", "MCP tools" becomes "MCP-Tools"). Beyond names, **word lists** put right the terms a recognizer gets wrong. voice brings two, for IT terms in Polish speech (`dżejsona` → `JSON-a`, `rytmi` → `README`, `komit` → `commit`) and in English speech (`read me` → `README`, `engine x` → `nginx`). They are on for the languages you speak until you turn them on or off under Listening and memory → Word lists. A list is a JSON file: each word as it should be written, with what recognition writes instead. An empty list means match by sound alone. An ordinary lowercase word is put right only from its listed forms, so "build" does not swallow "built".
+
+```json
+{
+  "id": "my-team",
+  "title": "Our project names",
+  "languages": ["pl", "en"],
+  "words": { "Kubernetes": ["kubernetis"], "Grafana": [] }
+}
+```
+
+**Import a list…** keeps it in the data folder (`<state_dir>\wordlists`), so it stays across updates. The lists voice brings sit next to `voice.exe` and improve with new versions. Your own words go under **Your words**, as a word and what is heard instead (`[listen] words` in `config.toml`, `heard -> meant` lines). **Save as a list…** turns them into a list file to share. Dictation, its live words and `voice_listen` all use them.
 
 ### GPU sidecar
 
