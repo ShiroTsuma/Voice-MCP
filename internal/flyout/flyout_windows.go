@@ -123,6 +123,9 @@ type Options struct {
 	// focus or the mouse, so it does not disturb what the user works in.
 	// ShowPassive brings it up.
 	Passive bool
+	// Centre puts a flyout or passive window in the middle of the screen with
+	// the mouse instead of the taskbar corner.
+	Centre bool
 }
 
 type Window struct {
@@ -179,6 +182,10 @@ func (w *Window) Show() error { return w.do(w.show) }
 // window: the focus stays where the user works.
 func (w *Window) ShowPassive() error {
 	return w.do(func() {
+		// Already up: leave it be, or the page's opening would play again.
+		if w.visible() && w.opt.URL() == w.url {
+			return
+		}
 		if u := w.opt.URL(); u != w.url {
 			w.url = u
 			w.chromium.Navigate(u)
@@ -411,6 +418,11 @@ func (w *Window) place(flags uintptr) {
 	}
 	if work.Top > full.Top {
 		y = work.Top + margin
+	}
+	if w.opt.Centre {
+		width = min(width, work.Right-work.Left-2*margin)
+		x = work.Left + (work.Right-work.Left-width)/2
+		y = work.Top + (work.Bottom-work.Top-height)/2
 	}
 	procSetWindowPos.Call(w.hwnd, hwndTopmost, uintptr(x), uintptr(y), uintptr(width), uintptr(height), flags)
 }

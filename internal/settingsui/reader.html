@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>voice · Reading</title>
+<!--
+  The reading window: a large one in the middle of the screen, for long messages and scenes the
+  corner popup is too small for. The recent messages, oldest at the top; the one being said fills in
+  word by word ([serve] reader_appear = "words") or shows whole with the word being said marked
+  ("block"). A scene's speakers each start a new line, in their character's colour. It takes no
+  clicks, so it scrolls itself to keep the words being said in view.
+-->
+<style>
+  :root {
+    --ground: oklch(21.5% 0.003 260);
+    --ink:    oklch(94% 0.002 260);
+    --ink-2:  oklch(72% 0.003 260);
+    --ink-3:  oklch(54% 0.003 260);
+    --you:    oklch(90% 0.03 205);
+    --plain:  oklch(80% 0.004 260);
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ease: cubic-bezier(.3, .7, .2, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  html { background: var(--ground); }
+  body { overflow: hidden; font: 15px/1.4 var(--ui); color: var(--ink); user-select: none; cursor: default; }
+  .win { height: 100%; display: flex; flex-direction: column; }
+  .win.enter { animation: enter .2s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes enter { from { opacity: 0; transform: scale(.985); } }
+
+  /* A log: older messages smaller and quieter, the newest at full size near the bottom. */
+  #list { flex: 1; overflow: hidden; padding: 24px 32px; display: flex; flex-direction: column; gap: 14px;
+    mask-image: linear-gradient(to bottom, transparent 0, #000 40px, #000 100%); }
+  #list::after { content: ""; flex: 0 0 8px; }
+  .msg { --light: var(--plain); padding-left: 14px; border-left: 3px solid color-mix(in oklab, var(--light) 70%, transparent);
+    opacity: .7; transition: opacity .5s var(--ease); animation: rise .35s var(--ease); }
+  .msg.live, .msg.last { opacity: 1; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  .head { display: flex; gap: 10px; align-items: baseline; font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
+  .head b { color: var(--light); font-weight: 600; font-size: 13px; }
+  .head .state { color: var(--ink-2); }
+  .text { font: 15px/1.45 var(--ui-display); color: var(--ink-2); text-wrap: pretty; }
+  .msg.live .text, .msg.last .text { font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .msg.dictated .text, .msg.dictated.last .text { color: var(--you); }
+  .msg.dictated.last .text { font-size: 16px; }
+  .text .br { display: block; height: 6px; }
+  .text .who { font-weight: 600; color: var(--c, var(--ink-2)); }
+  .w { transition: opacity .16s linear, color .2s linear, background-color .15s linear; border-radius: 4px; }
+
+  /* Words as they are said: the rest is not there yet. */
+  .words .live .w.later { opacity: 0; }
+  .words .live .w.now { color: color-mix(in oklab, var(--light) 55%, var(--ink)); }
+  /* The whole block at once: what is not said yet is quieter, the word being said is marked. */
+  .block .live .w.later { color: var(--ink-3); }
+  .block .live .w.now { background: color-mix(in oklab, var(--light) 32%, transparent); color: var(--ink);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--light) 32%, transparent); }
+  #empty { margin: auto; color: var(--ink-3); }
+  @media (prefers-reduced-motion: reduce) { .msg, .win.enter { animation: none; } .w { transition: none; } }
+</style>
+</head>
+<body class="words">
+<div class="win enter" id="win">
+  <div id="list"><div id="empty">Nothing said yet.</div></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+async function api(path) {
+  const res = await fetch('/settings/api/' + path);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+const ms = t => { const v = Date.parse(t); return isNaN(v) ? Date.now() : v; };
+const clock = t => new Date(ms(t)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const cap = s => s ? s[0].toUpperCase() + s.slice(1) : '';
+const clientName = c => /codex/i.test(c || '') ? 'Codex' : /claude/i.test(c || '') ? 'Claude' : cap(c || '');
+const still = matchMedia('(prefers-reduced-motion: reduce)');
+
+// The characters' colours, as in the settings window.
+const PALETTE = ['oklch(76% 0.13 152)', 'oklch(74% 0.15 18)', 'oklch(73% 0.13 262)', 'oklch(76% 0.12 322)',
+  'oklch(80% 0.12 92)', 'oklch(75% 0.11 195)', 'oklch(75% 0.13 48)', 'oklch(80% 0.13 128)',
+  'oklch(72% 0.14 292)', 'oklch(78% 0.1 232)', 'oklch(77% 0.12 352)', 'oklch(80% 0.07 70)'];
+let state = null, status = {}, line = null, stateSig = '';
+const chars = () => (state && state.characters) || [];
+const charOf = n => n ? chars().find(c => (c.name || '').toLowerCase() === String(n).toLowerCase()) : null;
+const colourOf = n => { const c = charOf(n); return c ? (c.color || PALETTE[chars().indexOf(c) % PALETTE.length]) : null; };
+const agentOf = pid => (status.agents || []).find(a => a.pid === pid);
+const nameOf = l => (l.pid && agentOf(l.pid) && agentOf(l.pid).name) || l.name || (l.pid ? 'A session' : 'voice');
+const appear = () => (state && state.serve && state.serve.reader_appear) === 'block' ? 'block' : 'words';
+
+// Words with their place in the text, counted in runes like the API's done/from/to.
+function tokens(text) {
+  const cps = Array.from(text || ''), out = [];
+  let i = 0;
+  while (i < cps.length) {
+    while (i < cps.length && /\s/.test(cps[i])) i++;
+    if (i >= cps.length) break;
+    const s = i;
+    while (i < cps.length && !/\s/.test(cps[i])) i++;
+    out.push({ w: cps.slice(s, i).join(''), s, e: i });
+  }
+  return out;
+}
+// The transcript's text (a scene's has "Name:" before each speaker) matched word by word to the text
+// being spoken, so each shown word knows when it is said. A word with no match (a name) goes with the
+// word after it.
+const norm = w => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+function align(shown, spoken) {
+  const map = shown.map(() => -1);
+  let j = 0;
+  shown.forEach((t, i) => {
+    const a = norm(t.w);
+    for (let k = j; k < Math.min(j + 4, spoken.length); k++) if (norm(spoken[k].w) === a) { map[i] = k; j = k + 1; return; }
+  });
+  let next = spoken.length;
+  for (let i = map.length - 1; i >= 0; i--) { if (map[i] >= 0) next = map[i]; else map[i] = -1 - next; }
+  return map; // >= 0: that spoken word; < 0: goes with spoken word -1-v
+}
+
+// One element per transcript entry, kept between polls; the live one is redrawn as it is heard.
+const views = new Map();
+let liveKey = null, live = null, raf = 0, followTop = -1;
+// Utterance ids start again with each run of voice, so the time tells two apart.
+const keyOf = l => (l.id || l.kind) + '|' + l.at + '|' + (l.pid || 0);
+
+function build(l) {
+  const el = document.createElement('div');
+  const you = l.kind === 'dictated';
+  el.className = 'msg ' + (you ? 'dictated' : 'said');
+  el.style.setProperty('--light', you ? 'var(--you)' : (colourOf(nameOf(l)) || 'var(--plain)'));
+  const head = document.createElement('div'); head.className = 'head';
+  const who = document.createElement('b'); who.textContent = you ? 'You' : nameOf(l);
+  const where = document.createElement('span');
+  where.textContent = you ? (l.name ? 'to ' + l.name : '') : [clientName(l.client), l.project].filter(Boolean).join(' in ');
+  const st = document.createElement('span'); st.className = 'state';
+  const when = document.createElement('time'); when.textContent = clock(l.at);
+  head.append(who, where, st, when);
+  const text = document.createElement('div'); text.className = 'text';
+  const toks = tokens(l.text), spans = [];
+  toks.forEach((t, i) => {
+    const s = document.createElement('span');
+    s.className = 'w'; s.textContent = t.w;
+    // In a scene a speaker's name starts a new line, in their colour.
+    const named = l.scene && /^[^\s:]{1,40}:$/.test(t.w) && (i === 0 || /[.!?…"”)]$/.test(toks[i - 1].w));
+    if (named) {
+      if (i) text.append(Object.assign(document.createElement('span'), { className: 'br' }));
+      s.classList.add('who');
+      const c = colourOf(t.w.slice(0, -1)); if (c) s.style.setProperty('--c', c);
+    } else if (i) text.append(' ');
+    text.append(s); spans.push(s);
+  });
+  el.append(head, text);
+  return { el, toks, spans, st, l };
+}
+
+function render() {
+  const list = $('list');
+  const t = (status.transcript || []).filter(l => l.kind === 'said' || l.kind === 'dictated').slice(-8);
+  $('empty').hidden = t.length > 0;
+  const keep = new Set(t.map(keyOf));
+  for (const [k, v] of views) if (!keep.has(k)) { v.el.remove(); views.delete(k); }
+  t.forEach((l, i) => {
+    const k = keyOf(l);
+    let v = views.get(k);
+    if (!v || v.l.text !== l.text) { if (v) v.el.remove(); v = build(l); views.set(k, v); if (live && liveKey === k) liveKey = null; }
+    if (list.children[i + 1] !== v.el) list.insertBefore(v.el, list.children[i + 1] || null); // after #empty
+    v.el.classList.toggle('last', i === t.length - 1);
+  });
+
+  // What is being said now: the newest entry of its utterance.
+  let k = null;
+  if (line) for (let i = t.length - 1; i >= 0; i--) if (t[i].id === line.id) { k = keyOf(t[i]); break; }
+  const v = k ? views.get(k) : null;
+  if (liveKey !== k || (v && live !== v)) {
+    if (live) { live.el.classList.remove('live'); live.spans.forEach(s => s.classList.remove('later', 'now')); live.st.textContent = ''; }
+    liveKey = k; live = v || null; followTop = -1;
+    if (live) {
+      live.spoken = tokens(line.text); live.map = align(live.toks, live.spoken); live.now = -1;
+      live.el.classList.add('live');
+      live.spans.forEach(s => s.classList.add('later'));
+    }
+  }
+  dictation(list);
+  if (live) {
+    live.st.textContent = line.preparing ? 'is getting ready…' : 'is speaking';
+    if (!raf) tick();
+  } else follow(status.dictation ? $('dict') : null);
+}
+
+// What you are dictating, as it is heard, below the messages until it is sent.
+function dictation(list) {
+  const d = status.dictation;
+  let el = $('dict');
+  if (!d) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div'); el.id = 'dict'; el.className = 'msg dictated last';
+    el.style.setProperty('--light', 'var(--you)');
+    el.innerHTML = '<div class="head"><b>You</b><span class="state"></span></div><div class="text"></div>';
+  }
+  if (list.lastElementChild !== el) list.append(el);
+  const st = d.state === 'transcribing' ? 'transcribing…' : 'listening';
+  if (el.querySelector('.state').textContent !== st) el.querySelector('.state').textContent = st;
+  const text = d.text || (d.state === 'transcribing' ? '' : '…');
+  if (el.querySelector('.text').textContent !== text) el.querySelector('.text').textContent = text;
+}
+
+function tick() {
+  raf = 0;
+  if (!live || !line) return;
+  const from = line.from | 0, to = Math.max(from, line.to | 0), dur = Math.max(.05, +line.seconds || 0) * 1000;
+  const f = line.preparing ? 0 : Math.max(0, Math.min(1, (Date.now() - ms(line.at)) / dur));
+  const p = line.preparing ? (line.done | 0) : Math.max(from + f * (to - from), line.done | 0);
+  const sp = live.spoken;
+  let cur = -1;
+  live.map.forEach((m, i) => {
+    const k = m >= 0 ? m : -1 - m;
+    const said = k < sp.length && sp[k].s < p;
+    live.spans[i].classList.toggle('later', !said);
+    if (said && m >= 0) cur = i;
+  });
+  const n = !line.preparing && f < 1 && cur >= 0 && sp[live.map[cur]].e > from ? cur : -1;
+  if (n !== live.now) {
+    if (live.now >= 0) live.spans[live.now].classList.remove('now');
+    if (n >= 0) live.spans[n].classList.add('now');
+    live.now = n;
+  }
+  follow(cur >= 0 ? live.spans[cur] : live.el);
+  if (document.visibilityState === 'visible') raf = requestAnimationFrame(tick);
+}
+
+// The words being said stay in view near the bottom, as in a log: the view moves on only when they
+// reach the last lines, by a few lines at a time. With nothing said now it moves only to bring a new
+// message's end into view, never back up, so it does not jump when the voice stops.
+function follow(el) {
+  const list = $('list'), h = list.clientHeight;
+  let top = list.scrollTop;
+  if (el) {
+    const r = el.getBoundingClientRect(), lr = list.getBoundingClientRect(), y = r.bottom - lr.top;
+    if (y > h - 36 || y < 60) top = list.scrollTop + y - h * .72;
+  } else {
+    const last = list.querySelector('.msg.last');
+    if (last) {
+      const end = last.offsetTop + last.offsetHeight - list.offsetTop;
+      if (end > list.scrollTop + h - 28) top = end - h + 48;
+    }
+  }
+  top = Math.max(0, Math.min(list.scrollHeight - h, Math.round(top)));
+  if (followTop < 0 || Math.abs(top - followTop) > 4) {
+    followTop = top;
+    list.scrollTo({ top, behavior: still.matches ? 'auto' : 'smooth' });
+  }
+}
+
+let polling = false;
+async function poll() {
+  if (polling) return;
+  polling = true;
+  try { status = await api('status'); line = status.line || null; render(); } catch (e) {} finally { polling = false; }
+}
+// The settings this window follows: how words appear, and the characters' colours.
+async function loadState() {
+  try {
+    state = await api('state');
+    document.body.className = appear();
+    const sig = JSON.stringify(chars().map(c => [c.name, c.color]));
+    if (sig !== stateSig) { stateSig = sig; for (const v of views.values()) v.el.remove(); views.clear(); liveKey = null; live = null; }
+  } catch (e) {}
+}
+// The window calls this each time it appears.
+async function onShow() {
+  const w = $('win'); w.classList.remove('enter'); void w.offsetWidth; w.classList.add('enter');
+  followTop = -1;
+  await loadState();
+  poll();
+}
+let ticks = 0;
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  ticks++;
+  if (line || status.speaking || status.dictation || ticks % 4 === 0) poll();
+  if (ticks % 40 === 0) loadState();
+}, 250);
+onShow();
+</script>
+</body>
+</html>

@@ -29,6 +29,9 @@ var charactersPage []byte
 //go:embed integrations.html
 var integrationsPage []byte
 
+//go:embed reader.html
+var readerPage []byte
+
 type Deps struct {
 	Token        string
 	SettingsPath string
@@ -102,6 +105,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	servePage("/settings", page)
 	servePage("/settings/characters", charactersPage)
 	servePage("/settings/integrations", integrationsPage)
+	servePage("/settings/reader", readerPage)
 	// Character pictures, by the names saveAvatar gives them.
 	mux.HandleFunc("/settings/avatar/", func(w http.ResponseWriter, r *http.Request) {
 		path, err := avatarPath(d.AvatarDir, strings.TrimPrefix(r.URL.Path, "/settings/avatar/"))
@@ -355,6 +359,8 @@ func merge(s *settings.Settings, in settings.Settings) {
 	setB(&s.Serve.Personas, in.Serve.Personas)
 	setB(&s.Serve.SpeakingPopup, in.Serve.SpeakingPopup)
 	setF(&s.Serve.PopupLinger, in.Serve.PopupLinger)
+	set(&s.Serve.ReaderWindow, in.Serve.ReaderWindow)
+	set(&s.Serve.ReaderAppear, in.Serve.ReaderAppear)
 	setB(&s.Serve.PopupDictation, in.Serve.PopupDictation)
 	setB(&s.Serve.VoiceReplies, in.Serve.VoiceReplies)
 	set(&s.Serve.UnloadAfter, in.Serve.UnloadAfter)

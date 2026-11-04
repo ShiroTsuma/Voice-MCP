@@ -554,6 +554,14 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="lab">Stays after<span class="help">How long the corner keeps the last words</span></div>
             <div class="seg" id="popupLinger" role="group" aria-label="Stays after"><button type="button" data-v="4">4 s</button><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button></div>
           </div>
+          <div class="row">
+            <div class="lab">Reading window<span class="help">A large window in the middle of the screen with the recent messages, for long messages and scenes</span></div>
+            <div class="seg" id="readerWindow" role="group" aria-label="Reading window"><button type="button" data-v="off">Off</button><button type="button" data-v="long">Long</button><button type="button" data-v="always">Always</button></div>
+          </div>
+          <div class="row" id="appearRow">
+            <div class="lab">Words appear<span class="help">One by one as they are said, or the whole message at once with the word being said marked</span></div>
+            <div class="seg" id="readerAppear" role="group" aria-label="Words appear"><button type="button" data-v="words">As said</button><button type="button" data-v="block">At once</button></div>
+          </div>
         </div></div>
       </section>
 
@@ -1451,7 +1459,7 @@ if (fullMode) {
     klon: ['clone'], postac: ['character'], charakter: ['character'], dyktow: ['dictation', 'dictate'], ogloszen: ['announce'], zapowiedz: ['announce'],
     model: ['model'], pamiec: ['memory', 'idle'], laduj: ['load'], zaladuj: ['load'], wycisz: ['mute', 'duck'], przerw: ['stop', 'interrupt'],
     tempo: ['speed'], szybkosc: ['speed'], predkosc: ['speed'], wysokosc: ['pitch'], efekt: ['effects'], integrac: ['integrations'], motyw: ['theme'],
-    popup: ['corner', 'popup'], okienk: ['corner', 'popup'], transkryp: ['transcript'], nagryw: ['record'], wysyl: ['submit', 'enter'],
+    popup: ['corner', 'popup', 'reading'], okienk: ['corner', 'popup', 'reading'], okno: ['window', 'reading'], czyta: ['reading'], wyraz: ['words'], pojawi: ['appear'], scen: ['scenes'], transkryp: ['transcript'], nagryw: ['record'], wysyl: ['submit', 'enter'],
   };
   const index = [];
   for (const s of sections) {
@@ -1759,6 +1767,8 @@ function render(s) {
   seg('popupLinger', String(s.serve.popup_linger || 8));
   $('popupDictation').checked = !!s.serve.popup_dictation;
   $('lingerRow').hidden = !s.serve.speaking_popup;
+  seg('readerWindow', s.serve.reader_window || 'off'); seg('readerAppear', s.serve.reader_appear || 'words');
+  $('appearRow').hidden = (s.serve.reader_window || 'off') === 'off';
   $('voiceReplies').checked = !!s.serve.voice_replies;
   setKey($('stopKey'), s.serve.stop_hotkey); setKey($('muteKey'), s.serve.mute_hotkey); setKey($('dictateKey'), s.serve.dictate_hotkey);
   $('dictateTarget').value = s.serve.dictate_target || 'auto'; $('dictateSubmit').checked = !!s.serve.dictate_submit;
@@ -2051,6 +2061,8 @@ on('cornerSpeak', 'change', () => save({ serve: { corner_speaking: $('cornerSpea
 onSeg('overlayScale', v => save({ serve: { dictate_overlay_scale: +v } }));
 onSeg('goalWait', v => save({ hooks: { codex_goal_wait: +v } }));
 onSeg('popupLinger', v => save({ serve: { popup_linger: +v } }));
+onSeg('readerWindow', v => { $('appearRow').hidden = v === 'off'; save({ serve: { reader_window: v } }); });
+onSeg('readerAppear', v => save({ serve: { reader_appear: v } }));
 on('popupDictation', 'change', () => save({ serve: { popup_dictation: $('popupDictation').checked } }));
 onSeg('summaryPart', v => { const [from, n] = v.split(':'); save({ hooks: { summary_from: from, summary_sentences: +n } }); });
 on('dictateTheme', 'change', () => save({ serve: { dictate_theme: $('dictateTheme').value } }));

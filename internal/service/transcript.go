@@ -21,6 +21,7 @@ type Line struct {
 	Text    string    `json:"text"`
 	Outcome string    `json:"outcome,omitempty"` // dictated, message: where it went
 	From    string    `json:"from,omitempty"`    // message: the session that sent it
+	Scene   bool      `json:"scene,omitempty"`   // said: a script of lines ("Name: text ...")
 }
 
 // transcriptSize is how many lines the transcript keeps.

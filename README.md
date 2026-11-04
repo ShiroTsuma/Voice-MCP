@@ -172,11 +172,16 @@ When characters speak, the agent passes the whole scene in **one** `voice_speak`
 ```json
 { "lines": [
   { "text": "The tavern falls quiet as the door creaks open.", "voice": "narrator" },
-  { "text": "Well, look who finally showed up.", "voice": "Rebekka" },
+  { "text": "Well, look who finally showed up.", "voice": "Rebekka", "pause": 1.5 },
+  { "pause": 2 },
   { "text": "Hush. Come, sit by the fire.", "voice": "Anna" } ] }
 ```
 
+`pause` sets the silence after a line in seconds (up to 10); a line with only a pause is a break between beats or scenes.
+
 Kokoro's 54 voices suit a crowd of side characters (they run on the CPU at once); keep the GPU voices for one or two leads.
+
+The corner popup is small for a scene. Under **Reading window** in the settings, voice opens a large window in the middle of the screen instead, for long messages and scenes or always, with the recent messages as a log: each speaker of a scene on its own line in their colour, and your dictation as it is heard. **Words appear** shows each word as it is said, or the whole message at once with the word being said marked.
 ## Add your own voice
 
 A voice comes in three layers, each in `config.toml` next to `voice.exe` (create it from `config.example.toml`):

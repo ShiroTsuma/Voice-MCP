@@ -7,9 +7,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"voice/internal/core"
 	"voice/internal/flyout"
+	"voice/internal/service"
 )
 
 // The settings window is a flyout above the tray icon.
@@ -63,8 +65,13 @@ func (b *backend) togglePanel() {
 // panelShown puts the popup away while the settings window, which shows the
 // same, is open.
 func (b *backend) panelShown() {
-	if popup != nil && b.panel().Visible() {
-		popup.Hide()
+	if b.panel().Visible() {
+		if popup != nil {
+			popup.Hide()
+		}
+		if reader != nil {
+			reader.Hide()
+		}
 	}
 }
 
@@ -168,7 +175,7 @@ func (b *backend) speaking(on bool) {
 	// Nothing on screen says who speaks (no popup, no settings window): the
 	// agent's ring in the corner does, in its character's colour.
 	sv := b.cfg.Serve
-	popupOn := sv.SpeakingPopup != nil && *sv.SpeakingPopup
+	popupOn := (sv.SpeakingPopup != nil && *sv.SpeakingPopup) || b.wantsReader()
 	corner := on && (sv.CornerSpeaking == nil || *sv.CornerSpeaking) && !popupOn && !b.panel().Visible()
 	b.ctl.cornerSpeech(corner, b.speakerTint())
 }
@@ -238,7 +245,21 @@ func (b *backend) panelHidden() {
 // showPopupLocked shows the popup if the setting is on and the settings
 // window is closed; the caller holds popupMu.
 func (b *backend) showPopupLocked() {
-	if sv := b.cfg.Serve; sv.SpeakingPopup == nil || !*sv.SpeakingPopup || b.panel().Visible() {
+	if b.panel().Visible() {
+		return
+	}
+	// A long message or a scene goes to the reading window; once it is up, it
+	// stays for what follows.
+	if (reader != nil && reader.Visible()) || b.wantsReader() {
+		if err := b.reader().ShowPassive(); err != nil {
+			logf("reading window: %v", err)
+		}
+		if popup != nil {
+			popup.Hide()
+		}
+		return
+	}
+	if sv := b.cfg.Serve; sv.SpeakingPopup == nil || !*sv.SpeakingPopup {
 		return
 	}
 	if err := b.popup().ShowPassive(); err != nil {
@@ -251,9 +272,21 @@ func (b *backend) showPopupLocked() {
 func (b *backend) dictating(on bool) {
 	popupMu.Lock()
 	defer popupMu.Unlock()
-	if sv := b.cfg.Serve; on && sv.PopupDictation != nil && *sv.PopupDictation && !b.panel().Visible() {
-		if err := b.popup().ShowPassive(); err != nil {
-			logf("speaking popup: %v", err)
+	// The reading window shows the dictation too, as it is heard: when it is up
+	// or on its way for the speech now, or set to show always, it does instead
+	// of the corner popup.
+	sv := b.cfg.Serve
+	toReader := (reader != nil && reader.Visible()) || (popupSpeaking && b.wantsReader()) || sv.Reader() == "always"
+	if on && sv.PopupDictation != nil && *sv.PopupDictation && !b.panel().Visible() {
+		w, what := b.popup(), "speaking popup"
+		if toReader {
+			w, what = b.reader(), "reading window"
+			if popup != nil {
+				popup.Hide()
+			}
+		}
+		if err := w.ShowPassive(); err != nil {
+			logf("%s: %v", what, err)
 		}
 	}
 	// Dictating holds the popup whenever it shows, also when it came up after
@@ -269,10 +302,71 @@ func (b *backend) lingerLocked() {
 		popupHide.Stop()
 		popupHide = nil
 	}
-	if popup == nil || popupSpeaking || popupDictating {
+	if (popup == nil && reader == nil) || popupSpeaking || popupDictating {
 		return
 	}
-	popupHide = time.AfterFunc(b.cfg.Serve.Linger(), popup.Hide)
+	popupHide = time.AfterFunc(b.cfg.Serve.Linger(), func() {
+		if popup != nil {
+			popup.Hide()
+		}
+		if reader != nil {
+			reader.Hide()
+		}
+	})
+}
+
+// The reading window: a large one in the middle of the screen with the
+// recent messages, for long messages and scenes the corner is too small for.
+// Like the popup it takes no focus and no clicks.
+var (
+	readerOnce sync.Once
+	reader     *flyout.Window
+)
+
+func (b *backend) reader() *flyout.Window {
+	readerOnce.Do(func() {
+		reader = flyout.New(flyout.Options{
+			Width: 820, Height: 760, Margin: 24, Passive: true, Centre: true,
+			URL:        func() string { return "http://" + b.info.Addr + "/settings/reader?t=" + b.info.Token },
+			DataDir:    filepath.Join(core.DataDir(), "webview"),
+			Background: 0x16161d,
+			OnShow:     "onShow()",
+		})
+	})
+	return reader
+}
+
+// readerLong is how many characters make a message long enough for the
+// reading window ([serve] reader_window = "long").
+const readerLong = 280
+
+// wantsReader reports whether what is being said now goes to the reading
+// window.
+func (b *backend) wantsReader() bool {
+	switch b.cfg.Serve.Reader() {
+	case "always":
+		return true
+	case "long":
+		l := b.saying()
+		return l != nil && (l.Scene || utf8.RuneCountInString(l.Text) >= readerLong)
+	}
+	return false
+}
+
+// saying is the transcript's entry for what is being said now, or the newest
+// said one while the voice gets ready.
+func (b *backend) saying() *service.Line {
+	t := b.ctl.agents.Transcript()
+	id := ""
+	if l := b.sp.Status().Line; l != nil {
+		id = l.ID
+	}
+	for i := len(t) - 1; i >= 0; i-- {
+		if t[i].Kind == "said" && (id == "" || t[i].ID == id) {
+			return &t[i]
+		}
+	}
+	return nil
 }
 
 // The Integrations window: an ordinary window like the characters one.
