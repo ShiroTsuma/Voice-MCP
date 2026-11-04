@@ -137,6 +137,7 @@ func runServe(args []string) error {
 	ctl := startExtras(ctx, cfg, sp, l, agents)
 	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device}
 	ctl.onSpeaking, ctl.onDictating = b.speaking, b.dictating
+	sp.OnPreparing(b.preparing)
 	// The Integrations window picks a GPU backend's model size here.
 	sidecarOptions = func(name string) map[string]string { return b.cfg.Sidecar[name] }
 	saveSidecarOption = func(backend, key, value string) error {

@@ -173,6 +173,35 @@ func (b *backend) speaking(on bool) {
 	b.ctl.cornerSpeech(corner, b.speakerTint())
 }
 
+// preparing shows the agent's ring working in the corner while its voice
+// renders: the popup waits for the sound, so nothing else would say it.
+// A fast voice is ready in a moment: the ring shows only once rendering
+// takes longer than this, so it does not flash before every sentence.
+func (b *backend) preparing(on bool) {
+	prepMu.Lock()
+	defer prepMu.Unlock()
+	if prepTimer != nil {
+		prepTimer.Stop()
+		prepTimer = nil
+	}
+	if !on {
+		b.ctl.cornerPreparing(false, 0)
+		return
+	}
+	sv := b.cfg.Serve
+	if (sv.CornerSpeaking != nil && !*sv.CornerSpeaking) || b.panel().Visible() {
+		return
+	}
+	prepTimer = time.AfterFunc(800*time.Millisecond, func() {
+		b.ctl.cornerPreparing(true, b.speakerTint())
+	})
+}
+
+var (
+	prepMu    sync.Mutex
+	prepTimer *time.Timer
+)
+
 // speakerTint is the colour of the character speaking now, 0xRRGGBB, or 0.
 func (b *backend) speakerTint() uint32 {
 	l := b.sp.Status().Line

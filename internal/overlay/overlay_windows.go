@@ -209,8 +209,11 @@ func (o *Overlay) paint(hwnd uintptr) {
 	t := now.Sub(o.start).Seconds()
 	outer := o.scene.Step(s.Show(now), s, t, dt)
 	si, innerKind := s, Hidden
-	if s.Speaking {
+	switch {
+	case s.Speaking:
 		innerKind, si.Level = Recording, s.SpeakLevel
+	case s.Preparing:
+		innerKind = Transcribing // the theme's own "working on it"
 	}
 	inner := o.inner.Step(innerKind, si, t, dt)
 	if !outer && !inner {
@@ -225,7 +228,7 @@ func (o *Overlay) paint(hwnd uintptr) {
 		procSetTimer.Call(hwnd, 1, uintptr(frame/time.Millisecond), 0)
 		o.timer = true
 		if Logf != nil {
-			Logf("overlay: showing %v at %d,%d", s.Show(now), o.pos.X, o.pos.Y)
+			Logf("overlay: showing %v, agent %v, at %d,%d", s.Show(now), innerKind, o.pos.X, o.pos.Y)
 		}
 	}
 	side := onScreen(o.scene.Size(), scale)

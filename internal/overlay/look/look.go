@@ -37,6 +37,9 @@ type State struct {
 	Speaking   bool
 	SpeakLevel float64
 	Tint       uint32
+	// Preparing: an agent's voice is rendering before it is heard; the inner
+	// ring shows the theme's working animation meanwhile.
+	Preparing bool
 }
 
 // Show is the Kind the user's ring shows at now; an agent speaking is the

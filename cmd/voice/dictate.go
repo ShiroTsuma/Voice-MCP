@@ -167,6 +167,20 @@ func (c *controller) cornerSpeech(on bool, tint uint32) {
 	}()
 }
 
+// cornerPreparing shows the agent's ring working while its voice renders
+// before anything is heard; off clears it.
+func (c *controller) cornerPreparing(on bool, tint uint32) {
+	if c.ov == nil {
+		return
+	}
+	c.ov.Set(func(s *overlay.State) {
+		s.Preparing = on
+		if on {
+			s.Tint = tint
+		}
+	})
+}
+
 // show changes the overlay, when dictation reports on screen.
 func (c *controller) show(change func(*overlay.State)) {
 	if screen, _ := c.feedback(); screen {

@@ -74,26 +74,33 @@ type Speaker struct {
 	cfg *preset.Config
 	out audio.Output
 
-	mu        sync.Mutex
-	engines   map[string]engine.Engine
-	loading   map[string]*sync.Mutex // per-engine creation locks
-	used      map[string]time.Time   // last synthesis per engine, for idle unloading
-	activity  func(bool)
-	audibleOn bool // activity(true) was reported for the current stretch of speech (loop only)
-	queue     []*item
-	current   *item
-	cancel    context.CancelFunc
-	active    string
-	muted     bool
-	nextID    int
-	lastErr   string
-	gone      map[string]bool // presets whose missing voice was already reported
+	mu       sync.Mutex
+	engines  map[string]engine.Engine
+	loading  map[string]*sync.Mutex // per-engine creation locks
+	used     map[string]time.Time   // last synthesis per engine, for idle unloading
+	activity func(bool)
+	// preparingFn learns when an utterance is rendering before it is heard.
+	preparingFn func(bool)
+	audibleOn   bool // activity(true) was reported for the current stretch of speech (loop only)
+	queue       []*item
+	current     *item
+	cancel      context.CancelFunc
+	active      string
+	muted       bool
+	nextID      int
+	lastErr     string
+	gone        map[string]bool // presets whose missing voice was already reported
 	// The sentence playing: its loudness every levelStep, from levelAt.
 	levels  []float32
 	levelAt time.Time
 	wake    chan struct{}
 	closed  chan struct{}
 }
+
+// OnPreparing sets a callback for when an utterance starts rendering (true)
+// and when its first sound plays or it ends (false): a slow voice takes a
+// while before anything is heard. Call before speaking.
+func (s *Speaker) OnPreparing(fn func(preparing bool)) { s.preparingFn = fn }
 
 // OnActivity sets a callback for when speech starts (true) and when the
 // queue has drained (false), e.g. to duck other apps. Call before speaking.
@@ -540,6 +547,14 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		defer release()
 	}
 	var err error
+	// Rendering before anything is heard: the screen can say so.
+	ready := func() {}
+	if fn := s.preparingFn; fn != nil && !saving {
+		fn(true)
+		once := sync.Once{}
+		ready = func() { once.Do(func() { fn(false) }) }
+		defer ready()
+	}
 
 	choice := it.preset.For(it.lang)
 	if choice.Voice, err = resolveVoice(choice.Voice); err != nil {
@@ -554,6 +569,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 			return nil
 		}
 		chimed = true
+		ready()
 		s.audible()
 		return s.out.Play(ctx, audio.Chime(it.preset.Chime, audio.DeviceRate))
 	}
@@ -567,6 +583,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 			if err := chime(); err != nil {
 				return Result{Err: err}
 			}
+			ready()
 			s.audible()
 			s.playing(it, 0, len([]rune(it.text)), pcm)
 			if err := s.out.Play(ctx, pcm); err != nil {
@@ -654,6 +671,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		if err := chime(); err != nil {
 			return Result{Engine: used, Err: err}
 		}
+		ready()
 		s.audible()
 		from, to := at, len(runes)
 		if i < len(sentences) {
