@@ -76,6 +76,8 @@ type Serve struct {
 type Listen struct {
 	Model       *string `toml:"model,omitempty" json:"model,omitempty"`
 	InputDevice *string `toml:"input_device,omitempty" json:"input_device,omitempty"`
+	// Words replaces config.toml's list when set.
+	Words *[]string `toml:"words,omitempty" json:"words,omitempty"`
 }
 
 type Hooks struct {

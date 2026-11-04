@@ -385,7 +385,7 @@ Engine types: `sherpa` (Kokoro, Piper/VITS, Pocket, ZipVoice in process), `http`
 
 ### Cloning
 
-In the settings window: Voice clone → record from the microphone or drop a sound file. From the command line:
+In the settings window: Voice clone → pick the engine (the installed ones first: Pocket on the CPU for English, Chatterbox or XTTS on the GPU for Polish too), then record from the microphone or drop a sound file. From the command line:
 
 ```powershell
 voice clone record me -rights "my own voice"      # or: voice clone add me D:\clips\me.wav ...
@@ -400,6 +400,8 @@ Only clone a voice you have the right to use.
 ### Listening
 
 `[listen] model` picks the recognizer: Parakeet TDT v3 (default; fast, 25 European languages) or Whisper turbo (about 100 languages, several times slower on CPU). Silero VAD ends the recording after `end_silence` seconds of quiet.
+
+Recognizers mishear names they have never heard. voice corrects the text afterwards, with any recognizer: a word that sounds like a character's or session's name, or a project named like an identifier (`MCP-Tools`, `isaac64`), is written as that name ("Rebecca" becomes "Rebekka", "MCP tools" becomes "MCP-Tools"). Add your own words under Listening and memory → Words to get right (`[listen] words` in `config.toml`), one per line; `heard -> meant` replaces what the recognizer keeps writing wrong (`rytmi -> README`). Dictation, its live words and `voice_listen` all use it.
 
 ### GPU sidecar
 

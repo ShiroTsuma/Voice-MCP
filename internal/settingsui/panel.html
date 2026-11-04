@@ -350,6 +350,11 @@
   .cloneacts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .cloneacts .btn { justify-content: center; }
   #cloneGroup.drop .body { outline: 1px dashed var(--ink-2); outline-offset: -4px; border-radius: 8px; }
+  .words { width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--field); color: var(--ink);
+    font: 13px/1.45 var(--ui); outline: none; user-select: text; }
+  .words:focus { box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+  .words::placeholder { color: var(--ink-3); }
+
   /* Tuning the default voice: speed, pitch, effects. */
   .tune { margin-top: 2px; border-radius: 8px; background: color-mix(in oklab, var(--field) 45%, transparent); }
   .tune summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; font-size: 13px; color: var(--ink-2); }
@@ -607,6 +612,10 @@
           <div class="row col">
             <label class="lab" for="model">Speech recognition</label>
             <select id="model"></select>
+          </div>
+          <div class="row col">
+            <label class="lab" for="words">Words to get right<span class="help">One per line: names and terms (character and project names are known already), or <i>heard -> meant</i> for what the recognizer keeps mishearing</span></label>
+            <textarea id="words" class="words" rows="4" spellcheck="false" placeholder="README&#10;Codex&#10;rytmi -> README"></textarea>
           </div>
           <div class="row">
             <label class="lab" for="unload">Free idle models after</label>
@@ -1447,6 +1456,7 @@ function render(s) {
   const o = s.options;
   notes(s.notes);
   fillCloneEngines(s);
+  if (document.activeElement !== $('words')) $('words').value = ((s.listen && s.listen.words) || []).join('\n');
   // Base voices in the list; a tuned default (voice-default) shows as its base plus the tuning.
   const presets = o.presets.filter(p => !p.extends).map(p => ({ value: p.name, label: p.name }));
   const tunedDefault = o.presets.find(p => p.name === s.default_preset && p.extends);
@@ -1592,6 +1602,8 @@ on('tPitch', 'input', e => retune(() => { tune.pitch = +e.target.value; }));
 for (const [id, key] of [['tReverb', 'reverb'], ['tCompress', 'compress']])
   on(id, 'click', e => { const b = e.target.closest('button'); if (b) retune(() => { tune[key] = b.dataset.v; }); });
 on('tSoft', 'change', e => retune(() => { tune.soft = e.target.checked; }));
+// The words list saves when the field is left.
+on('words', 'change', () => save({ listen: { words: $('words').value.split('\n').map(w => w.trim()).filter(Boolean) } }));
 on('tReset', 'click', () => retune(() => { tune = fromPreset(presetOf($('preset').value)); }));
 on('volume', 'input', () => { $('volumeVal').textContent = pct($('volume').value); paintRange($('volume')); save({ volume: +$('volume').value }, 350); });
 on('lang', 'change', () => save({ default_lang: $('lang').value }));

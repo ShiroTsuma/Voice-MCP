@@ -92,7 +92,7 @@ func (c *controller) dictate() {
 				c.show(func(s *overlay.State) { s.Recording, s.Transcribing = false, true })
 				c.setDictation("transcribing", 0)
 			},
-			Partial: c.setDictationText,
+			Partial: func(text string) { c.setDictationText(service.VocabularyFor(c.cfg, c.agents).Correct(text)) },
 		})
 		if cancelled.Load() {
 			c.cancelled("Esc")
@@ -103,6 +103,8 @@ func (c *controller) dictate() {
 			return
 		}
 		text := strings.Join(strings.Fields(res.Text), " ") // a line break would send it early
+		// Names and words the recognizer does not know, before routing reads the address.
+		text = service.VocabularyFor(c.cfg, c.agents).Correct(text)
 		if text == "" {
 			c.problem("%s", res.Reason)
 			return

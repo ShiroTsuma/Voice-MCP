@@ -283,6 +283,7 @@ func (s *Service) Listen(ctx context.Context, a ListenArgs) (any, error) {
 	if err != nil {
 		return nil, UserError{err.Error()}
 	}
+	res.Text = VocabularyFor(s.Config, s.Agents).Correct(res.Text)
 	return res, nil
 }
 

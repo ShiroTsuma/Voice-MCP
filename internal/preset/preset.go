@@ -111,7 +111,9 @@ type Listen struct {
 	Language    string   `toml:"language"`     // Whisper only; empty detects
 	InputDevice string   `toml:"input_device"` // microphone name substring; empty = default
 	EndSilence  *float64 `toml:"end_silence"`  // seconds of silence that end an answer
-	Threads     int      `toml:"threads"`
+	// Words the recognizer should get right: names, terms, or "heard -> meant".
+	Words   []string `toml:"words"`
+	Threads int      `toml:"threads"`
 }
 
 // Preset is one voice character. Unset fields inherit from Extends.
@@ -309,6 +311,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if l.Threads != 0 {
 		c.Listen.Threads = l.Threads
+	}
+	if l.Words != nil {
+		c.Listen.Words = l.Words
 	}
 	h := o.Hooks
 	if h.Enabled != nil {

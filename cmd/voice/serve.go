@@ -330,7 +330,7 @@ func (b *backend) state() map[string]any {
 			"dictate_hotkey": orNone(cfg.Serve.DictateHotkey), "dictate_submit": boolOr(cfg.Serve.DictateSubmit, false),
 			"dictate_target": cfg.Serve.DictateTarget, "dictate_feedback": cfg.Serve.DictateFeedback, "dictate_routing": boolOr(cfg.Serve.DictateRouting, false), "dictate_theme": cfg.Serve.DictateTheme, "dictate_overlay_scale": floatOr(cfg.Serve.DictateOverlayScale, 1.5), "personas": boolOr(cfg.Serve.Personas, false), "speaking_popup": boolOr(cfg.Serve.SpeakingPopup, false), "popup_linger": floatOr(cfg.Serve.PopupLinger, 8), "popup_dictation": boolOr(cfg.Serve.PopupDictation, false), "voice_replies": boolOr(cfg.Serve.VoiceReplies, false),
 		},
-		"listen":     map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice},
+		"listen":     map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice, "words": cfg.Listen.Words},
 		"characters": cfg.Characters,            // who sessions become; the settings window edits the list
 		"transcript": b.ctl.agents.Transcript(), // what voice said and what the user dictated, oldest first
 		"hooks": map[string]any{
