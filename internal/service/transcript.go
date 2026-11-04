@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -138,4 +139,22 @@ func (a *Agents) TranscriptFor(caller uint32, session string, limit int) map[str
 		out["note"] = "no lines for " + session + "; omit session for every session"
 	}
 	return out
+}
+
+// Count is a number an MCP client may send as a JSON number or as a string
+// ("5"): clients with an older copy of the tool's schema send strings.
+type Count int
+
+func (c *Count) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		*c = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fmt.Errorf("limit must be a whole number, not %s", b)
+	}
+	*c = Count(n)
+	return nil
 }

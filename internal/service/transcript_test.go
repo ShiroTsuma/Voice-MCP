@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -51,5 +52,15 @@ func TestTranscriptForFilters(t *testing.T) {
 	}
 	if m := a.TranscriptFor(5, "Nobody", 0); len(rows(m)) != 0 || m["note"] == nil {
 		t.Fatalf("unknown: %v", m)
+	}
+}
+
+func TestCountTakesStrings(t *testing.T) {
+	var a ControlArgs
+	for in, want := range map[string]Count{`{"limit":5}`: 5, `{"limit":"7"}`: 7, `{}`: 0} {
+		a = ControlArgs{}
+		if err := json.Unmarshal([]byte(in), &a); err != nil || a.Limit != want {
+			t.Fatalf("%s: %v %v", in, a.Limit, err)
+		}
 	}
 }
