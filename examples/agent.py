@@ -30,13 +30,32 @@ def discovery_path():
 
 
 class Voice:
-    """voice's session API; finds the running background process again
-    after it restarts (new port and token)."""
+    """voice's session API. When voice restarts (an update, a reboot of the
+    tray app) it has a new port and token: calls wait for it to come back,
+    up to a minute, and on_restart registers the session again."""
 
     def __init__(self):
         self.info = None
+        self.on_restart = None
 
     def call(self, action, **body):
+        deadline = time.time() + 60
+        while True:
+            try:
+                return self._call(action, body)
+            except (OSError, urllib.error.URLError):
+                if time.time() > deadline:
+                    raise
+                self.info = None
+                time.sleep(2)
+            except RuntimeError as e:
+                # A restarted voice may not know the session yet: register again once.
+                if "unknown session" in str(e) and self.on_restart and action != "register":
+                    self.on_restart()
+                    return self._call(action, body)
+                raise
+
+    def _call(self, action, body):
         for attempt in range(2):
             if self.info is None:
                 with open(discovery_path(), encoding="utf-8") as f:
@@ -82,8 +101,13 @@ def main():
 
     voice = Voice()
     session = f"example-{uuid.uuid4().hex[:8]}"
-    reg = voice.call("register", session=session, pid=os.getpid(), client="example-agent",
-                     project=args.project, name=args.name or "")
+    def register():
+        return voice.call("register", session=session, pid=os.getpid(), client="example-agent",
+                          project=args.project, name=args.name or name)
+
+    name = ""
+    reg = register()
+    voice.on_restart = register
     name = reg["name"]
     persona = reg.get("persona", "")
 
