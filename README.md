@@ -258,7 +258,7 @@ Characters are `[[characters]]` in `config.toml`: `name`, `traits = [...]`, `des
 ### MCP tools
 
 - `voice_speak(text, intent, lang, interrupt)` queues speech and returns at once.
-- `voice_control(action: status|stop|mute|unmute|list_presets|set_preset|register|list_characters|set_character|transcript, ...)`. `transcript` returns the newest lines of what voice said and what the user dictated, with the session each was for and where it went; `session` filters by a session's or character's name (or `me`), `limit` sets how many (20 by default, 50 at most).
+- `voice_control(action: status|stop|mute|unmute|list_presets|set_preset|register|list_characters|set_character|transcript, ...)`. `transcript` returns the newest lines of what voice said and what the user dictated, with the session each was for and where it went; `session` filters by a session's or character's name (or `me`), `limit` sets how many (20 by default, 50 at most). The last 50 lines are kept in `transcript.json` in the data folder, so they survive a restart.
 - `voice_listen(prompt, wait_seconds, max_seconds)` optionally asks aloud, then records until the user pauses and returns `{"text","lang","seconds"}`. The microphone is open only during the call, between two chimes, and no voice process speaks meanwhile.
 - `voice_clone(action: record|add|list|preview|set_transcript|remove, ...)` creates a voice from the microphone (`record`, `seconds`) or a clip (`add`); both refuse without `rights_confirmed=true`, which the agent may only pass after the user confirms they may use that voice.
 

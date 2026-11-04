@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -62,5 +63,19 @@ func TestCountTakesStrings(t *testing.T) {
 		if err := json.Unmarshal([]byte(in), &a); err != nil || a.Limit != want {
 			t.Fatalf("%s: %v %v", in, a.Limit, err)
 		}
+	}
+}
+
+func TestTranscriptSurvivesRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agents.json")
+	a := &Agents{}
+	a.Load(path)
+	a.Record(Line{Kind: "dictated", PID: 7, Text: "run the tests", Outcome: "Delivered"})
+	a.Record(Line{Kind: "said", PID: 7, Text: "All green."})
+	b := &Agents{}
+	b.Load(path)
+	got := b.Transcript()
+	if len(got) != 2 || got[0].Text != "run the tests" || got[1].Text != "All green." || got[0].At.IsZero() {
+		t.Fatalf("after restart: %+v", got)
 	}
 }

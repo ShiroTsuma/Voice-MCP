@@ -36,6 +36,7 @@ func (a *Agents) Load(path string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.path = path
+	a.loadTranscriptLocked()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return
@@ -60,6 +61,47 @@ func (a *Agents) Load(path string) {
 	}
 	a.dirty = true // drop what did not survive
 	a.saveLocked()
+}
+
+// transcriptPath keeps the transcript next to the agents file, so it
+// survives a restart of voice.
+func (a *Agents) transcriptPath() string {
+	if a.path == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(a.path), "transcript.json")
+}
+
+func (a *Agents) loadTranscriptLocked() {
+	b, err := os.ReadFile(a.transcriptPath())
+	if err != nil {
+		return
+	}
+	var lines []Line
+	if json.Unmarshal(b, &lines) != nil {
+		return
+	}
+	if n := len(lines); n > transcriptSize {
+		lines = lines[n-transcriptSize:]
+	}
+	a.transcript = append(lines, a.transcript...)
+}
+
+// saveTranscriptLocked writes the transcript after each new line (at most
+// transcriptSize short lines).
+func (a *Agents) saveTranscriptLocked() {
+	path := a.transcriptPath()
+	if path == "" {
+		return
+	}
+	b, err := json.Marshal(a.transcript)
+	if err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, b, 0o644) == nil {
+		os.Rename(tmp, path)
+	}
 }
 
 // saveLocked writes the sessions when something worth keeping changed (a new

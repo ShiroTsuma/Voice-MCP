@@ -40,6 +40,7 @@ func (a *Agents) Record(l Line) {
 	if n := len(a.transcript); n > transcriptSize {
 		a.transcript = append([]Line(nil), a.transcript[n-transcriptSize:]...)
 	}
+	a.saveTranscriptLocked()
 	logf := a.Logf
 	a.mu.Unlock()
 	if logf != nil {
