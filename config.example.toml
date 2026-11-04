@@ -97,3 +97,50 @@
 #                        # especially with pitch, speed or reverb changes
 # fallback = ["sapi"]
 # lang.pl = { engine = "piper-justyna", speed = 0.85, pitch = -2.0 }
+
+# GPU voices. Install the backend first (settings window → Integrations →
+# GPU voices); its engine is built in, so a preset only names it. The server
+# starts on the first sentence (a few seconds) and exits after 10 idle minutes.
+#
+# Chatterbox speaks 23 languages, Polish included, with its own voice; with
+# voice = "ref:<clip>" it speaks in the voice of that clip.
+# [presets.chatterbox]
+# engine = "chatterbox"
+# description = "Chatterbox's own voice, English and Polish (GPU)"
+#
+# [presets.chatterbox-clip]
+# engine = "chatterbox"
+# description = "Chatterbox in the voice of a clip"
+# voice = 'ref:D:\clips\speaker.wav'      # 5-15 s of one clear speaker
+#
+# XTTS v2 always takes the voice from a clip (non-commercial license).
+# [presets.xtts-clip]
+# engine = "xtts"
+# description = "XTTS v2 in the voice of a clip, 17 languages"
+# voice = 'ref:D:\clips\speaker.wav'
+#
+# F5-TTS needs the clip's exact words as well: clone the voice, which stores
+# them, and use its preset (NVIDIA only, non-commercial weights):
+#   voice clone add me D:\clips\me.wav -engine f5 -rights "my own voice"
+# That makes the preset clone-me; a preset of your own can extend it:
+# [presets.me-slow]
+# extends = "clone-me"
+# speed = 0.9
+#
+# How expressive Chatterbox is belongs to its engine. Redefining the engine
+# under its own name replaces the built-in one, so give every field:
+# [engines.chatterbox]
+# type = "http"
+# url = "http://127.0.0.1:8765"
+# start = ["{python:chatterbox}", "-m", "voice_sidecar", "--backend", "chatterbox", "--port", "8765", "--idle-seconds", "600"]
+# extra = { exaggeration = 0.6, cfg_weight = 0.3 }   # livelier: exaggeration up, cfg_weight down (default 0.4 / 0.4)
+
+# The chain: an engine makes the sound (kokoro, piper, chatterbox, …), a preset
+# picks an engine and tunes it (calm-mature is Kokoro's af_nicole, slower and
+# lower), and a character picks a preset. A character's preset can be any of
+# the above, a built-in one or a cloned voice (clone-<name>); the Characters
+# window sets it too.
+# [[characters]]
+# name = "Rebekka"
+# traits = ["teasing", "playful"]
+# preset = "chatterbox"
