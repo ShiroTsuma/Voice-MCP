@@ -132,16 +132,16 @@ func matchWords(norm, addr []string) int {
 		return 0
 	}
 	for i, a := range addr {
-		if !close(norm[i], a) {
+		if !similar(norm[i], a) {
 			return 0
 		}
 	}
 	return len(addr)
 }
 
-// close compares two normalized words, allowing one edit in words of five
+// similar compares two normalized words, allowing one edit in words of five
 // letters or more and two in words of eight or more.
-func close(a, b string) bool {
+func similar(a, b string) bool {
 	if a == b || a+"s" == b || b+"s" == a { // "tool" for "tools"
 		return true
 	}

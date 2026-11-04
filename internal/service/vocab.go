@@ -121,7 +121,7 @@ func vocabMatch(heard, entry string) bool {
 	if len([]rune(entry)) < 5 || len([]rune(heard)) < 4 {
 		return false
 	}
-	return close(heard, entry)
+	return similar(heard, entry)
 }
 
 // VocabularyFor is the vocabulary dictation and listening use now: the

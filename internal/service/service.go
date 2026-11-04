@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"voice/internal/audio"
@@ -116,6 +117,9 @@ type Service struct {
 	// DeliverTo passes a message to one agent the way dictation reaches it,
 	// never by typing into another window; ok is false when it took none.
 	DeliverTo func(pid uint32, text string) (report string, ok bool)
+
+	recMu   sync.Mutex
+	recStop chan struct{} // closed by the clone action stop: the recording ends early
 }
 
 func (s *Service) presetFor(explicit, client string) string {
@@ -297,6 +301,16 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		return nil
 	}
 	switch a.Action {
+	case "stop":
+		// Ends a recording early; what was recorded so far is cloned.
+		s.recMu.Lock()
+		defer s.recMu.Unlock()
+		if s.recStop == nil {
+			return "no recording to stop", nil
+		}
+		close(s.recStop)
+		s.recStop = nil
+		return "stopping", nil
 	case "record":
 		// Records the clip from the microphone, checks it, then adds it like "add".
 		if err := need("name"); err != nil {
@@ -321,9 +335,21 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		}
 		secs = max(6, min(secs, 30))
 		const rate = 24000
-		pcm, err := s.Listener.Record(ctx, secs, rate)
+		stop := make(chan struct{})
+		s.recMu.Lock()
+		s.recStop = stop
+		s.recMu.Unlock()
+		pcm, err := s.Listener.Record(ctx, secs, rate, stop)
+		s.recMu.Lock()
+		if s.recStop == stop {
+			s.recStop = nil
+		}
+		s.recMu.Unlock()
 		if err != nil {
 			return nil, UserError{"recording failed: " + err.Error()}
+		}
+		if got := float64(len(pcm)) / rate; got < 4 {
+			return nil, userErr("stopped after %.0f s: record at least 5 s of speech, ideally 10-15", got)
 		}
 		problems, warnings := clones.Check(pcm, rate)
 		if len(problems) > 0 {

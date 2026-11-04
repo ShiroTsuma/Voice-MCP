@@ -179,8 +179,9 @@ func (l *Listener) WaitForSpeech(ctx context.Context, min time.Duration) (bool, 
 
 // Record captures a clip for voice cloning: three short ticks count down,
 // the listen chime opens the microphone for seconds, the heard chime ends it.
-// It returns raw audio at rate, untrimmed; other voice processes stay silent.
-func (l *Listener) Record(ctx context.Context, seconds float64, rate int) ([]float32, error) {
+// Closing stop ends it early with what was recorded so far. It returns raw
+// audio at rate, untrimmed; other voice processes stay silent.
+func (l *Listener) Record(ctx context.Context, seconds float64, rate int, stop <-chan struct{}) ([]float32, error) {
 	defer l.hold()()
 	release, err := core.HoldPlayback(ctx)
 	if err != nil {
@@ -204,6 +205,7 @@ func (l *Listener) Record(ctx context.Context, seconds float64, rate int) ([]flo
 	}
 	want := int(seconds * float64(rate))
 	pcm := make([]float32, 0, want)
+record:
 	for len(pcm) < want {
 		chunk, err := mic.Read(ctx)
 		if err != nil {
@@ -211,10 +213,15 @@ func (l *Listener) Record(ctx context.Context, seconds float64, rate int) ([]flo
 			return nil, err
 		}
 		pcm = append(pcm, chunk...)
+		select {
+		case <-stop:
+			break record
+		default:
+		}
 	}
 	mic.Close()
 	out.Play(ctx, audio.Chime("heard", audio.DeviceRate))
-	return pcm[:want], nil
+	return pcm[:min(len(pcm), want)], nil
 }
 
 type Options struct {

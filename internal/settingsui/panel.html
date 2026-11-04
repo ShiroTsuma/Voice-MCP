@@ -349,6 +349,7 @@
   .clones .cl .btn { height: 28px; padding: 0 10px; font-weight: 500; }
   .cloneacts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .cloneacts .btn { justify-content: center; }
+  .cloneacts .btn.primary { background: var(--ink); color: var(--ground); }
   #cloneGroup.drop .body { outline: 1px dashed var(--ink-2); outline-offset: -4px; border-radius: 8px; }
   .words { width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; border: 0; border-radius: 6px; background: var(--field); color: var(--ink);
     font: 13px/1.45 var(--ui); outline: none; user-select: text; }
@@ -1334,7 +1335,7 @@ if (fullMode) {
   }
   // ?section=characters opens there (the flyout's Manage characters); else where it was left.
   const asked = new URLSearchParams(location.search).get('section');
-  let first = asked ? (asked + '-page') : null;
+  let first = asked ? (sections.find(s => s.id === asked || s.id === asked + '-page') || {}).id : null;
   try { first = first || localStorage.getItem('voice.section'); } catch (e) {}
   // After the rest of the script: the folded groups start inert, and the shown one must not be.
   setTimeout(() => show(sections.some(s => s.id === first) ? first : 'speaking'), 0);
@@ -1473,10 +1474,36 @@ async function cloneAct(args, busyText) {
     const notes = [].concat(r.quality || [], r.warning || []);
     cloneMsg(args.action === 'remove' ? 'Removed ' + args.name + '.'
       : args.action === 'preview' ? ''
-      : 'Added ' + (r.name || args.name) + '; it is the voice preset ' + r.preset + '.' + (notes.length ? ' ' + notes.join(' ') : ''));
+      : 'Added ' + (r.name || args.name) + '; it is the voice preset ' + r.preset + '. Pick it as the default voice or give it to a character.' + (notes.length ? ' ' + notes.join(' ') : ''));
     if (args.action !== 'preview') { await loadClones(); render(await api('state')); }
   } catch (e) { cloneMsg(e.message, true); }
   finally { cloneBusy = false; ['cloneRecord', 'cloneFile'].forEach(id => $(id).disabled = false); }
+}
+// Recording: three ticks count down (about 2 s), then the microphone is open for secs; the Record
+// button turns into Stop, and the line under it counts the time.
+let recording = false;
+async function recordWithTimer(a, secs) {
+  if (cloneBusy) return;
+  const btn = $('cloneRecord'), t0 = Date.now(), lead = 2100;
+  const mmss = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  recording = true; btn.textContent = 'Stop'; btn.classList.add('primary'); $('cloneFile').disabled = true;
+  const tick = setInterval(() => {
+    const ms = Date.now() - t0;
+    if (ms < lead) cloneMsg('Get ready… recording starts after the ticks.');
+    else if (ms < lead + secs * 1000) cloneMsg('Recording ' + mmss((ms - lead) / 1000) + ' / ' + mmss(secs) + ' · read aloud in your normal voice; Stop ends it early.');
+    else cloneMsg('Cloning your voice…');
+  }, 200);
+  cloneBusy = true;
+  try {
+    const r = await api('clone', { ...a, action: 'record', seconds: secs });
+    const notes = [].concat(r.quality || [], r.warning || []);
+    cloneMsg('Added ' + (r.name || a.name) + '; it is the voice preset ' + r.preset + '. Pick it as the default voice or give it to a character.' + (notes.length ? ' ' + notes.join(' ') : ''));
+    await loadClones(); render(await api('state'));
+  } catch (e) { cloneMsg(e.message, true); }
+  finally {
+    clearInterval(tick); recording = false; cloneBusy = false;
+    btn.textContent = 'Record'; btn.classList.remove('primary'); $('cloneFile').disabled = false;
+  }
 }
 function cloneArgs() {
   const name = $('cloneName').value.trim();
@@ -1510,9 +1537,10 @@ async function cloneFrom(file) {
 // wireClone hooks up the clone controls; it runs after on() and onSeg() exist.
 function wireClone() {
   on('cloneRecord', 'click', () => {
+    if (recording) { api('clone', { action: 'stop' }).catch(() => {}); return; } // Stop: clone what was recorded
     const a = cloneArgs(); if (!a) return;
     const secs = +(segValue('cloneSecs') || 12);
-    cloneAct({ ...a, action: 'record', seconds: secs }, 'Recording for ' + secs + ' s: read something aloud in your normal voice.');
+    recordWithTimer(a, secs);
   });
   on('cloneFile', 'click', () => { if (cloneArgs()) $('cloneInput').click(); });
   on('cloneInput', 'change', e => { cloneFrom(e.target.files[0]); e.target.value = ''; });
