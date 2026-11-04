@@ -34,6 +34,9 @@ type SpeakArgs struct {
 	Preset    string `json:"preset,omitempty"`
 	Cache     bool   `json:"cache,omitempty"`
 	Wait      bool   `json:"wait,omitempty"` // return after playback
+	// Voice: for this call only, a character's name (its preset) or a
+	// preset's name; empty uses the session's character or the default.
+	Voice string `json:"voice,omitempty"`
 	// SaveTo: render into this file (an absolute .wav or .mp3 path) instead
 	// of saying it; the call returns once the file is written.
 	SaveTo  string `json:"save_to,omitempty"`
@@ -128,6 +131,26 @@ type Service struct {
 	recStop chan struct{} // closed by the clone action stop: the recording ends early
 }
 
+// speakPreset is the preset a call speaks with: the voice it names (a
+// character or a preset), else the session's character, the client's
+// preset or the default.
+func (s *Service) speakPreset(a SpeakArgs) (string, error) {
+	if v := strings.TrimSpace(a.Voice); v != "" {
+		if ch, ok := s.Config.Character(v); ok {
+			return ch.Preset, nil
+		}
+		if s.Config.HasPreset(v) {
+			return v, nil
+		}
+		var names []string
+		for _, ch := range s.Config.Characters {
+			names = append(names, ch.Name)
+		}
+		return "", userErr("no character or preset %q; characters: %s; presets: voice_control list_presets", v, strings.Join(names, ", "))
+	}
+	return s.presetFor(dirOr(a.Preset, s.characterPreset(a.PID)), a.Client), nil
+}
+
 func (s *Service) presetFor(explicit, client string) string {
 	if explicit != "" || client == "" {
 		return explicit
@@ -148,9 +171,13 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if s.Agents.NoSpeech(a.PID) {
 		return nil, userErr("muted by the user for this session; stay silent until they unmute it")
 	}
+	preset, err := s.speakPreset(a)
+	if err != nil {
+		return nil, err
+	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: a.Intent, Lang: a.Lang, Interrupt: a.Interrupt,
-		Preset: s.presetFor(dirOr(a.Preset, s.characterPreset(a.PID)), a.Client), Cache: a.Cache,
+		Preset: preset, Cache: a.Cache,
 	})
 	if errors.Is(err, core.ErrMuted) {
 		return nil, userErr("muted by the user; stay silent until they unmute")
@@ -548,9 +575,13 @@ func (s *Service) saveSpeech(ctx context.Context, a SpeakArgs) (any, error) {
 	if ext := strings.ToLower(filepath.Ext(path)); ext != ".wav" && ext != ".mp3" {
 		return nil, userErr("save_to must end in .wav or .mp3")
 	}
+	preset, err := s.speakPreset(a)
+	if err != nil {
+		return nil, err
+	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: core.IntentInfo, Lang: a.Lang,
-		Preset: s.presetFor(dirOr(a.Preset, s.characterPreset(a.PID)), a.Client), SaveTo: path,
+		Preset: preset, SaveTo: path,
 	})
 	if err != nil {
 		return nil, UserError{err.Error()}

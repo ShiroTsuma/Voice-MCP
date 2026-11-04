@@ -48,6 +48,7 @@ var (
 				"description": "Language of text. Omit to use the configured default (English). Other languages sound much worse.",
 			},
 			"interrupt": map[string]any{"type": "boolean", "default": false, "description": "Cut off what is playing and drop the queue. Only for urgent messages."},
+			"voice":     map[string]any{"type": "string", "description": "Only when the user asks for a particular voice: a character's name (from voice_control list_characters) or a preset's name (list_presets), for this call only. Omit to speak as yourself."},
 			"save_to":   map[string]any{"type": "string", "description": "Only when the user asks for a recording to keep or send: an absolute path ending in .wav (or .mp3, which needs ffmpeg). The text is rendered there in your voice instead of being said aloud; the answer gives the file. Long text is fine here."},
 		},
 		"additionalProperties": false,
@@ -133,7 +134,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Speak", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.SpeakArgs
-		if err := decode(req, &a, "text", "intent", "lang", "interrupt", "save_to"); err != nil {
+		if err := decode(req, &a, "text", "intent", "lang", "interrupt", "voice", "save_to"); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.Preset, a.PID, a.Project = caller(req, client), presetName, callerPID(req), callerProject(req)

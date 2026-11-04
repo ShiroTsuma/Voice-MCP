@@ -588,9 +588,11 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	// speaks faster or slower by the same factor, so tempo stays as set.
 	pitch := math.Pow(2, choice.Pitch/12)
 
-	// Render the next sentence while the current one plays.
+	// Render the next sentence while the current one plays. The queue holds
+	// a whole batch, so the batch after it starts rendering as soon as this
+	// one is ready and has all of its playing time to get done.
 	sentences := Split(it.text, minSentence)
-	ch := make(chan rendered, 1)
+	ch := make(chan rendered, batchSize)
 	var used string
 	go func() {
 		defer close(ch)
