@@ -19,7 +19,7 @@ func TestRemovedVoiceFallsBackToDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.SetPreset("ghost", preset.Preset{Engine: "sapi", Voice: preset.Voice{Voice: engine.Voice{Name: clonePrefix + "tomek"}}})
+	cfg.SetPreset("ghost", preset.Preset{Engine: "sapi", Voice: preset.Voice{Voice: engine.Voice{Name: clonePrefix + "sam"}}})
 	cfg.SetPreset("moved", preset.Preset{Engine: "sapi", Voice: preset.Voice{Voice: engine.Voice{Ref: filepath.Join(t.TempDir(), "gone.wav")}}})
 
 	for _, name := range []string{"ghost", "moved"} {
@@ -32,7 +32,7 @@ func TestRemovedVoiceFallsBackToDefault(t *testing.T) {
 			t.Fatalf("%s: preset %q note %q err %v", name, got.Name, note, err)
 		}
 	}
-	if !strings.Contains(func() string { p, _ := cfg.Resolve("ghost"); _, n, _ := voiceOrDefault(cfg, p, "en"); return n }(), "cloned voice tomek") {
+	if !strings.Contains(func() string { p, _ := cfg.Resolve("ghost"); _, n, _ := voiceOrDefault(cfg, p, "en"); return n }(), "cloned voice sam") {
 		t.Fatal("note does not name the clone")
 	}
 
@@ -59,22 +59,22 @@ func TestPromptStandsForTheRecording(t *testing.T) {
 		pcm[i] = 0.3 * float32(i%50) / 50
 	}
 	os.WriteFile(wav, audio.EncodeWAV(pcm, 24000), 0o644)
-	if _, err := clones.Add("luna", wav, "Hello there.", "qwen3", "consent", false); err != nil {
+	if _, err := clones.Add("sam", wav, "Hello there.", "qwen3", "consent", false); err != nil {
 		t.Fatal(err)
 	}
-	v := engine.Voice{Name: clonePrefix + "luna"}
+	v := engine.Voice{Name: clonePrefix + "sam"}
 	if got, err := resolveVoice(v); err != nil || got.Prompt != "" {
 		t.Fatalf("without a prompt: %+v %v", got, err)
 	}
-	os.WriteFile(clones.PromptFile("luna"), []byte("x"), 0o644)
-	clones.SetPrompt("luna", "qwen3", "m", "r")
-	p, _ := clones.Get("luna")
+	os.WriteFile(clones.PromptFile("sam"), []byte("x"), 0o644)
+	clones.SetPrompt("sam", "qwen3", "m", "r")
+	p, _ := clones.Get("sam")
 	os.Rename(p.Ref, p.Ref+".away") // the recording is not there for a while
 	got, err := resolveVoice(v)
-	if err != nil || got.Prompt != clones.PromptFile("luna") || got.PromptEngine != "qwen3" || got.PromptModel != "m" {
+	if err != nil || got.Prompt != clones.PromptFile("sam") || got.PromptEngine != "qwen3" || got.PromptModel != "m" {
 		t.Fatalf("prompt without the WAV: %+v %v", got, err)
 	}
-	os.Remove(clones.PromptFile("luna")) // neither prompt nor recording: gone
+	os.Remove(clones.PromptFile("sam")) // neither prompt nor recording: gone
 	if _, err := resolveVoice(v); !errors.Is(err, ErrVoiceGone) {
 		t.Fatalf("nothing left: %v", err)
 	}

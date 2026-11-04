@@ -105,11 +105,11 @@ func TestReferenceSourceCopyAndPrompt(t *testing.T) {
 	if err != nil || c != src || text != "Hello there." {
 		t.Fatalf("reference: %q %q %v", c, text, err)
 	}
-	p, err := Add("luna", c, text, "qwen3", "the speaker's consent", false)
+	p, err := Add("sam", c, text, "qwen3", "the speaker's consent", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, _ = Get("luna")
+	p, _ = Get("sam")
 	orig, _ := os.ReadFile(src)
 	if kept, err := os.ReadFile(p.OriginalPath); err != nil || string(kept) != string(orig) {
 		t.Fatalf("source copy %q: %v", p.OriginalPath, err)
@@ -117,11 +117,11 @@ func TestReferenceSourceCopyAndPrompt(t *testing.T) {
 	if p.PromptPath != "" {
 		t.Fatal("a prompt before one was made")
 	}
-	if err := SetPrompt("luna", "qwen3", "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "abc123"); err != nil {
+	if err := SetPrompt("sam", "qwen3", "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "abc123"); err != nil {
 		t.Fatal(err)
 	}
-	p, _ = Get("luna")
-	if p.PromptPath != PromptFile("luna") || p.PromptModel != "Qwen/Qwen3-TTS-12Hz-1.7B-Base" || p.PromptRevision != "abc123" || p.Rights != "the speaker's consent" || p.Text != "Hello there." {
+	p, _ = Get("sam")
+	if p.PromptPath != PromptFile("sam") || p.PromptModel != "Qwen/Qwen3-TTS-12Hz-1.7B-Base" || p.PromptRevision != "abc123" || p.Rights != "the speaker's consent" || p.Text != "Hello there." {
 		t.Fatalf("after SetPrompt: %+v", p)
 	}
 	if _, _, err := Reference(filepath.Join(Dir, "missing.json")); err == nil {
