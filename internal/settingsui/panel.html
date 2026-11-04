@@ -396,6 +396,8 @@
   nav.side button:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); color: var(--ink); }
   nav.side button.sel { background: var(--field); color: var(--ink); font-weight: 600; }
   nav.side .grow { flex: 1; }
+@keyframes breathe { from { opacity: .55; } to { opacity: 1; } }
+.line.preparing { animation: breathe 1.2s ease-in-out infinite alternate; }
 nav.side .side-search { margin: 0 4px 10px; width: calc(100% - 8px); height: 30px; }
 nav.side .side-results button { display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; }
 nav.side .side-results small { margin: 0; font: 11.5px var(--ui-small); color: var(--ink-3); }
@@ -1101,7 +1103,21 @@ function renderSaid() {
     shown = 'loading';
     saidCue('voice', loadingText().replace(/^Starting /, 'is starting ').replace(/ on the graphics card… .*/, ''), Math.round((Date.now() - ms(lastStatus.loading.since)) / 1000) + ' s');
     $('line').className = 'line quiet'; $('line').title = '';
-    $('line').textContent = 'Loading the model on the graphics card; the first sentence follows. This takes a few seconds the first time, or after 10 idle minutes.';
+    $('line').textContent = 'Loading the model on the graphics card; the first sentence follows. This takes a few seconds the first time, or after the idle time set under Listening and memory.';
+    return;
+  }
+  // The voice is rendering what comes next (a GPU voice takes a while): say
+  // so, and show the words when they are heard, not before.
+  if (line && line.preparing) {
+    const key = 'prep:' + line.id;
+    if (shown !== key) {
+      shown = key; spans = []; toks = [];
+      if (fillRaf) { cancelAnimationFrame(fillRaf); fillRaf = 0; }
+      $('line').className = 'line quiet preparing'; $('line').scrollTop = 0; $('line').title = '';
+      $('line').textContent = 'Getting the voice ready; the words follow as they are spoken.';
+    }
+    saidCue(speakerName(line), 'is getting ready', speakerWhere(line));
+    showPortrait(pidKey(line.pid), nameNow(line));
     return;
   }
   if (line) {

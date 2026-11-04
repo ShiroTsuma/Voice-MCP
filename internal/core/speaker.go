@@ -237,6 +237,8 @@ type Line struct {
 	To      int       `json:"to"`
 	At      time.Time `json:"at"`
 	Seconds float64   `json:"seconds"`
+	// Preparing: nothing of it plays yet; its voice is still rendering.
+	Preparing bool `json:"preparing"`
 }
 
 func (s *Speaker) Status() Status {
@@ -246,6 +248,7 @@ func (s *Speaker) Status() Status {
 	if s.current != nil {
 		l := s.current.line
 		l.ID, l.Text = s.current.id, s.current.text
+		l.Preparing = l.At.IsZero()
 		st.Line = &l
 	}
 	return st
@@ -494,11 +497,17 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	if choice.Voice, err = resolveVoice(choice.Voice); err != nil {
 		return Result{Err: err}
 	}
-	if it.intent != IntentInfo {
-		s.audible()
-		if err := s.out.Play(ctx, audio.Chime(it.preset.Chime, audio.DeviceRate)); err != nil {
-			return Result{Err: err}
+	// A question or an alert opens with a chime, played right before the
+	// first sound is ready: with a GPU voice that renders for a while, a
+	// chime first would be followed by silence.
+	chimed := it.intent == IntentInfo
+	chime := func() error {
+		if chimed {
+			return nil
 		}
+		chimed = true
+		s.audible()
+		return s.out.Play(ctx, audio.Chime(it.preset.Chime, audio.DeviceRate))
 	}
 
 	// Cached phrases skip synthesis entirely, so hook notifications play at
@@ -507,6 +516,9 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	if it.cache {
 		key = cacheKey(it.preset, choice, it.lang, it.text)
 		if pcm := readCache(key); pcm != nil {
+			if err := chime(); err != nil {
+				return Result{Err: err}
+			}
 			s.audible()
 			s.playing(it, 0, len([]rune(it.text)), pcm)
 			if err := s.out.Play(ctx, pcm); err != nil {
@@ -584,6 +596,9 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	for r := range ch {
 		if r.err != nil {
 			return Result{Engine: used, Err: r.err}
+		}
+		if err := chime(); err != nil {
+			return Result{Engine: used, Err: err}
 		}
 		s.audible()
 		from, to := at, len(runes)
