@@ -401,9 +401,7 @@ func sidecarStatus(name string) integrations.Status {
 	}
 	if pkg := sidecarPackage[name]; pkg != "" {
 		if _, err := os.Stat(filepath.Join(httpengine.SidecarDir, ".venv", "Lib", "site-packages", pkg)); err == nil {
-			return integrations.Status{State: integrations.On, Detail: "Works from the older shared environment, which other backends can share. " +
-				"Install separately sets up a copy for this backend alone (several GB, mostly PyTorch) and uses it from then on; the shared one stays as it is. " +
-				"It runs only while a voice uses it.",
+			return integrations.Status{State: integrations.On, Detail: "Works from an older shared environment (from earlier voice versions); Install separately gives it its own",
 				Actions: []integrations.Action{{ID: "install", Label: "Install separately", Long: true}}}
 		}
 	}
