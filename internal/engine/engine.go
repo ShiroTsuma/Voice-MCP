@@ -34,6 +34,13 @@ type Voice struct {
 	PromptModel  string // the model it was made with; another model uses Ref
 }
 
+// Batcher is an engine that renders several sentences in one call, all in
+// the same voice: a GPU model generates them side by side, in about the time
+// of the longest. It returns one chunk per request, in order.
+type Batcher interface {
+	SynthesizeBatch(ctx context.Context, reqs []Request) ([]Chunk, error)
+}
+
 // ErrNoCloning is returned by engines that cannot use a reference clip.
 var ErrNoCloning = errors.New("engine cannot clone voices")
 

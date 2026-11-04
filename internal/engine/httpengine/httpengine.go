@@ -15,6 +15,7 @@ package httpengine
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,6 +47,7 @@ type Engine struct {
 	timeout time.Duration
 	extra   map[string]any
 	options map[string]string // --option key=value in start: what the server must run with
+	batch   bool              // the server renders several sentences in one call
 	client  *http.Client
 
 	mu      sync.Mutex
@@ -63,6 +65,7 @@ func New(name string, cfg engine.Config) (engine.Engine, error) {
 	}
 	e.extra, _ = cfg["extra"].(map[string]any)
 	e.options = startOptions(e.start)
+	e.batch, _ = cfg["batch"].(bool)
 	return e, nil
 }
 
@@ -269,6 +272,58 @@ func (e *Engine) ensure(ctx context.Context) error {
 	return fmt.Errorf("engine %q: server did not come up within %s; see %s", e.name, e.timeout, filepath.Join(SidecarDir, e.name+".log"))
 }
 
+// SynthesizeBatch renders several sentences in one voice with one call, when
+// the server can (batch = true); engine.Batcher.
+func (e *Engine) SynthesizeBatch(ctx context.Context, reqs []engine.Request) ([]engine.Chunk, error) {
+	if !e.batch || len(reqs) == 0 {
+		return nil, fmt.Errorf("engine %q renders no batches", e.name)
+	}
+	if err := e.ensure(ctx); err != nil {
+		return nil, err
+	}
+	payload := e.payload(reqs[0])
+	delete(payload, "text")
+	texts := make([]string, len(reqs))
+	for i, r := range reqs {
+		texts[i] = r.Text
+	}
+	payload["texts"] = texts
+	body, _ := json.Marshal(payload)
+	hr, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/synthesize_batch", bytes.NewReader(body))
+	hr.Header.Set("Content-Type", "application/json")
+	resp, err := e.client.Do(hr)
+	if err != nil {
+		return nil, fmt.Errorf("engine %q: %w", e.name, err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Audio []string `json:"audio"`
+		Error string   `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("engine %q: %w", e.name, err)
+	}
+	if resp.StatusCode != http.StatusOK || len(out.Audio) != len(reqs) {
+		if out.Error == "" {
+			out.Error = fmt.Sprintf("%s, %d of %d sentences", resp.Status, len(out.Audio), len(reqs))
+		}
+		return nil, fmt.Errorf("engine %q: %s", e.name, out.Error)
+	}
+	chunks := make([]engine.Chunk, len(out.Audio))
+	for i, a := range out.Audio {
+		data, err := base64.StdEncoding.DecodeString(a)
+		if err != nil {
+			return nil, fmt.Errorf("engine %q: %w", e.name, err)
+		}
+		pcm, rate, err := audio.DecodeWAV(data)
+		if err != nil {
+			return nil, fmt.Errorf("engine %q: %w", e.name, err)
+		}
+		chunks[i] = engine.Chunk{PCM: pcm, SampleRate: rate}
+	}
+	return chunks, nil
+}
+
 // PromptInfo is what a saved voice prompt was made with.
 type PromptInfo struct {
 	Model    string `json:"model"`
@@ -318,10 +373,8 @@ func (e *Engine) Voices(ctx context.Context) ([]engine.VoiceInfo, error) {
 	return out, err
 }
 
-func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(engine.Chunk) error) error {
-	if err := e.ensure(ctx); err != nil {
-		return err
-	}
+// payload is a request as the sidecar protocol has it.
+func (e *Engine) payload(req engine.Request) map[string]any {
 	payload := map[string]any{
 		"text": req.Text, "lang": req.Lang, "voice": req.Voice.Primary(),
 		"ref_audio": req.Voice.Ref, "ref_text": req.Voice.RefText, "speed": req.Speed, "extra": e.extra,
@@ -333,7 +386,14 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 			payload["voice_prompt"] = v.Prompt
 		}
 	}
-	body, _ := json.Marshal(payload)
+	return payload
+}
+
+func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(engine.Chunk) error) error {
+	if err := e.ensure(ctx); err != nil {
+		return err
+	}
+	body, _ := json.Marshal(e.payload(req))
 	hr, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/synthesize", bytes.NewReader(body))
 	hr.Header.Set("Content-Type", "application/json")
 	resp, err := e.client.Do(hr)

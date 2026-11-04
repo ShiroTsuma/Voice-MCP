@@ -41,6 +41,7 @@ type Backend struct {
 	Clones     bool           `json:"clones"`
 	Transcript bool           `json:"transcript"` // cloning needs the clip's transcript
 	Prompts    bool           `json:"prompts"`    // saves a voice prompt, so a clone speaks without its recording
+	Batch      bool           `json:"batch"`      // renders several sentences in one call (POST /synthesize_batch)
 	Languages  []string       `json:"languages"`  // what it speaks: en, pl, ...
 	Hidden     bool           `json:"hidden"`     // not offered in the windows (test)
 	Extra      map[string]any `json:"extra"`      // per-request settings voice sends
@@ -111,6 +112,9 @@ func (b Backend) Engine(set map[string]string) map[string]any {
 	e := map[string]any{"type": "http", "url": "http://127.0.0.1:" + port, "start": start}
 	if len(b.Extra) > 0 {
 		e["extra"] = b.Extra
+	}
+	if b.Batch {
+		e["batch"] = true
 	}
 	if b.StartTimeout > 0 {
 		e["start_timeout"] = int64(b.StartTimeout)

@@ -502,8 +502,35 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	go func() {
 		defer close(ch)
 		engines := choice.Engines
-		for _, sentence := range sentences {
-			req := engine.Request{Text: sentence, Lang: it.lang, Voice: choice.Voice, Speed: choice.Speed / pitch}
+		send := func(pcm []float32) bool {
+			effects.Process(pcm)
+			audio.Gain(pcm, it.preset.Volume)
+			select {
+			case ch <- rendered{pcm: pcm}:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
+		for k := 0; k < len(sentences); {
+			// An engine slower than its own speech (a GPU model) renders a few
+			// sentences at once, in about the time of one, from the first
+			// sentence on: speech starts a moment later and then flows, rather
+			// than a short sentence and a long silence. The next batch renders
+			// while this one plays. A batch that fails goes sentence by sentence.
+			if n := min(batchSize, len(sentences)-k); n > 1 && engines[0] == choice.Engines[0] {
+				if pcms, err := s.renderBatch(ctx, engines[0], pitch, it.lang, choice, sentences[k:k+n]); err == nil {
+					used = engines[0]
+					for _, pcm := range pcms {
+						if !send(pcm) {
+							return
+						}
+					}
+					k += n
+					continue
+				}
+			}
+			req := engine.Request{Text: sentences[k], Lang: it.lang, Voice: choice.Voice, Speed: choice.Speed / pitch}
 			pcm, name, rest, err := s.render(ctx, engines, choice.Engines[0], pitch, req)
 			if err != nil {
 				ch <- rendered{err: err}
@@ -512,13 +539,10 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 			// Stay on the engine that worked so the voice does not change
 			// mid-utterance; later fallbacks remain for failures.
 			engines, used = rest, name
-			effects.Process(pcm)
-			audio.Gain(pcm, it.preset.Volume)
-			select {
-			case ch <- rendered{pcm: pcm}:
-			case <-ctx.Done():
+			if !send(pcm) {
 				return
 			}
+			k++
 		}
 	}()
 
@@ -564,6 +588,41 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	}
 	markSpoke()
 	return Result{Engine: used}
+}
+
+// batchSize is how many sentences an engine that renders batches gets at once.
+const batchSize = 4
+
+// renderBatch renders sentences with one call to an engine that takes
+// batches (engine.Batcher), at the device rate; an error when it cannot.
+func (s *Speaker) renderBatch(ctx context.Context, name string, pitch float64, lang string, choice preset.Choice, sentences []string) ([][]float32, error) {
+	e, err := s.Engine(name)
+	if err != nil {
+		return nil, err
+	}
+	b, ok := e.(engine.Batcher)
+	if !ok {
+		return nil, errors.New("no batches")
+	}
+	s.mu.Lock()
+	s.used[name] = time.Now()
+	s.mu.Unlock()
+	reqs := make([]engine.Request, len(sentences))
+	for i, t := range sentences {
+		reqs[i] = engine.Request{Text: t, Lang: lang, Voice: choice.Voice, Speed: choice.Speed / pitch}
+	}
+	chunks, err := b.SynthesizeBatch(ctx, reqs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([][]float32, len(chunks))
+	for i, c := range chunks {
+		if len(c.PCM) == 0 {
+			return nil, errors.New("no audio")
+		}
+		out[i] = audio.Resample(c.PCM, int(math.Round(float64(c.SampleRate)*pitch)), audio.DeviceRate)
+	}
+	return out, nil
 }
 
 // render tries engines in order and returns audio at the device rate, the

@@ -6,6 +6,9 @@ POST /synthesize  {"text", "lang", "voice", "ref_audio", "ref_text", "speed", "e
 GET  /health      {"backend", "ready", "clones", "options"}
 GET  /voices      [{"name", "lang", "gender"}]
 POST /shutdown    exits, so voice can start it with other options (a model size)
+POST /synthesize_batch  as /synthesize with "texts" (a list) instead of "text" ->
+                  {"audio": [base64 WAV, ...]}: one voice, several sentences
+                  generated together (backends with synthesize_batch: qwen3)
 POST /prompt      {"ref_audio", "ref_text", "out"} -> {"model", "revision", ...}: a
                   backend that keeps voice prompts (qwen3) makes one from the clip
                   and saves it to out; /synthesize then takes "voice_prompt" (that
@@ -20,6 +23,7 @@ queues utterances anyway.
 
 import argparse
 import array
+import base64
 import importlib
 import io
 import json
@@ -101,13 +105,28 @@ class Handler(BaseHTTPRequestHandler):
             print("voice_sidecar asked to exit", file=sys.stderr, flush=True)
             threading.Thread(target=lambda: (time.sleep(0.2), os._exit(0)), daemon=True).start()
             return
-        if self.path not in ("/synthesize", "/prompt"):
+        if self.path not in ("/synthesize", "/synthesize_batch", "/prompt"):
             self.reply(404, {"error": "not found"})
             return
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         except ValueError as e:
             self.reply(400, {"error": f"bad JSON: {e}"})
+            return
+        if self.path == "/synthesize_batch":
+            batch = getattr(self.backend, "synthesize_batch", None)
+            texts = [str(t) for t in (req.get("texts") or []) if str(t).strip()]
+            if batch is None or not texts:
+                self.reply(400, {"error": f"backend {self.name} renders no batches" if batch is None else "texts is empty"})
+                return
+            try:
+                with self.lock:
+                    samples, rate = batch(req, texts)
+                Handler.last_request = time.monotonic()
+                self.reply(200, {"audio": [base64.b64encode(to_wav(s, rate)).decode() for s in samples]})
+            except Exception as e:
+                traceback.print_exc(file=sys.stderr)
+                self.reply(500, {"error": f"{type(e).__name__}: {e}"})
             return
         if self.path == "/prompt":
             make = getattr(self.backend, "make_prompt", None)

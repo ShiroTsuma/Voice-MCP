@@ -152,6 +152,21 @@ class Backend:
         return "Auto"
 
     def synthesize(self, req):
+        samples, rates = self.synthesize_batch(req, [req["text"]])
+        return samples[0], rates
+
+    def synthesize_batch(self, req, texts):
+        """Several sentences in one voice, generated together: the GPU runs
+        them side by side, in about the time of the longest one."""
+        prompt = self._prompt(req)
+        params = {k: v for k, v in (req.get("extra") or {}).items() if k in SAMPLING}
+        if "top_k" in params:
+            params["top_k"] = int(params["top_k"])
+        lang = self.language(req.get("lang"))
+        wavs, sr = self.model.generate_voice_clone(text=list(texts), language=[lang] * len(texts), voice_clone_prompt=prompt, **params)
+        return wavs, sr
+
+    def _prompt(self, req):
         if req.get("voice_prompt"):
             # A saved prompt: no recording is read or even looked for.
             prompt = self.load_prompt(req["voice_prompt"])
@@ -159,8 +174,4 @@ class Backend:
             prompt = self.prints.get(req["ref_audio"], (req.get("ref_text") or "").strip())
         else:
             raise ValueError("qwen3 clones voices: it needs a cloned voice (ref_audio or voice_prompt)")
-        params = {k: v for k, v in (req.get("extra") or {}).items() if k in SAMPLING}
-        if "top_k" in params:
-            params["top_k"] = int(params["top_k"])
-        wavs, sr = self.model.generate_voice_clone(text=req["text"], language=self.language(req.get("lang")), voice_clone_prompt=prompt, **params)
-        return wavs[0], sr
+        return prompt

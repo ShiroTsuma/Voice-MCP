@@ -33,6 +33,7 @@ voice runs large speech models in its Python **sidecar**: one small HTTP server 
 - `clones`: the backend takes a reference clip. `transcript`: cloning needs what the clip says. voice then asks for it, and fills it with speech recognition when that is installed.
 - `extra`: settings sent with every request (`req["extra"]`).
 - `prompts`: the backend saves a **voice prompt** (see below), so a cloned voice speaks without its recording.
+- `batch`: the backend renders several sentences in one call (`synthesize_batch(req, texts)`, `POST /synthesize_batch`). For a model slower than its own speech this matters most: voice gives it up to four sentences at once, from the first one on, so speech starts a moment later and then flows without gaps; the next batch renders while one plays.
 - `option` (optional): one setting the Integrations window offers as a picker. The server gets it as `--option key=value`. A change is saved as `[sidecar.<name>] key = "..."` in `settings.toml`, and voice starts the server again with it on the next request, since `/health` reports the options a server runs with.
 
 `go test ./sidecar` checks the list: required fields, unique ports, an option default that is one of its choices.

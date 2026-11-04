@@ -2,6 +2,7 @@ package httpengine
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -182,5 +183,34 @@ func TestVoicePromptGoesToItsEngineAndModel(t *testing.T) {
 	}
 	if send("chatterbox", "big", v) {
 		t.Fatal("a qwen3 prompt went to chatterbox")
+	}
+}
+
+func TestBatchOfSentences(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/synthesize_batch" {
+			w.Write([]byte(`{"ready":true}`))
+			return
+		}
+		json.NewDecoder(r.Body).Decode(&got)
+		var audioOut []string
+		for i := range got["texts"].([]any) {
+			audioOut = append(audioOut, base64.StdEncoding.EncodeToString(audio.EncodeWAV(make([]float32, 100*(i+1)), 24000)))
+		}
+		json.NewEncoder(w).Encode(map[string]any{"audio": audioOut})
+	}))
+	defer srv.Close()
+	ei, _ := New("qwen3", engine.Config{"url": srv.URL, "batch": true})
+	chunks, err := ei.(engine.Batcher).SynthesizeBatch(context.Background(), []engine.Request{{Text: "One."}, {Text: "Two."}, {Text: "Three."}})
+	if err != nil || len(chunks) != 3 || len(chunks[2].PCM) != 300 || chunks[0].SampleRate != 24000 {
+		t.Fatalf("batch: %d chunks, %v", len(chunks), err)
+	}
+	if texts := got["texts"].([]any); len(texts) != 3 || texts[1] != "Two." || got["text"] != nil {
+		t.Fatalf("sent %v", got)
+	}
+	plain, _ := New("chatterbox", engine.Config{"url": srv.URL})
+	if _, err := plain.(engine.Batcher).SynthesizeBatch(context.Background(), []engine.Request{{Text: "x"}, {Text: "y"}}); err == nil {
+		t.Fatal("an engine without batches took one")
 	}
 }
