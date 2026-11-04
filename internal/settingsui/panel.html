@@ -396,6 +396,12 @@
   nav.side button:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); color: var(--ink); }
   nav.side button.sel { background: var(--field); color: var(--ink); font-weight: 600; }
   nav.side .grow { flex: 1; }
+nav.side .side-search { margin: 0 4px 10px; width: calc(100% - 8px); height: 30px; }
+nav.side .side-results button { display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; }
+nav.side .side-results small { margin: 0; font: 11.5px var(--ui-small); color: var(--ink-3); }
+nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); color: var(--ink-3); }
+@keyframes hit { from { background: color-mix(in oklab, var(--ink) 14%, transparent); } to { background: transparent; } }
+.row.hit { animation: hit 1.6s ease-out; border-radius: 6px; }
   nav.side small { margin: 0 12px; font: 12px var(--ui-small); color: var(--ink-3); }
   html.full main { border-top: 0; display: flex; flex-direction: column; }
   html.full .groups { flex: 1; }
@@ -453,7 +459,9 @@
 
   <nav class="side" id="side" aria-label="Settings">
     <h1>Settings</h1>
-    <div id="sideList"></div>
+    <input type="search" id="sideSearch" class="text side-search" placeholder="Search settings" aria-label="Search settings" autocomplete="off" spellcheck="false">
+<div id="sideResults" class="side-results" hidden></div>
+<div id="sideList"></div>
     <span class="grow"></span>
     <small id="sideVer"></small>
   </nav>
@@ -1402,6 +1410,75 @@ if (fullMode) {
     b.addEventListener('click', () => show(s.id));
     list.append(b);
   }
+  // Search: every setting by its name and help, across the sections, plus
+  // the Characters and Integrations pages by what they hold. A result opens
+  // its section and lights the setting up for a moment.
+  const plain = t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
+  // The window is in English; these Polish stems find their settings too.
+  const polish = {
+    mikrofon: ['microphone'], glosnik: ['speakers'], sluchawk: ['speakers', 'microphone'], dzwiek: ['sound'], glosnosc: ['volume'],
+    jezyk: ['language'], glos: ['voice'], klawisz: ['key'], skrot: ['key'], rozpozna: ['recognition'], slow: ['words'], slownik: ['words'],
+    klon: ['clone'], postac: ['character'], charakter: ['character'], dyktow: ['dictation', 'dictate'], ogloszen: ['announce'], zapowiedz: ['announce'],
+    model: ['model'], pamiec: ['memory', 'idle'], laduj: ['load'], zaladuj: ['load'], wycisz: ['mute', 'duck'], przerw: ['stop', 'interrupt'],
+    tempo: ['speed'], szybkosc: ['speed'], predkosc: ['speed'], wysokosc: ['pitch'], efekt: ['effects'], integrac: ['integrations'], motyw: ['theme'],
+    popup: ['corner', 'popup'], okienk: ['corner', 'popup'], transkryp: ['transcript'], nagryw: ['record'], wysyl: ['submit', 'enter'],
+  };
+  const index = [];
+  for (const s of sections) {
+    if (s.el) {
+      for (const row of s.el.querySelectorAll('.row')) {
+        const lab = row.querySelector('.lab');
+        if (!lab) continue;
+        const copy = lab.cloneNode(true);
+        copy.querySelectorAll('.help').forEach(h => h.remove());
+        const name = copy.textContent.trim();
+        if (!name) continue;
+        const help = [...lab.querySelectorAll('.help')].map(h => h.textContent).join(' ');
+        index.push({ section: s, row, name, hay: plain(name + ' ' + help + ' ' + s.title) });
+      }
+    } else {
+      const more = { 'characters-page': 'character persona name traits personality voice preset colour picture', 'integrations-page': 'install download models engines backends gpu qwen chatterbox xtts f5 kokoro piper pocket zipvoice parakeet whisper vad python claude codex hooks session api' }[s.id] || '';
+      index.push({ section: s, row: null, name: s.title, hay: plain(s.title + ' ' + more) });
+    }
+  }
+  const search = document.getElementById('sideSearch'), results = document.getElementById('sideResults');
+  let found = [];
+  const go = hit => {
+    search.value = ''; showHits();
+    show(hit.section.id);
+    if (!hit.row) return;
+    setTimeout(() => {
+      hit.row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      hit.row.classList.remove('hit'); void hit.row.offsetWidth; hit.row.classList.add('hit');
+      const field = hit.row.querySelector('input, select, button, textarea');
+      if (field) field.focus({ preventScroll: true });
+    }, 60);
+  };
+  const showHits = () => {
+    const words = plain(search.value).split(/\s+/).filter(Boolean);
+    results.hidden = !words.length;
+    list.hidden = !!words.length;
+    if (!words.length) return;
+    // A word matches as typed, or through its Polish stem's English words.
+    const alts = w => [w, ...Object.entries(polish).filter(([k]) => w.startsWith(k) || (w.length >= 4 && k.startsWith(w))).flatMap(([, v]) => v)];
+    found = index.filter(e => !(e.row && e.row.closest('[hidden]')) && words.every(w => alts(w).some(a => e.hay.includes(a)))).slice(0, 30);
+    results.replaceChildren(...(found.length ? found.map(hit => {
+      const b = document.createElement('button'); b.type = 'button';
+      const n = document.createElement('span'); n.textContent = hit.name;
+      const where = document.createElement('small'); where.textContent = hit.row ? hit.section.title : 'Page';
+      b.append(n, where);
+      b.addEventListener('click', () => go(hit));
+      return b;
+    }) : [Object.assign(document.createElement('p'), { className: 'nohit', textContent: 'Nothing matches.' })]));
+  };
+  search.addEventListener('input', showHits);
+  search.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && found.length) { e.preventDefault(); go(found[0]); }
+    if (e.key === 'Escape' && search.value) { e.preventDefault(); e.stopPropagation(); search.value = ''; showHits(); }
+  });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); search.focus(); search.select(); }
+  });
   // ?section=characters opens there (the flyout's Manage characters); else where it was left.
   const asked = new URLSearchParams(location.search).get('section');
   let first = asked ? (sections.find(s => s.id === asked || s.id === asked + '-page') || {}).id : null;
