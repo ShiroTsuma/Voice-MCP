@@ -39,11 +39,15 @@ type Request struct {
 	Preset    string // empty: active preset
 	Interrupt bool   // stop the current utterance and drop the queue
 	Cache     bool   // reuse rendered audio for repeated phrases (hooks)
+	// SaveTo renders into this file (.wav, or .mp3 with ffmpeg) instead of
+	// the speakers: the same voice, nothing played, and mute does not stop it.
+	SaveTo string
 }
 
 type Result struct {
-	Engine string // engine that produced the audio
-	Err    error
+	Engine  string  // engine that produced the audio
+	Seconds float64 // SaveTo: how long the saved audio is
+	Err     error
 }
 
 type Ticket struct {
@@ -60,6 +64,7 @@ type item struct {
 	lang   string
 	preset preset.Resolved
 	cache  bool
+	saveTo string
 	done   chan Result
 
 	line Line // progress, under Speaker.mu
@@ -141,7 +146,7 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.muted || SharedMuted() {
+	if (s.muted || SharedMuted()) && req.SaveTo == "" {
 		return Ticket{}, ErrMuted
 	}
 	name := req.Preset
@@ -170,7 +175,7 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 		}
 	}
 	s.nextID++
-	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: p, cache: req.Cache, done: make(chan Result, 1)}
+	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: p, cache: req.Cache && req.SaveTo == "", saveTo: req.SaveTo, done: make(chan Result, 1)}
 	if req.Interrupt {
 		s.dropLocked(ErrInterrupted)
 	}
@@ -524,11 +529,17 @@ type rendered struct {
 }
 
 func (s *Speaker) play(ctx context.Context, it *item) Result {
-	release, err := acquirePlayback(ctx)
-	if err != nil {
-		return Result{Err: err}
+	// Saving to a file plays nothing: no playback lock, chime or popup.
+	saving := it.saveTo != ""
+	var saved []float32
+	if !saving {
+		release, err := acquirePlayback(ctx)
+		if err != nil {
+			return Result{Err: err}
+		}
+		defer release()
 	}
-	defer release()
+	var err error
 
 	choice := it.preset.For(it.lang)
 	if choice.Voice, err = resolveVoice(choice.Voice); err != nil {
@@ -537,7 +548,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	// A question or an alert opens with a chime, played right before the
 	// first sound is ready: with a GPU voice that renders for a while, a
 	// chime first would be followed by silence.
-	chimed := it.intent == IntentInfo
+	chimed := it.intent == IntentInfo || saving
 	chime := func() error {
 		if chimed {
 			return nil
@@ -634,6 +645,10 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		if r.err != nil {
 			return Result{Engine: used, Err: r.err}
 		}
+		if saving {
+			saved = append(saved, r.pcm...)
+			continue
+		}
 		if err := chime(); err != nil {
 			return Result{Engine: used, Err: err}
 		}
@@ -658,12 +673,21 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	if err := ctx.Err(); err != nil {
 		return Result{Engine: used, Err: err}
 	}
-	if tail := effects.Tail(); len(tail) > 0 {
+	if tail := effects.Tail(); len(tail) > 0 && saving {
+		audio.Gain(tail, it.preset.Volume)
+		saved = append(saved, tail...)
+	} else if len(tail) > 0 {
 		audio.Gain(tail, it.preset.Volume)
 		if err := s.out.Play(ctx, tail); err != nil {
 			return Result{Engine: used, Err: err}
 		}
 		heard = append(heard, tail...)
+	}
+	if saving {
+		if err := audio.WriteFile(it.saveTo, saved, audio.DeviceRate); err != nil {
+			return Result{Engine: used, Err: err}
+		}
+		return Result{Engine: used, Seconds: float64(len(saved)) / audio.DeviceRate}
 	}
 	// Let the device drain its buffer before the lock goes to someone else.
 	_ = s.out.Play(ctx, audio.Silence(audio.DeviceRate, 0.12))

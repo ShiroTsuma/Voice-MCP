@@ -120,7 +120,7 @@ func (c *Client) call(ctx context.Context, method string, args any, timeout time
 
 func (c *Client) Speak(ctx context.Context, a service.SpeakArgs) (any, error) {
 	timeout := 10 * time.Second
-	if a.Wait {
+	if a.Wait || a.SaveTo != "" {
 		timeout = 3 * time.Minute
 	}
 	return c.call(ctx, "speak", a, timeout)

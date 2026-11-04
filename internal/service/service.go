@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,10 +33,13 @@ type SpeakArgs struct {
 	Interrupt bool   `json:"interrupt,omitempty"`
 	Preset    string `json:"preset,omitempty"`
 	Cache     bool   `json:"cache,omitempty"`
-	Wait      bool   `json:"wait,omitempty"`    // return after playback
-	Client    string `json:"client,omitempty"`  // claude, codex, ...: picks [clients] preset
-	PID       uint32 `json:"pid,omitempty"`     // the agent's process, for dictation
-	Project   string `json:"project,omitempty"` // its working directory name, for routing
+	Wait      bool   `json:"wait,omitempty"` // return after playback
+	// SaveTo: render into this file (an absolute .wav or .mp3 path) instead
+	// of saying it; the call returns once the file is written.
+	SaveTo  string `json:"save_to,omitempty"`
+	Client  string `json:"client,omitempty"`  // claude, codex, ...: picks [clients] preset
+	PID     uint32 `json:"pid,omitempty"`     // the agent's process, for dictation
+	Project string `json:"project,omitempty"` // its working directory name, for routing
 }
 
 type ControlArgs struct {
@@ -138,6 +142,9 @@ func (s *Service) presetFor(explicit, client string) string {
 
 func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	s.Agents.Seen(a.PID, a.Client, a.Project)
+	if a.SaveTo != "" {
+		return s.saveSpeech(ctx, a)
+	}
 	if s.Agents.NoSpeech(a.PID) {
 		return nil, userErr("muted by the user for this session; stay silent until they unmute it")
 	}
@@ -529,6 +536,38 @@ func (s *Service) makePrompt(ctx context.Context, p clones.Profile) (map[string]
 		return nil, err
 	}
 	return map[string]any{"file": clones.PromptFile(p.Name), "model": info.Model, "revision": info.Revision, "from": filepath.Base(ref)}, nil
+}
+
+// saveSpeech renders text in the voice it would be said in, into a file
+// nobody hears: not in the transcript, not stopped by mute.
+func (s *Service) saveSpeech(ctx context.Context, a SpeakArgs) (any, error) {
+	path := a.SaveTo
+	if !filepath.IsAbs(path) {
+		return nil, userErr("save_to must be an absolute path, got %q", path)
+	}
+	if ext := strings.ToLower(filepath.Ext(path)); ext != ".wav" && ext != ".mp3" {
+		return nil, userErr("save_to must end in .wav or .mp3")
+	}
+	t, err := s.Speaker.Speak(core.Request{
+		Text: a.Text, Intent: core.IntentInfo, Lang: a.Lang,
+		Preset: s.presetFor(dirOr(a.Preset, s.characterPreset(a.PID)), a.Client), SaveTo: path,
+	})
+	if err != nil {
+		return nil, UserError{err.Error()}
+	}
+	select {
+	case res := <-t.Done:
+		if res.Err != nil {
+			return nil, UserError{res.Err.Error()}
+		}
+		out := map[string]any{"file": path, "seconds": math.Round(res.Seconds*10) / 10, "engine": res.Engine}
+		if t.Note != "" {
+			out["voice_note"] = t.Note + ". Tell the user once."
+		}
+		return out, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // NeedsTranscript reports whether a cloning engine needs the clip's
