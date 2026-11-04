@@ -104,7 +104,13 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 		ag.mu.Unlock()
 		return nil, userErr("unknown session %q: register it first (it is forgotten when its process ends)", a.Session)
 	}
-	st.at, st.modAt = time.Now(), time.Now()
+	// Polling keeps the session reachable (modAt) but is not activity: an
+	// agent polling every second would otherwise always be the "most recent"
+	// session and take every dictation that names no one.
+	st.modAt = time.Now()
+	if a.Action != "poll" {
+		st.at = time.Now()
+	}
 	client, project := st.client, st.project
 	ag.mu.Unlock()
 

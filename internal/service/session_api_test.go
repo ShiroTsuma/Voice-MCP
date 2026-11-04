@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"voice/internal/preset"
 )
@@ -63,11 +64,20 @@ func TestSessionAPI(t *testing.T) {
 		t.Fatal("unknown event accepted")
 	}
 
+	// Polling is not activity: unaddressed dictation goes to the session the
+	// user works with, not to whichever agent polled last.
+	time.Sleep(20 * time.Millisecond) // Windows clocks can give two calls the same time
+	s.Agents.Seen(902, "claude", "app")
+	call(SessionArgs{Action: "poll", Session: "a1", State: "idle"})
+	if r := s.Agents.Recent(); len(r) < 2 || r[0] != 902 {
+		t.Fatalf("a poll made the session most recent: %v", r)
+	}
+
 	if _, err := s.Session(ctx, SessionArgs{Action: "end", Session: "a1"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Agents.Info()) != 0 {
-		t.Fatal("end keeps the session")
+	if info := s.Agents.Info(); len(info) != 1 || info[0].PID != 902 {
+		t.Fatalf("end keeps the session: %+v", info)
 	}
 }
 
