@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"voice/internal/engine/httpengine"
 	"voice/internal/integrations"
 )
 
@@ -78,5 +79,17 @@ func TestShippedIntegrationFilesParse(t *testing.T) {
 		if _, ok := known[f.Uses]; f.Uses != "" && !ok {
 			t.Errorf("%s: unknown uses %q", p, f.Uses)
 		}
+	}
+}
+
+func TestSidecarStatusReadsBOM(t *testing.T) {
+	old := httpengine.SidecarDir
+	defer func() { httpengine.SidecarDir = old }()
+	httpengine.SidecarDir = t.TempDir()
+	env := filepath.Join(httpengine.SidecarDir, "envs", "chatterbox")
+	os.MkdirAll(env, 0o755)
+	os.WriteFile(filepath.Join(env, ".voice-setup.json"), []byte("\xEF\xBB\xBF{\"gpu\": \"nvidia\", \"backend\": true}"), 0o644)
+	if st := sidecarStatus("chatterbox"); st.State != integrations.On {
+		t.Fatalf("%+v", st)
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -428,7 +429,8 @@ func sidecarStatus(name string) integrations.Status {
 		GPU     string `json:"gpu"`
 	}
 	if b, err := os.ReadFile(filepath.Join(httpengine.SidecarDir, "envs", name, ".voice-setup.json")); err == nil {
-		json.Unmarshal(b, &st)
+		// setup.ps1 writes it with Windows PowerShell, which starts it with a BOM.
+		json.Unmarshal(bytes.TrimPrefix(b, []byte("\xEF\xBB\xBF")), &st)
 		if st.Backend {
 			return integrations.Status{State: integrations.On, Detail: "Installed for " + st.GPU + "; it runs only while a voice uses it",
 				Actions: []integrations.Action{{ID: "install", Label: "Reinstall", Long: true}, remove}}
