@@ -13,6 +13,7 @@ import (
 	"voice/internal/core"
 	"voice/internal/engine"
 	"voice/internal/engine/httpengine"
+	"voice/sidecar"
 )
 
 // runPaths shows where voice keeps its data, so it can be moved off a full
@@ -73,7 +74,7 @@ func runMixer([]string) error {
 }
 
 // runSidecar installs the Python sidecar into the configured sidecar_dir.
-const sidecarUsage = `usage: voice sidecar setup [flags] chatterbox|f5|xtts|test[,...]
+var sidecarUsage = `usage: voice sidecar setup [flags] ` + strings.Join(sidecar.Names(true), "|") + `[,...]
 
 Installs GPU voice backends into the sidecar dir (voice paths shows it), each in
 its own Python environment. Reruns resume: downloads are cached and finished
@@ -111,10 +112,11 @@ func runSidecar(args []string) error {
 	for _, b := range strings.Split(strings.Join(rest[1:], ","), ",") {
 		switch b = strings.TrimSpace(b); b {
 		case "":
-		case "chatterbox", "f5", "xtts", "test":
-			backends = append(backends, b)
 		default:
-			return fmt.Errorf("unknown backend %q\n%s", b, sidecarUsage)
+			if _, ok := sidecar.Find(b); !ok {
+				return fmt.Errorf("unknown backend %q\n%s", b, sidecarUsage)
+			}
+			backends = append(backends, b)
 		}
 	}
 	switch *gpu {

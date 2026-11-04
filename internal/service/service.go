@@ -19,6 +19,7 @@ import (
 	"voice/internal/core"
 	"voice/internal/listen"
 	"voice/internal/preset"
+	"voice/sidecar"
 )
 
 type SpeakArgs struct {
@@ -395,7 +396,7 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		p = s.autoTranscript(p)
 		s.Config.SetPreset(core.ClonePresetName(p.Name), core.ClonePreset(p))
 		out := map[string]any{"name": p.Name, "preset": core.ClonePresetName(p.Name), "engine": p.Engine, "seconds": p.Duration, "transcript": p.Text}
-		if (p.Engine == "zipvoice" || p.Engine == "f5") && p.Text == "" {
+		if NeedsTranscript(p.Engine) && p.Text == "" {
 			out["warning"] = p.Engine + " needs a transcript; call set_transcript"
 		}
 		return out, nil
@@ -440,6 +441,16 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		return "removed " + a.Name, nil
 	}
 	return nil, userErr("unknown action %q", a.Action)
+}
+
+// NeedsTranscript reports whether a cloning engine needs the clip's
+// transcript: ZipVoice, and the GPU backends sidecar/backends.json marks so.
+func NeedsTranscript(engine string) bool {
+	if engine == "zipvoice" {
+		return true
+	}
+	b, ok := sidecar.Find(engine)
+	return ok && b.Transcript
 }
 
 // autoTranscript fills a missing transcript with speech recognition when a

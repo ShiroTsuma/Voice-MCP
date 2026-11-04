@@ -28,6 +28,7 @@ import (
 	"voice/internal/settings"
 	"voice/internal/settingsui"
 	"voice/internal/tray"
+	"voice/sidecar"
 )
 
 // newClient reaches this installation's background process. loadConfig must
@@ -126,6 +127,24 @@ func runServe(args []string) error {
 	ctl := startExtras(ctx, cfg, sp, l, agents)
 	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device + "\x00" + cfg.Listen.InputDevice}
 	ctl.onSpeaking, ctl.onDictating = b.speaking, b.dictating
+	// The Integrations window picks a GPU backend's model size here.
+	sidecarOptions = func(name string) map[string]string { return b.cfg.Sidecar[name] }
+	saveSidecarOption = func(backend, key, value string) error {
+		err := settings.Update(settingsPath(b.cfgPath), func(s *settings.Settings) {
+			if s.Sidecar == nil {
+				s.Sidecar = map[string]map[string]string{}
+			}
+			if s.Sidecar[backend] == nil {
+				s.Sidecar[backend] = map[string]string{}
+			}
+			s.Sidecar[backend][key] = value
+		})
+		if err != nil {
+			return err
+		}
+		_, err = b.reload()
+		return err
+	}
 
 	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents}
 	var once sync.Once
@@ -278,6 +297,14 @@ func (b *backend) reload() (bool, error) {
 	// The windows show what is saved, a device waiting for the restart too,
 	// and dictation uses the words as saved.
 	cur.Device, cur.Listen = next.Device, next.Listen
+	// A GPU backend's option (qwen3's model size) applies from the next
+	// request: its server is started again with it.
+	for _, sb := range sidecar.Backends() {
+		if sb.Option != nil {
+			httpengine.SetOptions(sb.Name, map[string]string{sb.Option.Key: sb.Value(next.Sidecar[sb.Name])})
+		}
+	}
+	cur.Sidecar = next.Sidecar
 	cur.DefaultLang, cur.Volume, cur.Serve, cur.Hooks = next.DefaultLang, next.Volume, next.Serve, next.Hooks
 	cur.Characters = next.Characters
 	// Compare with the active preset too: voice_control set_preset switches it

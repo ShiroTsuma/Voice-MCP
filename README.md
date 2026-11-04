@@ -167,7 +167,7 @@ With **Give sessions characters** on, the agent plays its character in every rep
 
 A voice comes in three layers, each in `config.toml` next to `voice.exe` (create it from `config.example.toml`):
 
-1. An **engine** makes the sound. Kokoro, Piper, Windows SAPI and the GPU backends (Chatterbox, XTTS, F5) are built in. Any program that writes a WAV file can be another one (`type = "exec"`), and so can any server that speaks voice's HTTP protocol (`type = "http"`).
+1. An **engine** makes the sound. Kokoro, Piper, Windows SAPI and the GPU backends (Chatterbox, XTTS, F5, Qwen3-TTS) are built in. Any program that writes a WAV file can be another one (`type = "exec"`), and so can any server that speaks voice's HTTP protocol (`type = "http"`).
 2. A **preset** picks an engine and tunes it: voice, speed, pitch, effects, a different engine for Polish. The built-in `calm-mature` is Kokoro's `af_nicole`, slower and lower.
 3. A **character** speaks with a preset. Pick it in the Characters window (Voice), or set `preset` in its `[[characters]]` entry.
 
@@ -385,7 +385,7 @@ Engine types: `sherpa` (Kokoro, Piper/VITS, Pocket, ZipVoice in process), `http`
 
 ### Cloning
 
-In the settings window: Voice clone → pick the engine (the installed ones first: Pocket on the CPU for English, Chatterbox or XTTS on the GPU for Polish too), then record from the microphone or drop a sound file. From the command line:
+In the settings window: Voice clone → pick the engine (the installed ones first: Pocket on the CPU for English, Chatterbox or XTTS on the GPU for Polish too, Qwen3-TTS on the GPU for the closest English clone), then record from the microphone or drop a sound file. From the command line:
 
 ```powershell
 voice clone record me -rights "my own voice"      # or: voice clone add me D:\clips\me.wav ...
@@ -393,7 +393,7 @@ voice clone preview me
 voice say -preset clone-me "Hello."
 ```
 
-`record` counts down with three ticks, opens the microphone with a chime for 12 s (`-seconds 6..30`) and closes it with another; read a few natural sentences aloud. The recording is checked before it is used: almost silent or heavily clipped audio is refused with what to fix; quiet, slightly clipped or noisy audio is added with a warning. The clip is converted to mono 24 kHz, trimmed, capped at 15 s and normalized; 5-15 s of one clear speaker works best. Non-WAV input needs `ffmpeg` on PATH. When a recognition model is installed the clip is transcribed automatically (ZipVoice and F5 need the transcript). The default engine is Pocket (CPU, English); pass `-engine chatterbox` or `xtts` for Polish once the sidecar is set up.
+`record` counts down with three ticks, opens the microphone with a chime for 12 s (`-seconds 6..30`) and closes it with another; read a few natural sentences aloud. The recording is checked before it is used: almost silent or heavily clipped audio is refused with what to fix; quiet, slightly clipped or noisy audio is added with a warning. The clip is converted to mono 24 kHz, trimmed, capped at 15 s and normalized; 5-15 s of one clear speaker works best. Non-WAV input needs `ffmpeg` on PATH. When a recognition model is installed the clip is transcribed automatically (ZipVoice, F5 and Qwen3-TTS need the transcript). The default engine is Pocket (CPU, English); pass `-engine chatterbox` or `xtts` for Polish once the sidecar is set up.
 
 Only clone a voice you have the right to use.
 
@@ -407,11 +407,13 @@ Recognizers mishear names they have never heard. voice corrects the text afterwa
 
 ```powershell
 voice sidecar setup --help          # changes nothing
-voice sidecar setup chatterbox      # also: f5, xtts; -gpu auto|nvidia|amd|cpu
+voice sidecar setup chatterbox      # also: f5, xtts, qwen3; -gpu auto|nvidia|amd|cpu
 voice clone add me clip.wav -engine chatterbox -rights "..."
 ```
 
-The easiest way is the Integrations window (settings window → Integrations → GPU voices): Install there first downloads a Python 3.12 that voice brings along (python-build-standalone, pinned by SHA-256, into `sidecar_dir\python`), so you need no Python of your own. From the command line, setup needs Python 3.12 (3.10-3.12 without AMD), or `-python <voice's python.exe>`. It looks for it through `py`, the standard install folders and PATH, and says so before installing anything if none fits (`-python C:\path\python.exe` picks one). Each backend gets its own environment in `sidecar_dir\envs\<backend>`, so one backend's pins (chatterbox pins an old torch) cannot break another; setups from before keep working from the shared `sidecar_dir\.venv`. Downloads are cached in `sidecar_dir\.pip-cache` and finished stages are recorded, so a rerun after an interruption resumes (`-force` redoes them). A GPU computation test checks PyTorch before the backend is installed. The `chatterbox`, `f5` and `xtts` engines start their server on first use, log to `sidecar\<engine>.log`, keep model weights in `sidecar\models` and stay running for later calls. Other models plug in as a Python module with a `Backend` class (see `sidecar/voice_sidecar/backends/__init__.py`) started with `--backend your.module`.
+The easiest way is the Integrations window (settings window → Integrations → GPU voices): Install there first downloads a Python 3.12 that voice brings along (python-build-standalone, pinned by SHA-256, into `sidecar_dir\python`), so you need no Python of your own. From the command line, setup needs Python 3.12 (3.10-3.12 without AMD), or `-python <voice's python.exe>`. It looks for it through `py`, the standard install folders and PATH, and says so before installing anything if none fits (`-python C:\path\python.exe` picks one). Each backend gets its own environment in `sidecar_dir\envs\<backend>`, so one backend's pins (chatterbox pins an old torch) cannot break another; setups from before keep working from the shared `sidecar_dir\.venv`. Downloads are cached in `sidecar_dir\.pip-cache` and finished stages are recorded, so a rerun after an interruption resumes (`-force` redoes them). A GPU computation test checks PyTorch before the backend is installed. The `chatterbox`, `f5`, `xtts` and `qwen3` engines start their server on first use, log to `sidecar\<engine>.log`, keep model weights in `sidecar\models` and stay running until 10 minutes without requests. What a backend computes from a cloned voice's clip is kept in `sidecar\voiceprints`, so the clip is analysed once; a new recording, transcript or model makes a new one. The backends are listed once, in `sidecar/backends.json`; adding another is described in [docs/adding-an-engine.md](docs/adding-an-engine.md).
+
+**Qwen3-TTS** (`qwen3`) clones from the clip and its transcript, not only from a speaker embedding, and comes closest to the recorded voice. It speaks ten languages: English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish and Italian. **Polish is not one of them**, so use Chatterbox or XTTS for Polish. The Integrations window offers two sizes: 1.7B, the default and closest, and 0.6B, faster and lighter. A change applies from the next sentence. On NVIDIA it runs in bfloat16 with PyTorch's SDPA attention; FlashAttention is not needed. Without a transcript it falls back to the speaker embedding alone, which sounds less alike, so voice transcribes the clip when speech recognition is installed.
 
 GPUs: NVIDIA gets CUDA PyTorch (`-cuda cu128` default, needed for RTX 50). AMD gets AMD's ROCm PyTorch for Windows from a profile in `sidecar\profiles` (`amd-rocm-windows`: ROCm 7.2.1, PyTorch 2.9.1, Python 3.12, for Radeon RX 9070/9070 XT/9060 XT, RX 7900 XTX, RX 7700 and AI PRO R9700; driver 26.2.2 or newer). A newer ROCm release from [AMD's install page](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html) goes in as another profile (`-profile file.json`) or with `-torch-wheels`. F5-TTS needs `torch.distributed`, which AMD's Windows build lacks: setup checks that and skips f5 before downloading it. Tested pins for a backend go in `sidecar\requirements\<backend>-<gpu>.txt` (used as pip constraints). Everything outside the sidecar (Kokoro, Piper, Pocket cloning, Parakeet/Whisper listening) runs on the CPU and works the same on AMD and NVIDIA.
 

@@ -94,7 +94,7 @@ func TestAnotherProgramOnThePort(t *testing.T) {
 	if time.Since(began) > 5*time.Second {
 		t.Fatal("it waited instead of saying so")
 	}
-	if up, other := e.probe(context.Background()); up || !other {
+	if up, other, _ := e.probe(context.Background()); up || !other {
 		t.Fatalf("probe up=%v other=%v", up, other)
 	}
 }
@@ -105,11 +105,48 @@ func TestOwnServerIsUp(t *testing.T) {
 	}))
 	defer srv.Close()
 	e := &Engine{name: "chatterbox", url: srv.URL, start: []string{"python", "--backend", "chatterbox"}}
-	if up, other := e.probe(context.Background()); !up || other {
+	if up, other, _ := e.probe(context.Background()); !up || other {
 		t.Fatalf("probe up=%v other=%v", up, other)
 	}
 	e.start = []string{"python", "--backend", "xtts"} // another backend answers there
-	if up, other := e.probe(context.Background()); up || !other {
+	if up, other, _ := e.probe(context.Background()); up || !other {
 		t.Fatalf("other backend: up=%v other=%v", up, other)
+	}
+}
+
+func TestServerWithOtherOptionsMakesWay(t *testing.T) {
+	model, down := "Qwen/0.6B", false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			if down {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"backend": "qwen3", "ready": true, "options": map[string]string{"model": model}})
+		case "/shutdown":
+			down = true
+		}
+	}))
+	defer srv.Close()
+	start := []any{"python", "-m", "voice_sidecar", "--backend", "qwen3", "--option", "model=Qwen/1.7B"}
+	ei, err := New("qwen3", engine.Config{"url": srv.URL, "start": start})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := ei.(*Engine)
+	if up, other, stale := e.probe(context.Background()); !up || other || !stale {
+		t.Fatalf("other model: up %v other %v stale %v", up, other, stale)
+	}
+	if e.healthy(context.Background()) {
+		t.Fatal("a server with the old model counts as healthy")
+	}
+	e.shutdown(context.Background())
+	if !down {
+		t.Fatal("shutdown not asked")
+	}
+	model, down = "Qwen/1.7B", false
+	if !e.healthy(context.Background()) {
+		t.Fatal("the server with the chosen model is not healthy")
 	}
 }

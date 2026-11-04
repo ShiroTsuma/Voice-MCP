@@ -1,0 +1,68 @@
+{
+  "about": "The GPU speech backends voice runs in its Python sidecar. voice (Go), the sidecar (Python) and setup.ps1 all read this file; see docs/adding-an-engine.md.",
+  "backends": [
+    {
+      "name": "chatterbox",
+      "label": "Chatterbox",
+      "note": "Polish and 22 more languages, on the GPU",
+      "pip": ["chatterbox-tts"],
+      "module": "chatterbox",
+      "port": 8765,
+      "clones": true,
+      "transcript": false,
+      "extra": { "exaggeration": 0.4, "cfg_weight": 0.4 }
+    },
+    {
+      "name": "f5",
+      "label": "F5-TTS",
+      "note": "on an NVIDIA GPU; non-commercial",
+      "pip": ["f5-tts"],
+      "module": "f5_tts",
+      "port": 8766,
+      "clones": true,
+      "transcript": true
+    },
+    {
+      "name": "xtts",
+      "label": "XTTS v2",
+      "note": "17 languages incl. Polish, on the GPU; non-commercial",
+      "pip": ["coqui-tts"],
+      "module": "TTS",
+      "port": 8767,
+      "clones": true,
+      "transcript": false
+    },
+    {
+      "name": "qwen3",
+      "label": "Qwen3-TTS",
+      "note": "10 languages (no Polish), close cloning from the clip and its transcript, on the GPU",
+      "pip": ["qwen-tts"],
+      "module": "qwen_tts",
+      "port": 8768,
+      "clones": true,
+      "transcript": true,
+      "start_timeout": 1800,
+      "prefetch": ["Qwen/Qwen3-TTS-12Hz-1.7B-Base"],
+      "option": {
+        "key": "model",
+        "label": "Model size",
+        "default": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+        "choices": [
+          { "value": "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "label": "1.7B", "note": "closest to the voice; about 4.5 GB download, 6-8 GB of graphics memory" },
+          { "value": "Qwen/Qwen3-TTS-12Hz-0.6B-Base", "label": "0.6B", "note": "faster and lighter; about 2 GB download, 3-4 GB of graphics memory" }
+        ]
+      }
+    },
+    {
+      "name": "test",
+      "label": "Test tone",
+      "note": "a tone instead of speech, to check the sidecar without a model",
+      "pip": [],
+      "module": "",
+      "port": 8799,
+      "clones": true,
+      "transcript": false,
+      "hidden": true
+    }
+  ]
+}

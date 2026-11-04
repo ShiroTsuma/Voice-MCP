@@ -47,8 +47,9 @@ user asks for. `status` reports the active preset and the last error.
   other formats when ffmpeg is installed) and creates the preset
   `clone-<name>`. The transcript is recognized automatically when possible.
 - Engine: `pocket` (default, CPU, English); `chatterbox` or `xtts` for
-  Polish or higher quality if the GPU sidecar is set up
-  (`voice.exe sidecar setup chatterbox`).
+  Polish or higher quality, `qwen3` for the closest clone in English and
+  nine other languages (not Polish; it needs the transcript), if the GPU
+  sidecar is set up (`voice.exe sidecar setup chatterbox`, or `qwen3`).
 - `preview` before switching with `voice_control set_preset clone-<name>`.
 
 ## Background process

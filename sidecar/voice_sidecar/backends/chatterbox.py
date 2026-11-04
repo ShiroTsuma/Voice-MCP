@@ -30,7 +30,7 @@ class Backend:
         self.model = Model.from_pretrained(device=dev)
         self.builtin = self.model.conds  # the model's own voice, for requests without a clip
 
-        def compute(path):
+        def compute(path, _text):
             self.model.prepare_conditionals(path, exaggeration=self.defaults["exaggeration"])
             return self.model.conds
 

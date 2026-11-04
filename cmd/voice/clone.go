@@ -13,20 +13,35 @@ import (
 	"voice/internal/clones"
 	"voice/internal/core"
 	"voice/internal/service"
+	"voice/sidecar"
 )
 
-const cloneUsage = `usage:
-  voice clone record <name> [-seconds 12] [-engine pocket|zipvoice] [-rights who] [-replace]
+var cloneUsage = `usage:
+  voice clone record <name> [-seconds 12] [-engine name] [-rights who] [-replace]
       three ticks count down, a chime starts and ends the recording; read a few
       natural sentences aloud. The clip is checked (level, clipping, noise) and added.
-  voice clone add <name> <clip> [-text transcript] [-engine pocket|zipvoice] [-rights who] [-replace]
+  voice clone add <name> <clip> [-text transcript] [-engine name] [-rights who] [-replace]
   voice clone list
   voice clone preview <name> [-out file.wav] [text]
   voice clone text <name> <transcript>
   voice clone remove <name>
 
+Engines: pocket (default, CPU), zipvoice (CPU, needs -text), and on the GPU
+sidecar once set up: ` + sidecar.Summary() + `. Those needing the transcript
+(-text, or ` + "`voice clone text`" + `): zipvoice, ` + strings.Join(transcriptEngines(), ", ") + `.
+
 Each cloned voice also becomes a preset named clone-<name>.
 Only clone voices you have the right to use.`
+
+func transcriptEngines() []string {
+	var out []string
+	for _, b := range sidecar.Backends() {
+		if b.Transcript && !b.Hidden {
+			out = append(out, b.Name)
+		}
+	}
+	return out
+}
 
 func runClone(args []string) error {
 	if len(args) == 0 {
@@ -34,7 +49,7 @@ func runClone(args []string) error {
 	}
 	sub, rest := args[0], args[1:]
 	fs, cfgPath := flags("clone " + sub)
-	text := fs.String("text", "", "transcript of the clip (needed by zipvoice)")
+	text := fs.String("text", "", "transcript of the clip (needed by zipvoice, f5 and qwen3)")
 	engineName := fs.String("engine", "", "preferred engine (default pocket)")
 	rights := fs.String("rights", "", "who confirmed the right to use this voice")
 	replace := fs.Bool("replace", false, "overwrite an existing voice")
@@ -89,7 +104,7 @@ func runClone(args []string) error {
 		if t, _ := m["transcript"].(string); t != "" {
 			fmt.Printf("transcript: %s\n", t)
 		} else {
-			fmt.Println("no transcript: fine for pocket; zipvoice and f5 need `voice clone text`")
+			fmt.Println("no transcript: fine for pocket; zipvoice, " + strings.Join(transcriptEngines(), ", ") + " need `voice clone text`")
 		}
 	case "list":
 		w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)

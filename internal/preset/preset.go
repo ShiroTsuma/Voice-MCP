@@ -16,6 +16,7 @@ import (
 
 	"voice/internal/audio"
 	"voice/internal/engine"
+	"voice/sidecar"
 )
 
 //go:embed builtin.toml
@@ -37,11 +38,14 @@ type Config struct {
 	StateDir   string                   `toml:"state_dir"`   // phrase cache, shared mute; default <data_root>\data
 	SidecarDir string                   `toml:"sidecar_dir"` // Python venv and GPU weights (GBs); default <data_root>\sidecar
 	Engines    map[string]engine.Config `toml:"engines"`
-	Presets    map[string]Preset        `toml:"presets"`
-	Hooks      Hooks                    `toml:"hooks"`
-	Listen     Listen                   `toml:"listen"`
-	Clients    map[string]string        `toml:"clients"` // client name substring -> preset
-	Serve      Serve                    `toml:"serve"`
+	// Sidecar holds the settings of the GPU backends (sidecar/backends.json),
+	// such as qwen3's model size: [sidecar.qwen3] model = "...".
+	Sidecar map[string]map[string]string `toml:"sidecar"`
+	Presets map[string]Preset            `toml:"presets"`
+	Hooks   Hooks                        `toml:"hooks"`
+	Listen  Listen                       `toml:"listen"`
+	Clients map[string]string            `toml:"clients"` // client name substring -> preset
+	Serve   Serve                        `toml:"serve"`
 	// Characters are who agent sessions become, in order: a new session takes
 	// the first one no other session has. A later layer's list replaces it.
 	Characters []Character `toml:"characters"`
@@ -209,6 +213,16 @@ func Load(paths ...string) (*Config, error) {
 		}
 		cfg.merge(user)
 	}
+	// The GPU backends' engines come from sidecar/backends.json, with the
+	// user's settings; an [engines.<name>] table in config.toml replaces one.
+	if cfg.Engines == nil {
+		cfg.Engines = map[string]engine.Config{}
+	}
+	for _, b := range sidecar.Backends() {
+		if _, ok := cfg.Engines[b.Name]; !ok {
+			cfg.Engines[b.Name] = b.Engine(cfg.Sidecar[b.Name])
+		}
+	}
 	return cfg, nil
 }
 func (c *Config) merge(o *Config) {
@@ -354,6 +368,17 @@ func (c *Config) merge(o *Config) {
 	}
 	for k, v := range o.Engines {
 		c.Engines[k] = v
+	}
+	for name, set := range o.Sidecar {
+		if c.Sidecar == nil {
+			c.Sidecar = map[string]map[string]string{}
+		}
+		if c.Sidecar[name] == nil {
+			c.Sidecar[name] = map[string]string{}
+		}
+		for k, v := range set {
+			c.Sidecar[name][k] = v
+		}
 	}
 	for k, v := range o.Presets {
 		c.Presets[k] = v

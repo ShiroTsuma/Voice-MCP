@@ -23,6 +23,7 @@ import (
 	"voice/internal/models"
 	"voice/internal/pyruntime"
 	"voice/internal/service"
+	"voice/sidecar"
 )
 
 // Every integration in the Integrations window is a TOML file: the ones
@@ -371,8 +372,19 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 		},
 
 		"sidecar": {
-			status: func(f integrationFile) integrations.Status { return sidecarStatus(f.Backend) },
+			status: func(f integrationFile) integrations.Status {
+				st := sidecarStatus(f.Backend)
+				st.Choice = sidecarChoice(f.Backend)
+				return st
+			},
 			do: func(ctx context.Context, f integrationFile, action string, log func(string)) error {
+				if value, ok := strings.CutPrefix(action, integrations.ChoosePrefix); ok {
+					b, _ := sidecar.Find(f.Backend)
+					if b.Option == nil || saveSidecarOption == nil {
+						return fmt.Errorf("%s has nothing to choose here", f.Title)
+					}
+					return saveSidecarOption(b.Name, b.Option.Key, value)
+				}
 				if action == "remove" {
 					dir := filepath.Join(httpengine.SidecarDir, "envs", f.Backend)
 					log("Removing " + dir)
@@ -392,6 +404,31 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			},
 		},
 	}
+}
+
+// sidecarOptions and saveSidecarOption reach the settings of the voice that
+// runs (serve sets them): the chosen options of a GPU backend, and saving one.
+var (
+	sidecarOptions    func(backend string) map[string]string
+	saveSidecarOption func(backend, key, value string) error
+)
+
+// sidecarChoice is a GPU backend's option as the window's picker: qwen3's
+// model size.
+func sidecarChoice(name string) *integrations.Choice {
+	b, ok := sidecar.Find(name)
+	if !ok || b.Option == nil {
+		return nil
+	}
+	var set map[string]string
+	if sidecarOptions != nil {
+		set = sidecarOptions(name)
+	}
+	c := &integrations.Choice{Label: b.Option.Label, Value: b.Value(set)}
+	for _, o := range b.Option.Choices {
+		c.Options = append(c.Options, integrations.ChoiceOption{Value: o.Value, Label: o.Label, Note: o.Note})
+	}
+	return c
 }
 
 func yesNo(b bool) string { return map[bool]string{true: "yes", false: "no"}[b] }
@@ -414,10 +451,6 @@ func claudePluginOn(claudeHome string) bool {
 	return true
 }
 
-// sidecarPackage is the Python package a backend installs, to find it in
-// the shared environment older setups made.
-var sidecarPackage = map[string]string{"chatterbox": "chatterbox", "xtts": "TTS", "f5": "f5_tts"}
-
 // sidecarStatus reads what the sidecar setup recorded for a backend. A
 // backend in the older shared environment (.venv) works too: the engines use
 // it when the backend has no environment of its own.
@@ -437,7 +470,8 @@ func sidecarStatus(name string) integrations.Status {
 		}
 		return integrations.Status{State: integrations.Partly, Detail: "The setup stopped before it finished; run it again to resume", Actions: append(install, remove)}
 	}
-	if pkg := sidecarPackage[name]; pkg != "" {
+	if b, _ := sidecar.Find(name); b.Module != "" {
+		pkg := b.Module
 		if _, err := os.Stat(filepath.Join(httpengine.SidecarDir, ".venv", "Lib", "site-packages", pkg)); err == nil {
 			return integrations.Status{State: integrations.On, Detail: "Works from an older shared environment (from earlier voice versions); Install separately gives it its own",
 				Actions: []integrations.Action{{ID: "install", Label: "Install separately", Long: true}}}
@@ -477,12 +511,16 @@ func cloneEngines() []map[string]any {
 		m, ok := models.Find(name)
 		return ok && models.Installed(m, engine.Dirs.Models, engine.Dirs.Runtime)
 	}
-	gpu := func(name string) bool { return sidecarStatus(name).State == integrations.On }
-	return []map[string]any{
+	out := []map[string]any{
 		{"name": "pocket", "label": "Pocket", "note": "English, on the CPU; the default", "ready": model("pocket")},
-		{"name": "chatterbox", "label": "Chatterbox", "note": "Polish and 22 more languages, on the GPU", "ready": gpu("chatterbox")},
-		{"name": "xtts", "label": "XTTS v2", "note": "17 languages incl. Polish, on the GPU; non-commercial", "ready": gpu("xtts")},
-		{"name": "zipvoice", "label": "ZipVoice", "note": "English and Chinese, on the CPU", "ready": model("zipvoice")},
-		{"name": "f5", "label": "F5-TTS", "note": "on an NVIDIA GPU; non-commercial", "ready": gpu("f5")},
+		{"name": "zipvoice", "label": "ZipVoice", "note": "English and Chinese, on the CPU; needs the transcript", "ready": model("zipvoice"), "transcript": true},
 	}
+	// The GPU backends, from sidecar/backends.json.
+	for _, b := range sidecar.Backends() {
+		if b.Clones && !b.Hidden {
+			out = append(out, map[string]any{"name": b.Name, "label": b.Label, "note": b.Note,
+				"ready": sidecarStatus(b.Name).State == integrations.On, "transcript": b.Transcript})
+		}
+	}
+	return out
 }

@@ -72,24 +72,10 @@ model = "sherpa-onnx-pocket-tts-2026-01-26"
 type = "sherpa"
 model = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
 
-# GPU models in the Python sidecar (`voice sidecar setup chatterbox`). voice
-# starts the server on first use; it exits after 10 minutes without requests,
+# GPU models in the Python sidecar (`voice sidecar setup chatterbox`): their
+# engines (chatterbox, f5, xtts, qwen3) come from sidecar/backends.json. voice
+# starts a server on first use; it exits after 10 minutes without requests,
 # freeing GPU memory, and starts again when needed.
-[engines.chatterbox]
-type = "http"
-url = "http://127.0.0.1:8765"
-start = ["{python:chatterbox}", "-m", "voice_sidecar", "--backend", "chatterbox", "--port", "8765", "--idle-seconds", "600"]
-extra = { exaggeration = 0.4, cfg_weight = 0.4 }
-
-[engines.f5]
-type = "http"
-url = "http://127.0.0.1:8766"
-start = ["{python:f5}", "-m", "voice_sidecar", "--backend", "f5", "--port", "8766", "--idle-seconds", "600"]
-
-[engines.xtts]
-type = "http"
-url = "http://127.0.0.1:8767"
-start = ["{python:xtts}", "-m", "voice_sidecar", "--backend", "xtts", "--port", "8767", "--idle-seconds", "600"]
 
 [engines.piper-gosia]
 type = "sherpa"

@@ -1031,7 +1031,8 @@ function fillTick() {
   if (document.visibilityState === 'visible') fillRaf = requestAnimationFrame(fillTick);
 }
 // A GPU engine's server starting and loading its model: the first sentence waits for it.
-const engineTitle = n => ({ chatterbox: 'Chatterbox', xtts: 'XTTS v2', f5: 'F5-TTS' })[n] || n;
+// The GPU engines' names come with the clone engines (from sidecar/backends.json).
+const engineTitle = n => (((state && state.options.clone_engines) || []).find(x => x.name === n) || {}).label || n;
 function loadingText() {
   const l = lastStatus.loading;
   if (!l) return '';
@@ -1545,7 +1546,7 @@ function fillCloneEngines(s) {
 }
 function cloneEngineHint() {
   const e = ((state && state.options.clone_engines) || []).find(x => x.name === $('cloneEngine').value);
-  $('cloneEngineHint').textContent = e ? e.note + (e.ready ? '' : '. Not installed: see Integrations') : '';
+  $('cloneEngineHint').textContent = e ? e.note + (e.transcript ? '. It needs what the clip says: speech recognition writes it down' : '') + (e.ready ? '' : '. Not installed: see Integrations') : '';
 }
 async function cloneFrom(file) {
   const a = cloneArgs(); if (!a || !file) return;

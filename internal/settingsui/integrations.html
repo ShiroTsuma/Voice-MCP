@@ -80,6 +80,13 @@
     font: 12px/1.45 var(--mono); color: var(--ink-2); white-space: pre-wrap; user-select: text; }
   .log .fail { color: var(--err); }
   .empty { margin-top: 30px; color: var(--ink-2); }
+  /* A setting of the integration, such as a model size. */
+  .pick { margin: 8px 0 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 12.5px var(--ui-small); color: var(--ink-2); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
+  .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 5px; background: none; font: 600 12.5px var(--ui); color: var(--ink-2); }
+  .seg button:hover { color: var(--ink); background: var(--field-hi); }
+  .seg button.on { background: var(--ink); color: var(--ground); }
+  .pick .note { flex-basis: 100%; color: var(--ink-3); }
 </style>
 </head>
 <body>
@@ -155,6 +162,7 @@ function renderMain() {
       if (it.link) { const l = document.createElement('a'); l.href = it.link; l.textContent = 'More'; l.target = '_blank'; d.append(bits.length ? ' · ' : '', l); }
       left.append(d);
     }
+    if (it.status.choice) left.append(picker(it));
     const acts = document.createElement('div'); acts.className = 'acts';
     for (const a of it.status.actions || []) {
       const b = document.createElement('button'); b.type = 'button';
@@ -185,6 +193,31 @@ function renderMain() {
     main.append(row);
   }
   main.scrollTop = keepScroll;
+}
+
+// picker shows an integration's choice (a model size); picking one applies it
+// from the next use.
+function picker(it) {
+  const c = it.status.choice;
+  const wrap = document.createElement('div'); wrap.className = 'pick';
+  const lab = document.createElement('span'); lab.textContent = c.label;
+  const seg = document.createElement('div'); seg.className = 'seg'; seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', c.label);
+  const note = document.createElement('span'); note.className = 'note';
+  for (const o of c.options) {
+    const b = document.createElement('button'); b.type = 'button';
+    b.textContent = o.label; b.title = o.note || '';
+    const on = o.value === c.value;
+    b.className = on ? 'on' : ''; b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) note.textContent = o.note || '';
+    b.onclick = async () => {
+      if (on) return;
+      try { await api('integration', { id: it.id, action: 'choose:' + o.value }); } catch (e) { alert(e.message); }
+      refresh();
+    };
+    seg.append(b);
+  }
+  wrap.append(lab, seg, note);
+  return wrap;
 }
 
 function render() { renderGroups(); renderMain(); }

@@ -42,7 +42,26 @@ type Status struct {
 	State   State    `json:"state"`
 	Detail  string   `json:"detail,omitempty"`
 	Actions []Action `json:"actions,omitempty"`
+	// Choice is a setting the window shows as a picker, such as a model
+	// size; picking one runs the action "choose:<value>".
+	Choice *Choice `json:"choice,omitempty"`
 }
+
+// Choice is one setting with its values.
+type Choice struct {
+	Label   string         `json:"label"`
+	Value   string         `json:"value"` // the one in use
+	Options []ChoiceOption `json:"options"`
+}
+
+type ChoiceOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Note  string `json:"note,omitempty"`
+}
+
+// ChoosePrefix starts the action that picks a Choice value.
+const ChoosePrefix = "choose:"
 
 // Integration is one module. Status must be quick (it runs on every refresh
 // of the window); Do runs an action and writes what it does to log.
@@ -189,6 +208,26 @@ func (r *Registry) Start(id, action string) (Job, error) {
 	}
 	i := *it
 	r.mu.Unlock()
+
+	// Picking a value is quick and needs nothing installed first: it runs now.
+	if value, ok := strings.CutPrefix(action, ChoosePrefix); ok {
+		st := safeStatus(i)
+		known := false
+		if st.Choice != nil {
+			for _, o := range st.Choice.Options {
+				known = known || o.Value == value
+			}
+		}
+		if !known || i.Do == nil {
+			return Job{}, fmt.Errorf("%s has no choice %q", i.Title, value)
+		}
+		j := Job{ID: id + "-choose", Action: action, Started: time.Now(), Done: true, Log: []string{}}
+		if err := i.Do(context.Background(), action, func(string) {}); err != nil {
+			j.Error = err.Error()
+			return j, err
+		}
+		return j, nil
+	}
 
 	var act *Action
 	for _, a := range safeStatus(i).Actions {

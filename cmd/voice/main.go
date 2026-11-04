@@ -65,7 +65,7 @@ Usage:
   voice dictate text         pass text to the agent the way the dictation hotkey does
   voice transcribe file.wav  speech to text for a recording
   voice paths                where models, voices, cache and sidecar live
-  voice sidecar setup b,...  install GPU backends (chatterbox, f5, xtts)
+  voice sidecar setup b,...  install GPU backends (chatterbox, f5, xtts, qwen3)
   voice presets              list voice presets
   voice voices [-engine e]   list voices an engine offers
   voice devices              list audio outputs and microphones (* = selected)

@@ -21,6 +21,7 @@ PyTorch build by GPU (-Gpu auto detects it):
 .EXAMPLE
 .\setup.ps1 -Backend chatterbox
 .\setup.ps1 -Backend chatterbox,xtts -Gpu nvidia -Target D:\voice-sidecar
+.\setup.ps1 -Backend qwen3
 .\setup.ps1 -Backend chatterbox -Gpu amd -TorchProfile amd-rocm-windows
 .\setup.ps1 -Help
 #>
@@ -36,7 +37,13 @@ param(
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
-$usage = 'usage: setup.ps1 -Backend chatterbox|f5|xtts|test[,...] [-Gpu auto|nvidia|amd|cpu] [-Cuda cu128] [-TorchProfile name|file.json] [-TorchWheels url,...] [-Python path] [-Target dir] [-Force]'
+# The backends, their Python packages and the module that proves each imports,
+# come from backends.json, which voice and the sidecar read too.
+$registry = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'backends.json') -Raw | ConvertFrom-Json
+$packages = @{}
+foreach ($r in $registry.backends) { $packages[$r.name] = @{ pip = @($r.pip); module = [string]$r.module; prefetch = @($r.prefetch | Where-Object { $_ }) } }
+$names = @($registry.backends | ForEach-Object name)
+$usage = "usage: setup.ps1 -Backend $($names -join '|')[,...] [-Gpu auto|nvidia|amd|cpu] [-Cuda cu128] [-TorchProfile name|file.json] [-TorchWheels url,...] [-Python path] [-Target dir] [-Force]"
 # -File passes a comma list as one string.
 $Backend = @($Backend | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $TorchWheels = @($TorchWheels | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
@@ -44,14 +51,7 @@ $TorchWheels = @($TorchWheels | ForEach-Object { $_ -split ',' } | Where-Object 
 # Everything is checked before anything is installed.
 if ($Help -or $Backend -contains '--help' -or $Backend -contains '-h' -or $Backend -contains 'help') { Write-Host $usage; Get-Help $PSCommandPath -Detailed | Out-String | Write-Host; exit 0 }
 if (-not $Backend) { Write-Host $usage; exit 2 }
-# Python package, and the module that proves it imports.
-$packages = @{
-    chatterbox = @{ pip = @('chatterbox-tts'); module = 'chatterbox' }
-    f5         = @{ pip = @('f5-tts'); module = 'f5_tts' }
-    xtts       = @{ pip = @('coqui-tts'); module = 'TTS' }
-    test       = @{ pip = @(); module = '' }
-}
-foreach ($b in $Backend) { if (-not $packages.ContainsKey($b)) { Write-Host $usage; throw "unknown backend $b (chatterbox, f5, xtts, test)" } }
+foreach ($b in $Backend) { if (-not $packages.ContainsKey($b)) { Write-Host $usage; throw "unknown backend $b ($($names -join ', '))" } }
 
 if ($Gpu -eq 'auto') {
     $names = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object Name)
@@ -205,6 +205,18 @@ foreach ($b in $Backend) {
         & $py -c "import $($spec.module)"
         if ($LASTEXITCODE) { throw "$b installed but does not import; see the error above" }
         $state.backend = $true; Save-State $envDir $state
+    }
+    # Model weights the backend loads on first use come now, into the
+    # sidecar's models folder (where the engines look), with this progress.
+    if ($spec.prefetch -and -not $state.prefetch) {
+        $env:HF_HOME = Join-Path $Target 'models'
+        $env:HF_HUB_DISABLE_SYMLINKS_WARNING = '1'
+        foreach ($m in $spec.prefetch) {
+            Write-Host "Downloading $m (model weights, several GB) into $env:HF_HOME"
+            & $py -c "import sys; from huggingface_hub import snapshot_download; print(snapshot_download(sys.argv[1]))" $m
+            if ($LASTEXITCODE) { throw "downloading $m failed (rerun to resume)" }
+        }
+        $state.prefetch = $true; Save-State $envDir $state
     }
     $done += $b
 }

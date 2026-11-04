@@ -45,6 +45,7 @@ type Engine struct {
 	start   []string
 	timeout time.Duration
 	extra   map[string]any
+	options map[string]string // --option key=value in start: what the server must run with
 	client  *http.Client
 
 	mu      sync.Mutex
@@ -61,7 +62,52 @@ func New(name string, cfg engine.Config) (engine.Engine, error) {
 		e.timeout = time.Duration(t) * time.Second
 	}
 	e.extra, _ = cfg["extra"].(map[string]any)
+	e.options = startOptions(e.start)
 	return e, nil
+}
+
+// chosen holds options set while voice runs (a model size picked in the
+// Integrations window), by engine name; they win over the start command's.
+var chosen sync.Map
+
+// SetOptions sets an engine's options from now on: the next request finds
+// the server running with others and starts it again with these.
+func SetOptions(engine string, set map[string]string) {
+	cp := make(map[string]string, len(set))
+	for k, v := range set {
+		cp[k] = v
+	}
+	chosen.Store(engine, cp)
+}
+
+// want is what the server must run with: the start command's options with
+// the chosen ones over them.
+func (e *Engine) want() map[string]string {
+	out := make(map[string]string, len(e.options))
+	for k, v := range e.options {
+		out[k] = v
+	}
+	if set, ok := chosen.Load(e.name); ok {
+		for k, v := range set.(map[string]string) {
+			if _, known := out[k]; known {
+				out[k] = v
+			}
+		}
+	}
+	return out
+}
+
+// startOptions reads the --option key=value pairs of a start command.
+func startOptions(start []string) map[string]string {
+	out := map[string]string{}
+	for i := 0; i+1 < len(start); i++ {
+		if start[i] == "--option" {
+			if k, v, ok := strings.Cut(start[i+1], "="); ok {
+				out[k] = v
+			}
+		}
+	}
+	return out
 }
 
 func (e *Engine) Close() error { return nil }
@@ -84,35 +130,57 @@ func expand(a string) string {
 }
 
 func (e *Engine) healthy(ctx context.Context) bool {
-	up, _ := e.probe(ctx)
-	return up
+	up, _, stale := e.probe(ctx)
+	return up && !stale
 }
 
 // probe asks the server for its health. up: the engine's server answered and
 // is ready; other: something answered that is not it (another program holds
-// the port), which starting the server again cannot fix.
-func (e *Engine) probe(ctx context.Context) (up, other bool) {
+// the port), which starting the server again cannot fix; stale: it is the
+// engine's server, started with other options (another model size), and
+// must make way for one with these.
+func (e *Engine) probe(ctx context.Context) (up, other, stale bool) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, e.url+"/health", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return false, false // nothing listens
+		return false, false, false // nothing listens
 	}
 	defer resp.Body.Close()
 	var h struct {
-		Backend string `json:"backend"`
-		Ready   *bool  `json:"ready"`
+		Backend string            `json:"backend"`
+		Ready   *bool             `json:"ready"`
+		Options map[string]string `json:"options"`
 	}
 	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&h) != nil {
-		return false, true
+		return false, true, false
 	}
 	// A server of voice's sidecar says its backend; any other server speaking
 	// the protocol may say nothing, and counts as up.
 	if h.Backend != "" && len(e.start) > 0 && !strings.Contains(strings.Join(e.start, " "), h.Backend) {
-		return false, true
+		return false, true, false
 	}
-	return h.Ready == nil || *h.Ready, false
+	for k, v := range e.want() {
+		if h.Options != nil && h.Options[k] != v {
+			stale = true
+		}
+	}
+	return h.Ready == nil || *h.Ready, false, stale
+}
+
+// shutdown asks a stale server to exit and waits until its port is free.
+func (e *Engine) shutdown(ctx context.Context) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/shutdown", nil)
+	if resp, err := http.DefaultClient.Do(req); err == nil {
+		resp.Body.Close()
+	}
+	for i := 0; i < 50; i++ {
+		if up, _, _ := e.probe(ctx); !up {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 // OnStarting, when set, learns that voice waits for an engine's server to
@@ -134,7 +202,13 @@ func (e *Engine) ensure(ctx context.Context) error {
 	if len(e.start) == 0 {
 		return fmt.Errorf("engine %q: no server at %s", e.name, e.url)
 	}
-	if _, other := e.probe(ctx); other {
+	up, other, stale := e.probe(ctx)
+	if up && stale {
+		e.shutdown(ctx)
+		e.running = nil // it was started with the old options
+		other = false
+	}
+	if other {
 		return fmt.Errorf("engine %q: another program answers at %s, the port voice's %s server uses; close it, or give the engine another port in config.toml", e.name, e.url, e.name)
 	}
 	if fn := OnStarting; fn != nil {
@@ -152,8 +226,14 @@ func (e *Engine) ensure(ctx context.Context) error {
 		}
 	}
 	if !alive {
+		want := e.want()
 		args := make([]string, len(e.start))
 		for i, a := range e.start {
+			if i > 0 && e.start[i-1] == "--option" {
+				if k, _, ok := strings.Cut(a, "="); ok {
+					a = k + "=" + want[k]
+				}
+			}
 			args[i] = expand(a)
 		}
 		cmd := exec.Command(args[0], args[1:]...)

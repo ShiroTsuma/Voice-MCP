@@ -29,6 +29,9 @@ type Settings struct {
 	// preset with its own speed, pitch and effects. Sent with a null value, a
 	// preset is removed.
 	Presets map[string]*Preset `toml:"presets,omitempty" json:"presets,omitempty"`
+	// Sidecar holds the GPU backends' chosen options, such as qwen3's model
+	// size ([sidecar.qwen3] model = "...").
+	Sidecar map[string]map[string]string `toml:"sidecar,omitempty" json:"sidecar,omitempty"`
 }
 
 // Preset is a tuned voice: what it changes on the preset it extends.

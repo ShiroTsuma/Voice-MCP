@@ -3,8 +3,12 @@
     python -m voice_sidecar --backend chatterbox --port 8765
 
 POST /synthesize  {"text", "lang", "voice", "ref_audio", "ref_text", "speed", "extra"} -> audio/wav
-GET  /health      {"backend", "ready", "clones"}
+GET  /health      {"backend", "ready", "clones", "options"}
 GET  /voices      [{"name", "lang", "gender"}]
+POST /shutdown    exits, so voice can start it with other options (a model size)
+
+The built-in backends are listed in ../backends.json, which voice and
+setup.ps1 read too.
 
 Requests are served one at a time: a GPU model is not re-entrant, and voice
 queues utterances anyway.
@@ -23,7 +27,16 @@ import traceback
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-BUILTIN = ("chatterbox", "f5", "xtts", "test")
+def builtin():
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backends.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return tuple(b["name"] for b in json.load(f)["backends"])
+    except (OSError, ValueError, KeyError):
+        return ("chatterbox", "f5", "xtts", "test")
+
+
+BUILTIN = builtin()
 
 
 def load_backend(name, options):
@@ -54,6 +67,7 @@ def to_wav(samples, rate):
 class Handler(BaseHTTPRequestHandler):
     backend = None
     name = ""
+    options = {}
     lock = threading.Lock()
     last_request = time.monotonic()
 
@@ -70,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.reply(200, {"backend": self.name, "ready": True, "clones": bool(getattr(self.backend, "clones", False))})
+            self.reply(200, {"backend": self.name, "ready": True, "clones": bool(getattr(self.backend, "clones", False)), "options": self.options})
         elif self.path == "/voices":
             self.reply(200, list(getattr(self.backend, "voices", lambda: [])()))
         else:
@@ -78,6 +92,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         Handler.last_request = time.monotonic()
+        if self.path == "/shutdown":
+            self.reply(200, {"ok": True})
+            print("voice_sidecar asked to exit", file=sys.stderr, flush=True)
+            threading.Thread(target=lambda: (time.sleep(0.2), os._exit(0)), daemon=True).start()
+            return
         if self.path != "/synthesize":
             self.reply(404, {"error": "not found"})
             return
@@ -115,6 +134,7 @@ def main():
     os.environ.setdefault("HF_HOME", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models"))
 
     Handler.name = args.backend
+    Handler.options = options
     Handler.backend = load_backend(args.backend, options)  # load before listening: /health means ready
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"voice_sidecar {args.backend} ready on http://{args.host}:{args.port}", file=sys.stderr, flush=True)

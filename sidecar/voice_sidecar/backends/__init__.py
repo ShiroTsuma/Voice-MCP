@@ -34,23 +34,26 @@ class VoicePrints:
     so a clip is analysed once instead of for every sentence: in memory while
     the server runs, and as a file under voiceprints\\ in the server's folder
     for the servers after it. A clip recorded again has another size or time
-    and gets a new print.
+    and gets a new print; so does another transcript, and the tag names the
+    model and the settings the print depends on.
 
-    compute(path) makes a print; save(print, file) and load(file) store it.
+    compute(path, text) makes a print; save(print, file) and load(file)
+    store it.
     """
 
     def __init__(self, tag, compute, save=None, load=None):
         self.tag, self.compute, self.save, self.load = tag, compute, save, load
         self.memory = {}
 
-    def file(self, path):
+    def file(self, path, text=""):
         st = os.stat(path)
-        raw = f"{self.tag}|{os.path.abspath(path).lower()}|{st.st_size}|{st.st_mtime_ns}"
+        raw = f"{self.tag}|{os.path.abspath(path).lower()}|{st.st_size}|{st.st_mtime_ns}|{text}"
         key = hashlib.sha1(raw.encode()).hexdigest()[:20]
-        return os.path.join(os.getcwd(), "voiceprints", f"{self.tag}-{key}.pt")
+        name = "".join(c if c.isalnum() or c in "-_." else "-" for c in self.tag)
+        return os.path.join(os.getcwd(), "voiceprints", f"{name}-{key}.pt")
 
-    def get(self, path):
-        file = self.file(path)
+    def get(self, path, text=""):
+        file = self.file(path, text)
         if file in self.memory:
             return self.memory[file]
         start = time.monotonic()
@@ -61,7 +64,7 @@ class VoicePrints:
             except Exception as e:  # a damaged file: compute it again
                 print(f"voiceprint {file} unreadable ({e}); computing it again", file=sys.stderr, flush=True)
         if made is None:
-            made = self.compute(path)
+            made = self.compute(path, text)
             if self.save:
                 try:
                     os.makedirs(os.path.dirname(file), exist_ok=True)

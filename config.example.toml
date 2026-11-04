@@ -134,6 +134,11 @@
 # url = "http://127.0.0.1:8765"
 # start = ["{python:chatterbox}", "-m", "voice_sidecar", "--backend", "chatterbox", "--port", "8765", "--idle-seconds", "600"]
 # extra = { exaggeration = 0.6, cfg_weight = 0.3 }   # livelier: exaggeration up, cfg_weight down (default 0.4 / 0.4)
+#
+# The GPU engines (chatterbox, f5, xtts, qwen3) come from sidecar/backends.json.
+# Qwen3-TTS has two sizes; the Integrations window switches them, or here:
+# [sidecar.qwen3]
+# model = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"   # default Qwen/Qwen3-TTS-12Hz-1.7B-Base
 
 # The chain: an engine makes the sound (kokoro, piper, chatterbox, …), a preset
 # picks an engine and tunes it (calm-mature is Kokoro's af_nicole, slower and
