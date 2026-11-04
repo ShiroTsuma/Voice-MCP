@@ -214,3 +214,36 @@ func TestBatchOfSentences(t *testing.T) {
 		t.Fatal("an engine without batches took one")
 	}
 }
+
+func TestIdleReachesRunningServers(t *testing.T) {
+	got := make(chan float64, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/idle" {
+			var b struct{ Seconds float64 }
+			json.NewDecoder(r.Body).Decode(&b)
+			got <- b.Seconds
+		}
+		w.Write([]byte(`{"ready":true}`))
+	}))
+	defer srv.Close()
+	New("managed", engine.Config{"url": srv.URL, "start": []any{"python", "--idle-seconds", "600"}})
+	New("external", engine.Config{"url": srv.URL}) // a server voice does not run: left alone
+	SetIdle(3600)
+	select {
+	case s := <-got:
+		if s != 3600 {
+			t.Fatalf("idle %v", s)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the running server was not told")
+	}
+	select {
+	case <-got:
+		t.Fatal("a server voice does not run was told")
+	case <-time.After(300 * time.Millisecond):
+	}
+	if idleSeconds.Load() != 3600 {
+		t.Fatal("not kept for new servers")
+	}
+	SetIdle(-1)
+}

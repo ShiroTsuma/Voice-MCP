@@ -25,8 +25,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"voice/internal/audio"
@@ -66,8 +68,52 @@ func New(name string, cfg engine.Config) (engine.Engine, error) {
 	e.extra, _ = cfg["extra"].(map[string]any)
 	e.options = startOptions(e.start)
 	e.batch, _ = cfg["batch"].(bool)
+	live.Lock()
+	live.engines = append(live.engines, e)
+	live.Unlock()
 	return e, nil
 }
+
+// live are the engines made, so a new idle time reaches their servers.
+var live struct {
+	sync.Mutex
+	engines []*Engine
+}
+
+// idleSeconds is how long a server voice starts waits without requests
+// before it exits, freeing the GPU (0 stays; -1 keeps the start command's).
+var idleSeconds atomic.Int64
+
+func init() { idleSeconds.Store(-1) }
+
+// SetIdle sets that time for the servers voice starts from now on and tells
+// the ones running; seconds 0 keeps them loaded.
+func SetIdle(seconds int) {
+	if idleSeconds.Swap(int64(seconds)) == int64(seconds) {
+		return
+	}
+	live.Lock()
+	engines := append([]*Engine(nil), live.engines...)
+	live.Unlock()
+	for _, e := range engines {
+		if len(e.start) == 0 {
+			continue // a server voice does not run
+		}
+		go func(e *Engine) {
+			body, _ := json.Marshal(map[string]int{"seconds": seconds})
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/idle", bytes.NewReader(body))
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+			}
+		}(e)
+	}
+}
+
+// Warm starts the engine's server and waits until its model is loaded, so
+// the first sentence is not late.
+func (e *Engine) Warm(ctx context.Context) error { return e.ensure(ctx) }
 
 // chosen holds options set while voice runs (a model size picked in the
 // Integrations window), by engine name; they win over the start command's.
@@ -235,6 +281,11 @@ func (e *Engine) ensure(ctx context.Context) error {
 			if i > 0 && e.start[i-1] == "--option" {
 				if k, _, ok := strings.Cut(a, "="); ok {
 					a = k + "=" + want[k]
+				}
+			}
+			if i > 0 && e.start[i-1] == "--idle-seconds" {
+				if s := idleSeconds.Load(); s >= 0 {
+					a = strconv.FormatInt(s, 10)
 				}
 			}
 			args[i] = expand(a)

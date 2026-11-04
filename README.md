@@ -286,7 +286,7 @@ One background process, `voice serve`, owns the audio device, the models and the
 - **ducking**: other apps play at 35% while voice speaks;
 - optional **barge-in**: voice stops when you start talking (headphones);
 - optional **start at login** (tray → Start at login, or `voice autostart on`): a shortcut in the Startup folder, so the tray and hotkeys are there right after you sign in;
-- idle models are freed after 15 minutes and the GPU sidecar exits after 10 minutes without requests; both come back on the next use.
+- idle models are freed after 15 minutes (Listening and memory → Free idle models after: 5 min to never), the GPU voices' servers included; they come back on the next use. **Load the characters' voices at start** loads the voices of the default preset and the characters when voice starts, GPU servers included, so even the first sentence is not late.
 
 `voice serve status|stop` and `voice mixer` (session volumes) help diagnose.
 

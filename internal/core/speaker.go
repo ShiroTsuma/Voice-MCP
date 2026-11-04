@@ -277,6 +277,39 @@ func (s *Speaker) Warm() {
 	s.Engine(p.For(lang).Engines[0])
 }
 
+// WarmVoices loads, in the background, the engines the given presets speak
+// with, starting the servers of GPU voices so their first sentence is not
+// late. Presets that do not resolve are skipped.
+func (s *Speaker) WarmVoices(presets []string) {
+	lang := strings.ToLower(s.cfg.DefaultLang)
+	if lang == "" || lang == "auto" {
+		lang = "en"
+	}
+	seen := map[string]bool{}
+	for _, name := range presets {
+		p, err := s.cfg.Resolve(name)
+		if err != nil {
+			continue
+		}
+		engineName := p.For(lang).Engines[0]
+		if seen[engineName] {
+			continue
+		}
+		seen[engineName] = true
+		go func() {
+			e, err := s.Engine(engineName)
+			if err != nil {
+				return
+			}
+			if w, ok := e.(engine.Warmer); ok {
+				if err := w.Warm(context.Background()); err != nil && Logf != nil {
+					Logf("voices: %s did not load: %v", engineName, err)
+				}
+			}
+		}()
+	}
+}
+
 // Engine returns a started engine, creating it on first use. Failed starts
 // are retried on the next call so a sidecar that comes up later is picked up.
 // Loading a model takes seconds, so it holds only that engine's lock, never

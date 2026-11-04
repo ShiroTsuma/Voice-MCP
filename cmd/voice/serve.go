@@ -87,6 +87,8 @@ func runServe(args []string) error {
 	logf("voice %s serving (pid %d)", version, os.Getpid())
 
 	core.Logf = logf
+	// GPU servers exit after the same idle time as the other models.
+	httpengine.SetIdle(int(unloadAfter(cfg).Seconds()))
 	sp := core.NewSpeaker(cfg)
 	defer sp.Close()
 	if cfg.DefaultPreset != "" {
@@ -110,6 +112,9 @@ func runServe(args []string) error {
 		sp.Warm()
 		if l.Available() {
 			l.Warm()
+		}
+		if isOn(cfg.Serve.PreloadVoices) {
+			sp.WarmVoices(voicePresets(cfg))
 		}
 	}()
 
@@ -312,6 +317,10 @@ func (b *backend) reload() (bool, error) {
 		}
 	}
 	cur.Sidecar = next.Sidecar
+	httpengine.SetIdle(int(unloadAfter(next).Seconds()))
+	if isOn(next.Serve.PreloadVoices) && !isOn(cur.Serve.PreloadVoices) {
+		defer b.sp.WarmVoices(voicePresets(next)) // turned on: load them now
+	}
 	cur.DefaultLang, cur.Volume, cur.Serve, cur.Hooks = next.DefaultLang, next.Volume, next.Serve, next.Hooks
 	cur.Characters = next.Characters
 	// Compare with the active preset too: voice_control set_preset switches it
@@ -374,7 +383,7 @@ func (b *backend) state() map[string]any {
 		"device":         cfg.Device,
 		"serve": map[string]any{
 			"duck": duck, "stop_hotkey": orNone(cfg.Serve.StopHotkey), "mute_hotkey": orNone(cfg.Serve.MuteHotkey),
-			"barge_in": boolOr(cfg.Serve.BargeIn, false), "unload_after": unload,
+			"barge_in": boolOr(cfg.Serve.BargeIn, false), "unload_after": unload, "preload_voices": boolOr(cfg.Serve.PreloadVoices, false),
 			"dictate_hotkey": orNone(cfg.Serve.DictateHotkey), "dictate_submit": boolOr(cfg.Serve.DictateSubmit, false),
 			"dictate_target": cfg.Serve.DictateTarget, "dictate_feedback": cfg.Serve.DictateFeedback, "dictate_routing": boolOr(cfg.Serve.DictateRouting, false), "dictate_theme": cfg.Serve.DictateTheme, "dictate_overlay_scale": floatOr(cfg.Serve.DictateOverlayScale, 1.5), "personas": boolOr(cfg.Serve.Personas, false), "speaking_popup": boolOr(cfg.Serve.SpeakingPopup, false), "popup_linger": floatOr(cfg.Serve.PopupLinger, 8), "popup_dictation": boolOr(cfg.Serve.PopupDictation, false), "voice_replies": boolOr(cfg.Serve.VoiceReplies, false),
 		},
@@ -440,3 +449,18 @@ func wordListsState(cfg *preset.Config) []map[string]any {
 	}
 	return out
 }
+
+// voicePresets are the presets voice speaks with: the default one and each
+// character's.
+func voicePresets(cfg *preset.Config) []string {
+	out := []string{cfg.DefaultPreset}
+	for _, ch := range cfg.Characters {
+		if ch.Preset != "" {
+			out = append(out, ch.Preset)
+		}
+	}
+	return out
+}
+
+// isOn reads a switch that is off when unset.
+func isOn(p *bool) bool { return p != nil && *p }

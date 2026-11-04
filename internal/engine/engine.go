@@ -41,6 +41,12 @@ type Batcher interface {
 	SynthesizeBatch(ctx context.Context, reqs []Request) ([]Chunk, error)
 }
 
+// Warmer is an engine whose model loads in a separate server: Warm starts it
+// and waits until it is ready.
+type Warmer interface {
+	Warm(ctx context.Context) error
+}
+
 // ErrNoCloning is returned by engines that cannot use a reference clip.
 var ErrNoCloning = errors.New("engine cannot clone voices")
 

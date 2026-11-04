@@ -78,11 +78,14 @@ type Hooks struct {
 
 // Serve configures the background process that owns audio and models.
 type Serve struct {
-	UnloadAfter string   `toml:"unload_after"` // free idle models after this long, e.g. "15m"; "0" keeps them
-	Duck        *float64 `toml:"duck"`         // other apps' volume while speaking, 0..1; 1 turns ducking off
-	StopHotkey  string   `toml:"stop_hotkey"`  // e.g. "Ctrl+Alt+End"; empty disables
-	MuteHotkey  string   `toml:"mute_hotkey"`  // toggles mute; empty disables
-	BargeIn     *bool    `toml:"barge_in"`     // stop speaking when the user starts talking (use headphones)
+	UnloadAfter string `toml:"unload_after"` // free idle models after this long, e.g. "15m"; "0" keeps them
+	// PreloadVoices loads the voices the characters and the default preset
+	// use when voice starts, GPU servers included.
+	PreloadVoices *bool    `toml:"preload_voices"`
+	Duck          *float64 `toml:"duck"`        // other apps' volume while speaking, 0..1; 1 turns ducking off
+	StopHotkey    string   `toml:"stop_hotkey"` // e.g. "Ctrl+Alt+End"; empty disables
+	MuteHotkey    string   `toml:"mute_hotkey"` // toggles mute; empty disables
+	BargeIn       *bool    `toml:"barge_in"`    // stop speaking when the user starts talking (use headphones)
 	// Dictation: the hotkey records what the user says and types it into an agent.
 	DictateHotkey string `toml:"dictate_hotkey"` // starts recording; pressed again, ends it; empty disables
 	DictateSubmit *bool  `toml:"dictate_submit"` // press Enter after the text, sending it to the agent
@@ -274,6 +277,9 @@ func (c *Config) merge(o *Config) {
 		c.Clients[k] = v
 	}
 	sv := o.Serve
+	if sv.PreloadVoices != nil {
+		c.Serve.PreloadVoices = sv.PreloadVoices
+	}
 	if sv.UnloadAfter != "" {
 		c.Serve.UnloadAfter = sv.UnloadAfter
 	}

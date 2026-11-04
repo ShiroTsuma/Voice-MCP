@@ -6,6 +6,7 @@ POST /synthesize  {"text", "lang", "voice", "ref_audio", "ref_text", "speed", "e
 GET  /health      {"backend", "ready", "clones", "options"}
 GET  /voices      [{"name", "lang", "gender"}]
 POST /shutdown    exits, so voice can start it with other options (a model size)
+POST /idle        {"seconds"}: exit after this long without synthesis (0: stay)
 POST /synthesize_batch  as /synthesize with "texts" (a list) instead of "text" ->
                   {"audio": [base64 WAV, ...]}: one voice, several sentences
                   generated together (backends with synthesize_batch: qwen3)
@@ -76,6 +77,7 @@ class Handler(BaseHTTPRequestHandler):
     backend = None
     name = ""
     options = {}
+    idle = 0.0  # seconds without synthesis before the server exits; 0 stays
     lock = threading.Lock()
     last_request = time.monotonic()
 
@@ -92,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.reply(200, {"backend": self.name, "ready": True, "clones": bool(getattr(self.backend, "clones", False)), "options": self.options})
+            self.reply(200, {"backend": self.name, "ready": True, "clones": bool(getattr(self.backend, "clones", False)), "options": self.options, "idle": Handler.idle})
         elif self.path == "/voices":
             self.reply(200, list(getattr(self.backend, "voices", lambda: [])()))
         else:
@@ -100,6 +102,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         Handler.last_request = time.monotonic()
+        if self.path == "/idle":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                Handler.idle = max(0.0, float(body.get("seconds", 0)))
+            except (ValueError, TypeError) as e:
+                self.reply(400, {"error": f"bad idle: {e}"})
+                return
+            print(f"voice_sidecar idle time now {Handler.idle:.0f} s", file=sys.stderr, flush=True)
+            self.reply(200, {"idle": Handler.idle})
+            return
         if self.path == "/shutdown":
             self.reply(200, {"ok": True})
             print("voice_sidecar asked to exit", file=sys.stderr, flush=True)
@@ -177,17 +189,21 @@ def main():
     Handler.backend = load_backend(args.backend, options)  # load before listening: /health means ready
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"voice_sidecar {args.backend} ready on http://{args.host}:{args.port}", file=sys.stderr, flush=True)
-    if args.idle_seconds > 0:
-        # voice starts the server again on the next request that needs it.
-        def watch():
-            while True:
-                time.sleep(5)
-                if not Handler.lock.locked() and time.monotonic() - Handler.last_request > args.idle_seconds:
-                    print("voice_sidecar idle, exiting", file=sys.stderr, flush=True)
-                    os._exit(0)
+    # Exit after idle seconds without synthesis, freeing GPU memory (0: stay);
+    # voice starts the server again on the next request that needs it, and
+    # changes the time while it runs (POST /idle).
+    Handler.idle = args.idle_seconds
 
-        Handler.last_request = time.monotonic()
-        threading.Thread(target=watch, daemon=True).start()
+    def watch():
+        while True:
+            time.sleep(5)
+            idle = Handler.idle
+            if idle > 0 and not Handler.lock.locked() and time.monotonic() - Handler.last_request > idle:
+                print("voice_sidecar idle, exiting", file=sys.stderr, flush=True)
+                os._exit(0)
+
+    Handler.last_request = time.monotonic()
+    threading.Thread(target=watch, daemon=True).start()
     server.serve_forever()
 
 

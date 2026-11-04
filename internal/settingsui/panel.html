@@ -696,8 +696,12 @@
             </div>
           </div>
           <div class="row">
-            <label class="lab" for="unload">Free idle models after</label>
+            <label class="lab" for="unload">Free idle models after<span class="help">GPU voices too: their server stops and frees the graphics card; the next sentence loads it again</span></label>
             <select id="unload"><option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="1h">1 hour</option><option value="0">Never</option></select>
+          </div>
+          <div class="row">
+            <label class="lab" for="preload">Load the characters' voices at start<span class="help">Their models load when voice starts, so even the first sentence is not late</span></label>
+            <label class="switch"><input type="checkbox" id="preload"><span></span></label>
           </div>
         </div></div>
       </section>
@@ -1499,7 +1503,7 @@ function summaries() {
   $('sumDictation').textContent = keyText($('dictateKey').dataset.value) + ', ' + ($('dictateRouting').checked ? 'to the agent you name' : tgt) + ', '
     + ({ screen: 'shown on screen', voice: 'told by voice', both: 'shown and told' }[fb] || 'shown on screen') + ($('dictateSubmit').checked ? ', Enter pressed' : '');
   $('sumSound').textContent = ($('device').value === 'default' ? 'System speakers' : $('device').value) + ', ' + ($('mic').value && $('mic').value !== 'default' ? 'microphone ' + $('mic').value : 'system microphone') + ($('duckOn').checked ? ', others down to ' + pct($('duck').value) : '') + ($('barge').checked ? ', stops when you talk' : '');
-  $('sumModels').textContent = optText('model').split(' — ')[0] + ($('unload').value === '0' ? ', kept loaded' : ', freed after ' + optText('unload'));
+  $('sumModels').textContent = optText('model').split(' — ')[0] + ($('unload').value === '0' ? ', kept loaded' : ', freed after ' + optText('unload')) + ($('preload').checked ? ', voices loaded at start' : '');
   $('sumClone').textContent = !clones.length ? 'No cloned voices yet' : clones.length + (clones.length === 1 ? ' voice: ' : ' voices: ') + andList(clones.map(c => c.name));
 }
 
@@ -1664,6 +1668,7 @@ function render(s) {
   fill($('hookPreset'), presets, s.hooks.preset || '', [{ value: '', label: 'Same as default' }]);
   fill($('model'), o.models.map(m => ({ value: m.dir, label: m.label })), s.listen.model);
   $('unload').value = s.serve.unload_after || '15m';
+  $('preload').checked = !!s.serve.preload_voices;
   $('ver').textContent = s.version ? 'voice ' + s.version : '';
   $('sideVer').textContent = $('ver').textContent;
   // Until the first status poll, the sessions and the transcript come from the state.
@@ -1939,6 +1944,7 @@ on('project', 'change', () => save({ hooks: { announce_project: $('project').che
 on('hookPreset', 'change', () => save({ hooks: { preset: $('hookPreset').value } }));
 on('model', 'change', () => save({ listen: { model: $('model').value } }));
 on('unload', 'change', () => save({ serve: { unload_after: $('unload').value } }));
+on('preload', 'change', () => save({ serve: { preload_voices: $('preload').checked } }));
 
 // ── Hotkeys: click, then press the keys. Esc cancels, Backspace turns off, a modifier is needed ──
 const keyFields = { stopKey: 'stop_hotkey', muteKey: 'mute_hotkey', dictateKey: 'dictate_hotkey' };

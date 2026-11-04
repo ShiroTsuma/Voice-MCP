@@ -76,6 +76,7 @@ type Serve struct {
 	PopupLinger         *float64 `toml:"popup_linger,omitempty" json:"popup_linger,omitempty"`
 	VoiceReplies        *bool    `toml:"voice_replies,omitempty" json:"voice_replies,omitempty"`
 	UnloadAfter         *string  `toml:"unload_after,omitempty" json:"unload_after,omitempty"`
+	PreloadVoices       *bool    `toml:"preload_voices,omitempty" json:"preload_voices,omitempty"`
 }
 
 type Listen struct {
