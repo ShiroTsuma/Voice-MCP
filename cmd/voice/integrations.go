@@ -301,12 +301,25 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					return integrations.Status{State: integrations.Error, Detail: fmt.Sprintf("no model %q in `voice models`", f.Model)}
 				}
 				if models.Installed(m, engine.Dirs.Models, engine.Dirs.Runtime) {
-					return integrations.Status{State: integrations.On, Detail: "Downloaded"}
+					st := integrations.Status{State: integrations.On, Detail: "Downloaded"}
+					if m.Dir != "" { // the runtime has no folder of its own to remove
+						st.Actions = []integrations.Action{{ID: "remove", Label: "Remove"}}
+					}
+					return st
 				}
 				return integrations.Status{State: integrations.Missing, Actions: []integrations.Action{{ID: "download", Label: "Download", Long: true, Primary: true}}}
 			},
-			do: func(ctx context.Context, f integrationFile, _ string, log func(string)) error {
+			do: func(ctx context.Context, f integrationFile, action string, log func(string)) error {
 				m, _ := models.Find(f.Model)
+				if action == "remove" {
+					dir := filepath.Join(engine.Dirs.Models, m.Dir)
+					log("Removing " + dir)
+					if err := os.RemoveAll(dir); err != nil {
+						return err
+					}
+					log("Removed; Download brings it back")
+					return nil
+				}
 				log(fmt.Sprintf("Downloading %s (%d MB)…", m.Name, m.SizeMB))
 				last := -1
 				err := models.Pull(ctx, m, engine.Dirs.Models, engine.Dirs.Runtime, func(done, total int64) {
@@ -326,7 +339,16 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 
 		"sidecar": {
 			status: func(f integrationFile) integrations.Status { return sidecarStatus(f.Backend) },
-			do: func(ctx context.Context, f integrationFile, _ string, log func(string)) error {
+			do: func(ctx context.Context, f integrationFile, action string, log func(string)) error {
+				if action == "remove" {
+					dir := filepath.Join(httpengine.SidecarDir, "envs", f.Backend)
+					log("Removing " + dir)
+					if err := os.RemoveAll(dir); err != nil {
+						return err
+					}
+					log("Removed. Model weights the backend downloaded stay in " + filepath.Join(httpengine.SidecarDir, "models"))
+					return nil
+				}
 				log("Setting up " + f.Title + ": a Python environment, PyTorch for this GPU, then the backend. This takes a while.")
 				cmd := exec.CommandContext(ctx, exe, "sidecar", "setup", f.Backend)
 				return runLogged(cmd, log)
@@ -355,9 +377,16 @@ func claudePluginOn(claudeHome string) bool {
 	return true
 }
 
-// sidecarStatus reads what the sidecar setup recorded for a backend.
+// sidecarPackage is the Python package a backend installs, to find it in
+// the shared environment older setups made.
+var sidecarPackage = map[string]string{"chatterbox": "chatterbox", "xtts": "TTS", "f5": "f5_tts"}
+
+// sidecarStatus reads what the sidecar setup recorded for a backend. A
+// backend in the older shared environment (.venv) works too: the engines use
+// it when the backend has no environment of its own.
 func sidecarStatus(name string) integrations.Status {
 	install := []integrations.Action{{ID: "install", Label: "Install", Long: true, Primary: true}}
+	remove := integrations.Action{ID: "remove", Label: "Remove"}
 	var st struct {
 		Backend bool   `json:"backend"`
 		GPU     string `json:"gpu"`
@@ -365,12 +394,16 @@ func sidecarStatus(name string) integrations.Status {
 	if b, err := os.ReadFile(filepath.Join(httpengine.SidecarDir, "envs", name, ".voice-setup.json")); err == nil {
 		json.Unmarshal(b, &st)
 		if st.Backend {
-			return integrations.Status{State: integrations.On, Detail: "Installed for " + st.GPU, Actions: []integrations.Action{{ID: "install", Label: "Reinstall", Long: true}}}
+			return integrations.Status{State: integrations.On, Detail: "Installed for " + st.GPU + "; it runs only while a voice uses it",
+				Actions: []integrations.Action{{ID: "install", Label: "Reinstall", Long: true}, remove}}
 		}
-		return integrations.Status{State: integrations.Partly, Detail: "The setup stopped before it finished; run it again to resume", Actions: install}
+		return integrations.Status{State: integrations.Partly, Detail: "The setup stopped before it finished; run it again to resume", Actions: append(install, remove)}
 	}
-	if _, err := os.Stat(filepath.Join(httpengine.SidecarDir, ".venv")); err == nil {
-		return integrations.Status{State: integrations.Partly, Detail: "An older shared environment exists; Install gives the backend its own", Actions: install}
+	if pkg := sidecarPackage[name]; pkg != "" {
+		if _, err := os.Stat(filepath.Join(httpengine.SidecarDir, ".venv", "Lib", "site-packages", pkg)); err == nil {
+			return integrations.Status{State: integrations.On, Detail: "Installed in the older shared environment; it runs only while a voice uses it",
+				Actions: []integrations.Action{{ID: "install", Label: "Give it its own environment", Long: true}}}
+		}
 	}
 	return integrations.Status{State: integrations.Missing, Detail: "Needs Python 3.12", Actions: install}
 }

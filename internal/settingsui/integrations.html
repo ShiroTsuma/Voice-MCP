@@ -160,6 +160,7 @@ function renderMain() {
       b.className = 'btn' + (a.primary ? ' primary' : '');
       b.textContent = a.label;
       b.onclick = async () => {
+        if (a.id === 'remove' && !confirm('Remove ' + it.title + '? Its files are deleted; you can download or install it again later.')) return;
         b.disabled = true;
         try { await api('integration', { id: it.id, action: a.id }); openLogs.add(it.id); } catch (e) { alert(e.message); }
         refresh();
