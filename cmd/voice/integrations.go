@@ -469,3 +469,20 @@ func runLogged(cmd *exec.Cmd, log func(string)) error {
 	<-done
 	return err
 }
+
+// cloneEngines are the engines the Voice clone group offers, with whether
+// each is installed (the Integrations window installs the others).
+func cloneEngines() []map[string]any {
+	model := func(name string) bool {
+		m, ok := models.Find(name)
+		return ok && models.Installed(m, engine.Dirs.Models, engine.Dirs.Runtime)
+	}
+	gpu := func(name string) bool { return sidecarStatus(name).State == integrations.On }
+	return []map[string]any{
+		{"name": "pocket", "label": "Pocket", "note": "English, on the CPU; the default", "ready": model("pocket")},
+		{"name": "chatterbox", "label": "Chatterbox", "note": "Polish and 22 more languages, on the GPU", "ready": gpu("chatterbox")},
+		{"name": "xtts", "label": "XTTS v2", "note": "17 languages incl. Polish, on the GPU; non-commercial", "ready": gpu("xtts")},
+		{"name": "zipvoice", "label": "ZipVoice", "note": "English and Chinese, on the CPU", "ready": model("zipvoice")},
+		{"name": "f5", "label": "F5-TTS", "note": "on an NVIDIA GPU; non-commercial", "ready": gpu("f5")},
+	}
+}

@@ -581,6 +581,10 @@
             <label class="lab" for="cloneName">Name</label>
             <input class="text" id="cloneName" type="text" maxlength="40" spellcheck="false" autocomplete="off">
           </div>
+          <div class="row col">
+            <label class="lab" for="cloneEngine">Engine<span class="help" id="cloneEngineHint"></span></label>
+            <select id="cloneEngine"></select>
+          </div>
           <div class="row">
             <label class="lab" for="cloneRights">I have the right to use this voice<span class="help">My own, or with the speaker's consent</span></label>
             <label class="switch"><input type="checkbox" id="cloneRights"><span></span></label>
@@ -1394,7 +1398,24 @@ function cloneArgs() {
   const name = $('cloneName').value.trim();
   if (!name) { cloneMsg('Give the voice a name first.', true); $('cloneName').focus(); return null; }
   if (!$('cloneRights').checked) { cloneMsg('Confirm you have the right to use this voice first.', true); return null; }
-  return { name, rights_confirmed: true };
+  const engine = $('cloneEngine').value;
+  const e = ((state && state.options.clone_engines) || []).find(x => x.name === engine);
+  if (e && !e.ready) { cloneMsg(e.label + ' is not installed: install it in Integrations, or pick another engine.', true); return null; }
+  return engine ? { name, rights_confirmed: true, engine } : { name, rights_confirmed: true };
+}
+// The clone engines, installed ones first; the hint says what the chosen one speaks.
+function fillCloneEngines(s) {
+  const sel = $('cloneEngine'), keep = sel.value || 'pocket', list = (s.options.clone_engines || []);
+  sel.textContent = '';
+  for (const e of [...list.filter(x => x.ready), ...list.filter(x => !x.ready)]) {
+    const o = document.createElement('option'); o.value = e.name; o.textContent = e.label + (e.ready ? '' : ' (not installed)'); sel.append(o);
+  }
+  sel.value = list.some(x => x.name === keep) ? keep : 'pocket';
+  cloneEngineHint();
+}
+function cloneEngineHint() {
+  const e = ((state && state.options.clone_engines) || []).find(x => x.name === $('cloneEngine').value);
+  $('cloneEngineHint').textContent = e ? e.note + (e.ready ? '' : '. Not installed: see Integrations') : '';
 }
 async function cloneFrom(file) {
   const a = cloneArgs(); if (!a || !file) return;
@@ -1416,6 +1437,7 @@ function wireClone() {
   cloneGroup.addEventListener('dragleave', () => cloneGroup.classList.remove('drop'));
   cloneGroup.addEventListener('drop', e => { e.preventDefault(); cloneGroup.classList.remove('drop'); cloneFrom(e.dataTransfer.files[0]); });
   onSeg('cloneSecs', () => {});
+  on('cloneEngine', 'change', cloneEngineHint);
   seg('cloneSecs', '12');
 }
 
@@ -1424,6 +1446,7 @@ function render(s) {
   state = s;
   const o = s.options;
   notes(s.notes);
+  fillCloneEngines(s);
   // Base voices in the list; a tuned default (voice-default) shows as its base plus the tuning.
   const presets = o.presets.filter(p => !p.extends).map(p => ({ value: p.name, label: p.name }));
   const tunedDefault = o.presets.find(p => p.name === s.default_preset && p.extends);

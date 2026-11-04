@@ -339,7 +339,7 @@ func (b *backend) state() map[string]any {
 			"summary_sentences": cfg.Hooks.SummaryLength(), "summary_from": cfg.Hooks.SummaryPart(),
 			"codex_goal_wait": cfg.Hooks.GoalWait().Seconds(),
 		},
-		"options": map[string]any{"presets": presets, "outputs": outputs, "inputs": inputs, "models": asrModels(), "themes": overlayThemes(), "traits": cfg.TraitChoices()},
+		"options": map[string]any{"presets": presets, "outputs": outputs, "inputs": inputs, "models": asrModels(), "themes": overlayThemes(), "traits": cfg.TraitChoices(), "clone_engines": cloneEngines()},
 		"notes":   b.ctl.hotkeyErrors(),
 		// The sessions dictation can reach: name, client, project, busy, waiting messages.
 		"agents": b.ctl.liveAgents(),
