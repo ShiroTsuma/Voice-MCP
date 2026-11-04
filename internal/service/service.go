@@ -44,6 +44,9 @@ type ControlArgs struct {
 	Name    string `json:"name,omitempty"` // register: what the user calls this session
 	// Character: set_character's choice from list_characters.
 	Character string `json:"character,omitempty"`
+	// Session: transcript's filter, a session's or character's name, or "me".
+	Session string `json:"session,omitempty"`
+	Limit   int    `json:"limit,omitempty"` // transcript: how many lines, newest
 }
 
 type ListenArgs struct {
@@ -202,6 +205,8 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 			return fmt.Sprintf("the user calls you %s now; characters are switched off in the settings, so keep your usual tone", name), nil
 		}
 		return "From now on: " + persona, nil
+	case "transcript":
+		return s.Agents.TranscriptFor(a.PID, a.Session, a.Limit), nil
 	case "list_characters":
 		rows := [][]string{}
 		for _, ch := range s.Config.Characters {

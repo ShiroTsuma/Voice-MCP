@@ -96,3 +96,46 @@ func (a *Agents) dictatedLocked(pid uint32, prompt string) bool {
 func (s *Service) voiceReplies() bool {
 	return s.Config != nil && s.Config.Serve.VoiceReplies != nil && *s.Config.Serve.VoiceReplies
 }
+
+// TranscriptFor is the transcript for the voice_control tool: every line, or
+// those of one session (session: its name now or then, a character's name,
+// or "me" for the caller), the newest limit of them (default 20), oldest
+// first, as columns and rows.
+func (a *Agents) TranscriptFor(caller uint32, session string, limit int) map[string]any {
+	if limit <= 0 {
+		limit = 20
+	}
+	want := normalize(session)
+	lines := a.Transcript()
+	var picked []Line
+	for _, l := range lines {
+		switch {
+		case want == "":
+		case want == "me":
+			if l.PID != caller || caller == 0 {
+				continue
+			}
+		default:
+			if normalize(l.Name) != want && normalize(a.Name(l.PID)) != want {
+				continue
+			}
+		}
+		picked = append(picked, l)
+	}
+	if len(picked) > limit {
+		picked = picked[len(picked)-limit:]
+	}
+	rows := [][]string{}
+	for _, l := range picked {
+		kind := l.Kind
+		if kind == "said" && l.Source == "hook" {
+			kind = "announced"
+		}
+		rows = append(rows, []string{l.At.Format("15:04:05"), kind, l.Name, l.Project, l.Text, l.Outcome})
+	}
+	out := map[string]any{"columns": []string{"time", "kind", "session", "project", "text", "outcome"}, "rows": rows}
+	if len(rows) == 0 && want != "" && want != "me" {
+		out["note"] = "no lines for " + session + "; omit session for every session"
+	}
+	return out
+}
