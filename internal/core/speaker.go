@@ -42,6 +42,17 @@ type Request struct {
 	// SaveTo renders into this file (.wav, or .mp3 with ffmpeg) instead of
 	// the speakers: the same voice, nothing played, and mute does not stop it.
 	SaveTo string
+	// Lines, when given, replace Text: a script, each line in its own preset
+	// (empty: Preset), spoken as one utterance that keeps flowing.
+	Lines []ScriptLine
+	// MaxChars limits each line (or Text); 0 uses max_chars from the config.
+	MaxChars int
+}
+
+// ScriptLine is one line of a script and the preset that says it.
+type ScriptLine struct {
+	Text   string
+	Preset string
 }
 
 type Result struct {
@@ -65,9 +76,16 @@ type item struct {
 	preset preset.Resolved
 	cache  bool
 	saveTo string
+	parts  []part // the text by voice: one part, or a script's lines
 	done   chan Result
 
 	line Line // progress, under Speaker.mu
+}
+
+// part is a stretch of an utterance in one voice.
+type part struct {
+	text   string
+	preset preset.Resolved
 }
 
 type Speaker struct {
@@ -139,10 +157,28 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	if intent != IntentInfo && intent != IntentAttention && intent != IntentQuestion {
 		return Ticket{}, fmt.Errorf("intent must be info, attention or question, got %q", req.Intent)
 	}
-	text := Truncate(Clean(req.Text), s.cfg.MaxChars)
-	if strings.TrimSpace(text) == "" {
+	maxChars := req.MaxChars
+	if maxChars <= 0 {
+		maxChars = s.cfg.MaxChars
+	}
+	lines := req.Lines
+	if len(lines) == 0 {
+		lines = []ScriptLine{{Text: req.Text}}
+	}
+	var texts []string
+	var kept []ScriptLine
+	for _, l := range lines {
+		t := Truncate(Clean(l.Text), maxChars)
+		if strings.TrimSpace(t) == "" {
+			continue
+		}
+		texts = append(texts, t)
+		kept = append(kept, ScriptLine{Text: t, Preset: l.Preset})
+	}
+	if len(kept) == 0 {
 		return Ticket{}, errors.New("nothing speakable left after removing markdown, code and links")
 	}
+	text := strings.Join(texts, " ")
 	lang := strings.ToLower(req.Lang)
 	if lang == "" {
 		lang = strings.ToLower(s.cfg.DefaultLang)
@@ -156,33 +192,46 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	if (s.muted || SharedMuted()) && req.SaveTo == "" {
 		return Ticket{}, ErrMuted
 	}
-	name := req.Preset
-	if name == "" {
-		name = s.active
-	}
-	p, err := s.cfg.Resolve(name)
-	if err != nil {
-		return Ticket{}, err
-	}
-	// A removed cloned voice falls back to the default preset; other voice
-	// errors are reported now rather than at playback.
-	gone := p.Name
-	p, note, err := voiceOrDefault(s.cfg, p, lang)
-	if err != nil {
-		return Ticket{}, err
-	}
-	if note != "" {
-		if s.gone[gone] {
-			note = "" // said once; the user knows
-		} else {
+	var parts []part
+	note := ""
+	for _, l := range kept {
+		name := l.Preset
+		if name == "" {
+			name = req.Preset
+		}
+		if name == "" {
+			name = s.active
+		}
+		p, err := s.cfg.Resolve(name)
+		if err != nil {
+			return Ticket{}, err
+		}
+		// A removed cloned voice falls back to the default preset; other voice
+		// errors are reported now rather than at playback.
+		gone := p.Name
+		p, n, err := voiceOrDefault(s.cfg, p, lang)
+		if err != nil {
+			return Ticket{}, err
+		}
+		if n != "" && !s.gone[gone] {
 			if s.gone == nil {
 				s.gone = map[string]bool{}
 			}
-			s.gone[gone] = true
+			s.gone[gone] = true // said once; the user knows
+			if note == "" {
+				note = n
+			}
 		}
+		// Lines in the same voice in a row are one part: they render together.
+		if k := len(parts) - 1; k >= 0 && parts[k].preset.Name == p.Name {
+			parts[k].text += " " + l.Text
+			continue
+		}
+		parts = append(parts, part{text: l.Text, preset: p})
 	}
 	s.nextID++
-	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: p, cache: req.Cache && req.SaveTo == "", saveTo: req.SaveTo, done: make(chan Result, 1)}
+	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts,
+		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, done: make(chan Result, 1)}
 	if req.Interrupt {
 		s.dropLocked(ErrInterrupted)
 	}
@@ -533,6 +582,7 @@ func (s *Speaker) audible() {
 type rendered struct {
 	pcm []float32
 	err error
+	gap bool // a pause or an effect's tail between parts: no sentence of its own
 }
 
 func (s *Speaker) play(ctx context.Context, it *item) Result {
@@ -546,7 +596,6 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		}
 		defer release()
 	}
-	var err error
 	// Rendering before anything is heard: the screen can say so.
 	ready := func() {}
 	if fn := s.preparingFn; fn != nil && !saving {
@@ -556,10 +605,35 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		defer ready()
 	}
 
-	choice := it.preset.For(it.lang)
-	if choice.Voice, err = resolveVoice(choice.Voice); err != nil {
-		return Result{Err: err}
+	// Each part (one, or a script's lines by voice) with what renders it.
+	type voiced struct {
+		part
+		choice    preset.Choice
+		effects   audio.Chain
+		pitch     float64
+		sentences []string
 	}
+	var vs []voiced
+	var sentences []string // all of them in order, for Status
+	for _, p := range it.parts {
+		v := voiced{part: p, choice: p.preset.For(it.lang)}
+		var err error
+		if v.choice.Voice, err = resolveVoice(v.choice.Voice); err != nil {
+			return Result{Err: err}
+		}
+		// Effects keep state across sentences; Resolve already validated them.
+		if v.effects, err = audio.ParseChain(p.preset.DSP, audio.DeviceRate); err != nil {
+			return Result{Err: err}
+		}
+		// Pitch is shifted by playing the audio at a different rate. The engine
+		// speaks faster or slower by the same factor, so tempo stays as set.
+		v.pitch = math.Pow(2, v.choice.Pitch/12)
+		v.sentences = Split(p.text, minSentence)
+		sentences = append(sentences, v.sentences...)
+		vs = append(vs, v)
+	}
+	first := vs[0]
+
 	// A question or an alert opens with a chime, played right before the
 	// first sound is ready: with a GPU voice that renders for a while, a
 	// chime first would be followed by silence.
@@ -578,7 +652,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	// once even when the model is not loaded in this process.
 	key := ""
 	if it.cache {
-		key = cacheKey(it.preset, choice, it.lang, it.text)
+		key = cacheKey(it.preset, first.choice, it.lang, it.text)
 		if pcm := readCache(key); pcm != nil {
 			if err := chime(); err != nil {
 				return Result{Err: err}
@@ -596,65 +670,71 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	}
 	var heard []float32 // everything played, kept only for the cache
 
-	// Effects keep state across sentences; Resolve already validated them.
-	effects, err := audio.ParseChain(it.preset.DSP, audio.DeviceRate)
-	if err != nil {
-		return Result{Err: err}
-	}
-	// Pitch is shifted by playing the audio at a different rate. The engine
-	// speaks faster or slower by the same factor, so tempo stays as set.
-	pitch := math.Pow(2, choice.Pitch/12)
-
-	// Render the next sentence while the current one plays. The queue holds
-	// a whole batch, so the batch after it starts rendering as soon as this
-	// one is ready and has all of its playing time to get done.
-	sentences := Split(it.text, minSentence)
+	// Render ahead while earlier sentences play. The queue holds a whole
+	// batch, so the batch after it starts rendering as soon as this one is
+	// ready and has all of its playing time to get done; across a script's
+	// lines too, so the next voice is ready when its turn comes.
 	ch := make(chan rendered, batchSize)
 	var used string
 	go func() {
 		defer close(ch)
-		engines := choice.Engines
-		send := func(pcm []float32) bool {
-			effects.Process(pcm)
-			audio.Gain(pcm, it.preset.Volume)
+		put := func(r rendered) bool {
 			select {
-			case ch <- rendered{pcm: pcm}:
+			case ch <- r:
 				return true
 			case <-ctx.Done():
 				return false
 			}
 		}
-		for k := 0; k < len(sentences); {
-			// An engine slower than its own speech (a GPU model) renders a few
-			// sentences at once, in about the time of one, from the first
-			// sentence on: speech starts a moment later and then flows, rather
-			// than a short sentence and a long silence. The next batch renders
-			// while this one plays. A batch that fails goes sentence by sentence.
-			if n := min(batchSize, len(sentences)-k); n > 1 && engines[0] == choice.Engines[0] {
-				if pcms, err := s.renderBatch(ctx, engines[0], pitch, it.lang, choice, sentences[k:k+n]); err == nil {
-					used = engines[0]
-					for _, pcm := range pcms {
-						if !send(pcm) {
-							return
+		for n, v := range vs {
+			if n > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, lineGap), gap: true}) {
+				return // a turn in the dialogue: a short breath between voices
+			}
+			engines := v.choice.Engines
+			send := func(pcm []float32) bool {
+				v.effects.Process(pcm)
+				audio.Gain(pcm, v.preset.Volume)
+				return put(rendered{pcm: pcm})
+			}
+			for k := 0; k < len(v.sentences); {
+				// An engine slower than its own speech (a GPU model) renders a few
+				// sentences at once, in about the time of one, from the first
+				// sentence on: speech starts a moment later and then flows, rather
+				// than a short sentence and a long silence. The next batch renders
+				// while this one plays. A batch that fails goes sentence by sentence.
+				if m := min(batchSize, len(v.sentences)-k); m > 1 && engines[0] == v.choice.Engines[0] {
+					if pcms, err := s.renderBatch(ctx, engines[0], v.pitch, it.lang, v.choice, v.sentences[k:k+m]); err == nil {
+						used = engines[0]
+						for _, pcm := range pcms {
+							if !send(pcm) {
+								return
+							}
 						}
+						k += m
+						continue
 					}
-					k += n
-					continue
+				}
+				req := engine.Request{Text: v.sentences[k], Lang: it.lang, Voice: v.choice.Voice, Speed: v.choice.Speed / v.pitch}
+				pcm, name, rest, err := s.render(ctx, engines, v.choice.Engines[0], v.pitch, req)
+				if err != nil {
+					put(rendered{err: err})
+					return
+				}
+				// Stay on the engine that worked so the voice does not change
+				// mid-line; later fallbacks remain for failures.
+				engines, used = rest, name
+				if !send(pcm) {
+					return
+				}
+				k++
+			}
+			// The line's effects ring out before the next voice.
+			if tail := v.effects.Tail(); len(tail) > 0 {
+				audio.Gain(tail, v.preset.Volume)
+				if !put(rendered{pcm: tail, gap: true}) {
+					return
 				}
 			}
-			req := engine.Request{Text: sentences[k], Lang: it.lang, Voice: choice.Voice, Speed: choice.Speed / pitch}
-			pcm, name, rest, err := s.render(ctx, engines, choice.Engines[0], pitch, req)
-			if err != nil {
-				ch <- rendered{err: err}
-				return
-			}
-			// Stay on the engine that worked so the voice does not change
-			// mid-utterance; later fallbacks remain for failures.
-			engines, used = rest, name
-			if !send(pcm) {
-				return
-			}
-			k++
 		}
 	}()
 
@@ -673,16 +753,18 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		}
 		ready()
 		s.audible()
-		from, to := at, len(runes)
-		if i < len(sentences) {
-			if k := strings.Index(string(runes[at:]), sentences[i]); k >= 0 {
-				from = at + len([]rune(string(runes[at:])[:k]))
-				to = from + len([]rune(sentences[i]))
+		if !r.gap {
+			from, to := at, len(runes)
+			if i < len(sentences) {
+				if k := strings.Index(string(runes[at:]), sentences[i]); k >= 0 {
+					from = at + len([]rune(string(runes[at:])[:k]))
+					to = from + len([]rune(sentences[i]))
+				}
+				i++
 			}
-			i++
+			at = to
+			s.playing(it, from, to, r.pcm)
 		}
-		at = to
-		s.playing(it, from, to, r.pcm)
 		if err := s.out.Play(ctx, r.pcm); err != nil {
 			return Result{Engine: used, Err: err}
 		}
@@ -693,16 +775,6 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	if err := ctx.Err(); err != nil {
 		return Result{Engine: used, Err: err}
 	}
-	if tail := effects.Tail(); len(tail) > 0 && saving {
-		audio.Gain(tail, it.preset.Volume)
-		saved = append(saved, tail...)
-	} else if len(tail) > 0 {
-		audio.Gain(tail, it.preset.Volume)
-		if err := s.out.Play(ctx, tail); err != nil {
-			return Result{Engine: used, Err: err}
-		}
-		heard = append(heard, tail...)
-	}
 	if saving {
 		if err := audio.WriteFile(it.saveTo, saved, audio.DeviceRate); err != nil {
 			return Result{Engine: used, Err: err}
@@ -712,12 +784,15 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	// Let the device drain its buffer before the lock goes to someone else.
 	_ = s.out.Play(ctx, audio.Silence(audio.DeviceRate, 0.12))
 	// A fallback rendition is not cached, or it would outlive the outage.
-	if key != "" && used == choice.Engines[0] {
+	if key != "" && used == first.choice.Engines[0] {
 		writeCache(key, heard)
 	}
 	markSpoke()
 	return Result{Engine: used}
 }
+
+// lineGap is the breath between two voices of a script, in seconds.
+const lineGap = 0.3
 
 // Logf, when set, records what the log should know: an engine that failed
 // while a fallback spoke.

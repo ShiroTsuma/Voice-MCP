@@ -6,6 +6,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -34,6 +35,10 @@ type SpeakArgs struct {
 	Preset    string `json:"preset,omitempty"`
 	Cache     bool   `json:"cache,omitempty"`
 	Wait      bool   `json:"wait,omitempty"` // return after playback
+	// Lines: a script instead of Text, each line in its own voice (a
+	// character or a preset; empty: Voice or the session's), spoken as one
+	// flowing utterance.
+	Lines SpeakLines `json:"lines,omitempty"`
 	// Voice: for this call only, a character's name (its preset) or a
 	// preset's name; empty uses the session's character or the default.
 	Voice string `json:"voice,omitempty"`
@@ -57,7 +62,12 @@ type ControlArgs struct {
 	// Session: transcript's filter, a session's or character's name, or "me".
 	Session string `json:"session,omitempty"`
 	Limit   Count  `json:"limit,omitempty"` // transcript: how many lines, newest
+	// Style: set_style's choice, short (the default) or narrative.
+	Style string `json:"style,omitempty"`
 }
+
+// narrativeChars is how long one line may be in the narrative style.
+const narrativeChars = 4000
 
 type ListenArgs struct {
 	Prompt      string  `json:"prompt,omitempty"`
@@ -134,6 +144,62 @@ type Service struct {
 	recStop chan struct{} // closed by the clone action stop: the recording ends early
 }
 
+// SpeakLines is a script's lines. A client whose tool list predates them may
+// send the list as a JSON string; it is read the same.
+type SpeakLines []SpeakLine
+
+func (l *SpeakLines) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		b = []byte(s)
+	}
+	var lines []SpeakLine
+	if err := json.Unmarshal(b, &lines); err != nil {
+		return fmt.Errorf("lines: a list of {text, voice}: %w", err)
+	}
+	*l = lines
+	return nil
+}
+
+// SpeakLine is one line of a script.
+type SpeakLine struct {
+	Text  string `json:"text"`
+	Voice string `json:"voice,omitempty"`
+}
+
+// script turns a call's lines into the speaker's, each with its preset, and
+// the text the transcript keeps ("Clara: ..."). Without lines it is nil.
+func (s *Service) script(a SpeakArgs) ([]core.ScriptLine, string, error) {
+	if len(a.Lines) == 0 {
+		return nil, a.Text, nil
+	}
+	own, err := s.speakPreset(a)
+	if err != nil {
+		return nil, "", err
+	}
+	var out []core.ScriptLine
+	var said []string
+	for _, l := range a.Lines {
+		if strings.TrimSpace(l.Text) == "" {
+			continue
+		}
+		p := own
+		if l.Voice != "" {
+			if p, err = s.speakPreset(SpeakArgs{Voice: l.Voice}); err != nil {
+				return nil, "", err
+			}
+			said = append(said, l.Voice+": "+l.Text)
+		} else {
+			said = append(said, l.Text)
+		}
+		out = append(out, core.ScriptLine{Text: l.Text, Preset: p})
+	}
+	if len(out) == 0 {
+		return nil, "", userErr("lines has no text")
+	}
+	return out, strings.Join(said, " "), nil
+}
+
 // speakPreset is the preset a call speaks with: the voice it names (a
 // character or a preset), else the session's character, the client's
 // preset or the default.
@@ -178,9 +244,17 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	lines, said, err := s.script(a)
+	if err != nil {
+		return nil, err
+	}
+	maxChars := 0
+	if s.Agents.Style(a.PID) == StyleNarrative {
+		maxChars = narrativeChars // speech is the content: a reply is not cut short
+	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: a.Intent, Lang: a.Lang, Interrupt: a.Interrupt,
-		Preset: preset, Cache: a.Cache,
+		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars,
 	})
 	if errors.Is(err, core.ErrMuted) {
 		return nil, userErr("muted by the user; stay silent until they unmute")
@@ -188,7 +262,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, UserError{err.Error()}
 	}
-	s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: a.Text})
+	s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said})
 	if a.Source != "hook" {
 		core.MarkAsked(a.PID) // its end-of-turn announcement and question reading stay quiet
 	}
@@ -277,6 +351,16 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 	case "stop":
 		sp.Stop()
 		return "stopped", nil
+	case "set_style":
+		switch a.Style {
+		case StyleShort:
+			s.Agents.SetStyle(a.PID, StyleShort)
+			return "short style: one or two short spoken sentences per reply; details stay on screen", nil
+		case StyleNarrative:
+			s.Agents.SetStyle(a.PID, StyleNarrative)
+			return "narrative style: speech is the content now. Say each reply aloud in full as spoken prose (a story, a scene); when characters speak, pass the whole scene in one voice_speak call with lines, each in its voice. Code, lists and links still stay on screen. set_style short ends it.", nil
+		}
+		return nil, userErr("style must be short or narrative")
 	case "mute":
 		sp.SetMuted(true)
 		return "muted", nil
@@ -600,9 +684,13 @@ func (s *Service) saveSpeech(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	lines, _, err := s.script(a)
+	if err != nil {
+		return nil, err
+	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: core.IntentInfo, Lang: a.Lang,
-		Preset: preset, SaveTo: path,
+		Preset: preset, SaveTo: path, Lines: lines, MaxChars: narrativeChars, // a file is meant to hold it all
 	})
 	if err != nil {
 		return nil, UserError{err.Error()}

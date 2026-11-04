@@ -97,6 +97,7 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 	persona, _ := m["persona"].(string)
 	changed, _ := m["changed"].(bool)
 	voiceReply, _ := m["voice_reply"].(bool)
+	style, _ := m["style"].(string)
 	items, _ := m["messages"].([]any)
 	var texts []string
 	for _, t := range items {
@@ -132,7 +133,10 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 		}
 	}
 	// The user spoke to the agent: it answers by voice too (the setting).
-	if voiceReply && in.Event != "Notification" && in.Event != "Interrupt" {
+	if style == service.StyleNarrative && in.Event == "UserPromptSubmit" {
+		// Speech is the content: every reply is said in full, typed or spoken to.
+		notes = append(notes, "This session speaks in the narrative style: say your whole reply aloud with voice_speak as spoken prose, not a summary. When characters speak, pass the scene in one voice_speak call with lines, each in its own voice. Code, lists and links stay on screen. If you ask the user something, say the question aloud too.")
+	} else if voiceReply && in.Event != "Notification" && in.Event != "Interrupt" {
 		notes = append(notes, "The user is talking to you by voice. Besides your written reply, say its key point aloud with the voice_speak tool: one or two short sentences, in English, no code or lists; details stay on screen. If you ask them something, say the question aloud too.")
 	}
 	if len(notes) == 0 || in.Event == "Interrupt" {

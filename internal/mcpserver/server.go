@@ -35,10 +35,19 @@ voice_clone makes a new voice from a recording. Only clone a voice the user says
 
 var (
 	speakSchema = map[string]any{
-		"type":     "object",
-		"required": []string{"text"},
+		"type": "object",
 		"properties": map[string]any{
-			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code."},
+			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code. Required unless lines is given."},
+			"lines": map[string]any{
+				"type":        "array",
+				"description": "Only for a scene or dialogue the user asked to hear in several voices: the lines in order, each with its own voice (a character or a preset; omitted: yours), spoken as one flowing piece instead of text. One call for the whole scene, not one per line.",
+				"items": map[string]any{
+					"type":                 "object",
+					"required":             []string{"text"},
+					"properties":           map[string]any{"text": map[string]any{"type": "string"}, "voice": map[string]any{"type": "string"}},
+					"additionalProperties": false,
+				},
+			},
 			"intent": map[string]any{
 				"type": "string", "enum": []string{core.IntentInfo, core.IntentAttention, core.IntentQuestion}, "default": core.IntentInfo,
 				"description": "info: a status update; question: you are waiting for the user; attention: something needs them now. question and attention play a short chime first.",
@@ -58,14 +67,15 @@ var (
 		"required": []string{"action"},
 		"properties": map[string]any{
 			"action": map[string]any{
-				"type": "string", "enum": []string{"register", "set_character", "list_characters", "transcript", "status", "stop", "mute", "unmute", "list_presets", "set_preset"},
-				"description": "register: silently tell voice this session exists, so the user's dictation (their voice hotkey) reaches you, and get your name and character; set_character: become another character from list_characters when the user asks (the answer says who you are now); list_characters: the characters the user defined; transcript: what voice said and what the user dictated, and to whom (session filters it); status: preset, mute and queue state; stop: silence now and clear the queue; mute/unmute: refuse or accept speech; list_presets: available voices; set_preset: switch voice for everyone using this server.",
+				"type": "string", "enum": []string{"register", "set_character", "list_characters", "set_style", "transcript", "status", "stop", "mute", "unmute", "list_presets", "set_preset"},
+				"description": "register: silently tell voice this session exists, so the user's dictation (their voice hotkey) reaches you, and get your name and character; set_character: become another character from list_characters when the user asks (the answer says who you are now); list_characters: the characters the user defined; set_style: how this session speaks, short or narrative (style); transcript: what voice said and what the user dictated, and to whom (session filters it); status: preset, mute and queue state; stop: silence now and clear the queue; mute/unmute: refuse or accept speech; list_presets: available voices; set_preset: switch voice for everyone using this server.",
 			},
 			"preset":    map[string]any{"type": "string", "description": "Preset name for set_preset, from list_presets."},
 			"name":      map[string]any{"type": "string", "description": "register: a name the user calls this session by when dictating (one word, e.g. one the user asked for). Omit to keep the one voice gave you."},
 			"character": map[string]any{"type": "string", "description": "set_character: the character's name, from list_characters (name works too)."},
 			"session":   map[string]any{"type": "string", "description": "transcript: only lines of this session, by its name or character (\"Rebekka\"), or \"me\" for this session; omit for every session."},
 			"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "default": 20, "description": "transcript: how many of the newest lines."},
+			"style":     map[string]any{"type": "string", "enum": []string{"short", "narrative"}, "description": "set_style: short (the default: a sentence or two, details on screen) or narrative (only when the user asks for a story, a scene or a role-play: speech is the content and each reply is said in full)."},
 		},
 		"additionalProperties": false,
 	}
@@ -134,7 +144,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Speak", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.SpeakArgs
-		if err := decode(req, &a, "text", "intent", "lang", "interrupt", "voice", "save_to"); err != nil {
+		if err := decode(req, &a, "text", "lines", "intent", "lang", "interrupt", "voice", "save_to"); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.Preset, a.PID, a.Project = caller(req, client), presetName, callerPID(req), callerProject(req)
@@ -147,7 +157,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Voice control", DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.ControlArgs
-		if err := decode(req, &a, "action", "preset", "name", "character", "session", "limit"); err != nil {
+		if err := decode(req, &a, "action", "preset", "name", "character", "session", "limit", "style"); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.PID, a.Project = caller(req, client), callerPID(req), callerProject(req)

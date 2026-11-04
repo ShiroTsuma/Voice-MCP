@@ -163,6 +163,20 @@ Change a session's character by right-clicking it in the settings window, with `
 
 With **Give sessions characters** on, the agent plays its character in every reply, written and spoken, and speaks with its voice. The character changes only the tone: the agent still works correctly and keeps helping. Off, the names still route dictation, and agents keep their usual tone and the default voice.
 
+## Stories and scenes
+
+A session can speak in a **narrative style** instead of the usual sentence or two: ask your agent for a story or a role-play, and it switches with `voice_control` `set_style narrative` (`short` switches back; it is per session, so coding sessions keep their brevity). Each reply is then said in full, and the length limit rises to 4000 characters a line.
+
+When characters speak, the agent passes the whole scene in **one** `voice_speak` call with `lines`, each line in its own voice (a character's name or a preset). voice speaks it as one piece: the next lines render while earlier ones play, with a short breath between voices, and the transcript keeps who said what. One line in a different voice works without a scene too: `voice` on `voice_speak`. `save_to` writes a scene to a WAV or MP3 file instead.
+
+```json
+{ "lines": [
+  { "text": "The tavern falls quiet as the door creaks open.", "voice": "narrator" },
+  { "text": "Well, look who finally showed up.", "voice": "Rebekka" },
+  { "text": "Hush. Come, sit by the fire.", "voice": "Anna" } ] }
+```
+
+Kokoro's 54 voices suit a crowd of side characters (they run on the CPU at once); keep the GPU voices for one or two leads.
 ## Add your own voice
 
 A voice comes in three layers, each in `config.toml` next to `voice.exe` (create it from `config.example.toml`):

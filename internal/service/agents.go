@@ -60,6 +60,7 @@ type agentSeen struct {
 	exe      string
 	noInput  bool      // the user excluded it from dictation
 	noSpeech bool      // the user muted it
+	style    string    // how it speaks: "" (short) or "narrative"
 	told     string    // the character whose persona the agent last received
 	custom   bool      // the name is the user's own, not one from the character list
 	session  string    // Claude Code's session id, from its hooks
@@ -323,6 +324,43 @@ type AgentResult struct {
 	// VoiceReply: the user spoke this to the agent (dictated it); with the
 	// setting on, the agent is to say its answer aloud too.
 	VoiceReply bool `json:"voice_reply,omitempty"`
+	// Style is how the session speaks: empty (short) or "narrative", where
+	// speech is the content (a story, a scene) and the whole reply is said.
+	Style string `json:"style,omitempty"`
+}
+
+// Speaking styles of a session (voice_control set_style).
+const (
+	StyleShort     = "short"
+	StyleNarrative = "narrative"
+)
+
+// SetStyle sets how a session speaks; short is the default.
+func (a *Agents) SetStyle(pid uint32, style string) {
+	if a == nil || pid == 0 {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if st := a.seen[pid]; st != nil {
+		if style == StyleShort {
+			style = ""
+		}
+		st.style = style
+	}
+}
+
+// Style is how a session speaks: "" (short) or StyleNarrative.
+func (a *Agents) Style(pid uint32) string {
+	if a == nil {
+		return ""
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if st := a.seen[pid]; st != nil {
+		return st.style
+	}
+	return ""
 }
 
 // Agent records a hook's event and hands it the messages dictated for its
@@ -364,7 +402,7 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 	if queued == nil {
 		queued = []string{}
 	}
-	res := AgentResult{Messages: queued, Name: st.name}
+	res := AgentResult{Messages: queued, Name: st.name, Style: st.style}
 	// Dictated words reach the agent: through this hook, or as the prompt it
 	// is about to answer (the mod's, Codex's queue, typed into a console).
 	if !sub && s.voiceReplies() && (len(queued) > 0 || ag.dictatedLocked(a.PID, a.Prompt)) {
