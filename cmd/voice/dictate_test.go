@@ -5,6 +5,7 @@ import "testing"
 func TestOutcomeIsShort(t *testing.T) {
 	for in, want := range map[string]string{
 		"queued 70 characters for Clara (its Claude Code mod submits them)":                                                "Delivered to Clara",
+		"queued 12 characters for Mira (it takes them through the session API)":                                            "Delivered to Mira",
 		"queued 62 characters for Rebekka in Codex's queue":                                                                "Delivered to Rebekka",
 		"queued 53 characters for Clara, busy (its next hook passes them on)":                                              "Queued for Clara, busy; it gets it with its next step",
 		"queued 9 characters for Anna (idle in claude.exe with other sessions; it gets them with its next prompt or step)": "Queued for Anna; it gets it with its next prompt",

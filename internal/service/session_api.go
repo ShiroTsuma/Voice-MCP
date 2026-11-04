@@ -1,0 +1,273 @@
+package service
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"voice/internal/core"
+	"voice/internal/hooks"
+)
+
+// The session API lets any agent use voice the way Claude Code and Codex do
+// through their hooks and mod: register a conversation, say things in its
+// character's voice, take what the user dictates to it, and report the end
+// of a turn for an announcement. It is served as /v1/session/<action> and
+// documented in docs/http-api.md; a session is the agent's own id for one
+// conversation, its process ID ties it to a program that runs.
+
+// SessionArgs is one call of the session API; Action comes from the path.
+type SessionArgs struct {
+	Action  string `json:"-"`
+	Session string `json:"session"`           // the agent's id for this conversation
+	PID     uint32 `json:"pid,omitempty"`     // register: the agent's process
+	Client  string `json:"client,omitempty"`  // register: the agent program's name
+	Project string `json:"project,omitempty"` // register: working directory name, for "my-project: ..."
+	Name    string `json:"name,omitempty"`    // register: what the user calls it; empty takes a character
+	State   string `json:"state,omitempty"`   // poll: idle (waiting for the user) or busy (working)
+	Text    string `json:"text,omitempty"`    // say: what to say; event: the agent's last message or question
+	Intent  string `json:"intent,omitempty"`  // say: info, question or attention
+	Event   string `json:"event,omitempty"`   // event: done, question or permission
+	Tool    string `json:"tool,omitempty"`    // event permission: the tool waiting for approval
+	Limit   Count  `json:"limit,omitempty"`   // transcript: how many lines
+	Of      string `json:"of,omitempty"`      // transcript: a session's name instead of this session
+	To      string `json:"to,omitempty"`      // send: the session to reach, by name
+}
+
+// SessionResult answers register and poll.
+type SessionResult struct {
+	Name string `json:"name"` // what the user calls the session ("Anna, ...")
+	// Persona, when set, is the character the agent is to play from now on.
+	Persona string `json:"persona,omitempty"`
+	// Messages are what the user dictated to the session. Polled idle, they are
+	// the user's next prompt; polled busy, they arrived during the turn.
+	Messages []string `json:"messages"`
+	// VoiceReply: the user spoke these; with the setting on, answer aloud too.
+	VoiceReply bool `json:"voice_reply,omitempty"`
+	// Others are the other sessions' names, which send takes.
+	Others []string `json:"others"`
+}
+
+// othersThan lists the names of the sessions other than pid.
+func (ag *Agents) othersThan(pid uint32) []string {
+	out := []string{}
+	for _, x := range ag.Info() {
+		if x.PID != pid && x.Name != "" {
+			out = append(out, x.Name)
+		}
+	}
+	return out
+}
+
+// sessionLocked finds the session by id; the caller holds ag.mu.
+func (ag *Agents) sessionLocked(id string) (*agentSeen, uint32) {
+	var st *agentSeen
+	var pid uint32
+	for p, x := range ag.seen {
+		if id != "" && strings.EqualFold(x.session, id) && (st == nil || x.at.After(st.at)) {
+			st, pid = x, p
+		}
+	}
+	return st, pid
+}
+
+// Session runs one session API action.
+func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
+	if s.Agents == nil {
+		return nil, userErr("voice keeps no sessions here")
+	}
+	if a.Session = strings.TrimSpace(a.Session); a.Session == "" {
+		return nil, userErr("session is required: the agent's own id for this conversation")
+	}
+	ag := s.Agents
+	if a.Action == "register" {
+		if a.PID == 0 {
+			return nil, userErr("register needs pid: the agent's process ID")
+		}
+		ag.mu.Lock()
+		st := ag.get(a.PID, dirOr(a.Client, "agent"), a.Project)
+		st.session, st.modAt = a.Session, time.Now() // it polls: dictation waits for it
+		ag.dirty = true
+		ag.saveLocked()
+		ag.mu.Unlock()
+		name := ag.Name(a.PID)
+		if a.Name != "" {
+			name = ag.SetName(a.PID, a.Name)
+		}
+		persona, _ := s.takePersona(a.PID, true)
+		return SessionResult{Name: name, Persona: persona, Messages: []string{}, Others: ag.othersThan(a.PID)}, nil
+	}
+
+	ag.mu.Lock()
+	st, pid := ag.sessionLocked(a.Session)
+	if st == nil {
+		ag.mu.Unlock()
+		return nil, userErr("unknown session %q: register it first (it is forgotten when its process ends)", a.Session)
+	}
+	st.at, st.modAt = time.Now(), time.Now()
+	client, project := st.client, st.project
+	ag.mu.Unlock()
+
+	switch a.Action {
+	case "poll":
+		ag.mu.Lock()
+		out := SessionResult{Name: st.name, Messages: []string{}}
+		switch a.State {
+		case "busy":
+			st.busyAt = time.Now()
+			out.Messages, st.queue = append(out.Messages, st.queue...), nil
+		case "", "idle":
+			st.busyAt = time.Time{}
+			if len(st.queue) > 0 {
+				out.Messages, st.queue = append(out.Messages, st.queue...), nil
+				st.busyAt = time.Now() // the messages start a turn
+			}
+		default:
+			ag.mu.Unlock()
+			return nil, userErr("state is idle or busy, not %q", a.State)
+		}
+		out.VoiceReply = len(out.Messages) > 0 && s.voiceReplies()
+		report := func() {}
+		if len(out.Messages) > 0 {
+			report = ag.changed(true)
+		}
+		ag.mu.Unlock()
+		report()
+		out.Persona, _ = s.takePersona(pid, false) // after the user changed its character
+		out.Others = ag.othersThan(pid)
+		return out, nil
+	case "say":
+		if strings.TrimSpace(a.Text) == "" {
+			return nil, userErr("say needs text")
+		}
+		return s.Speak(ctx, SpeakArgs{Text: a.Text, Intent: a.Intent, PID: pid, Client: client, Project: project})
+	case "event":
+		return s.sessionEvent(ctx, a, pid, client, project)
+	case "send":
+		return s.sessionSend(a, pid)
+	case "end":
+		ag.Forget(pid)
+		return "ended", nil
+	case "transcript":
+		if a.Of != "" {
+			return ag.TranscriptFor(pid, a.Of, int(a.Limit)), nil
+		}
+		return ag.TranscriptFor(pid, "me", int(a.Limit)), nil
+	}
+	return nil, userErr("unknown action %q", a.Action)
+}
+
+// sessionEvent announces a turn's end, a question or a permission prompt the
+// way the hooks do for Claude Code and Codex, with the same settings: the
+// project first, the last sentences of the agent's message, quiet when muted
+// or right after the agent spoke for itself.
+func (s *Service) sessionEvent(ctx context.Context, a SessionArgs, pid uint32, client, project string) (any, error) {
+	ev := hooks.Event{Client: client, Project: project, Summary: a.Text, Tool: a.Tool}
+	switch a.Event {
+	case "done":
+		ev.Kind, ev.Intent = hooks.Done, core.IntentInfo
+		s.Agents.mu.Lock()
+		if st := s.Agents.seen[pid]; st != nil {
+			st.busyAt = time.Time{}
+		}
+		s.Agents.mu.Unlock()
+	case "question":
+		ev.Kind, ev.Intent = hooks.Input, core.IntentQuestion
+	case "permission":
+		ev.Kind, ev.Intent = hooks.Permission, core.IntentAttention
+	default:
+		return nil, userErr("event is done, question or permission, not %q", a.Event)
+	}
+	quiet := func(why string) (any, error) { return map[string]any{"said": "", "quiet": why}, nil }
+	h := s.Config.Hooks
+	switch {
+	case h.Enabled != nil && !*h.Enabled:
+		return quiet("announcements are off")
+	case core.SharedMuted():
+		return quiet("muted")
+	case core.SinceAsked(pid) < 30*time.Second:
+		return quiet("the agent spoke for itself")
+	}
+	text, cacheable := hooks.Compose(h, ev, s.Config.DefaultLang)
+	if ev.Kind == hooks.Input && strings.TrimSpace(a.Text) != "" {
+		text, cacheable = strings.TrimSpace(a.Text), false // the question itself
+		if project != "" && (h.AnnounceProject == nil || *h.AnnounceProject) {
+			text = project + ". " + text
+		}
+	}
+	if text == "" {
+		return quiet("no phrase for " + a.Event)
+	}
+	if _, err := s.Speak(ctx, SpeakArgs{Text: text, Intent: ev.Intent, Cache: cacheable, PID: pid, Client: client, Project: project, Source: "hook"}); err != nil {
+		return nil, err
+	}
+	return map[string]any{"said": text}, nil
+}
+
+// sessionSend passes a message from one session to another, named the way
+// the user names it. It reaches the other agent the way the user's dictation
+// does (into its running turn, its mod or Codex's queue), says who sent it,
+// and shows in the transcript as a message, not as the user's words.
+func (s *Service) sessionSend(a SessionArgs, from uint32) (any, error) {
+	if strings.TrimSpace(a.Text) == "" || strings.TrimSpace(a.To) == "" {
+		return nil, userErr("send needs to (a session's name) and text")
+	}
+	if s.DeliverTo == nil {
+		return nil, userErr("messages between sessions need voice's background process")
+	}
+	want := normalize(a.To)
+	var to uint32
+	var names []string
+	for _, x := range s.Agents.Info() {
+		names = append(names, x.Name)
+		if x.PID != from && normalize(x.Name) == want {
+			to = x.PID
+		}
+	}
+	if to == 0 {
+		return nil, userErr("no other session is called %q; sessions: %s", a.To, strings.Join(names, ", "))
+	}
+	if !s.Agents.allowSend(from, to) {
+		return nil, userErr("%s and %s exchanged %d messages in the last minute; stop here and tell the user instead (a loop guard)", s.Agents.Name(from), a.To, sendLimit)
+	}
+	sender := dirOr(s.Agents.Name(from), "another session")
+	report, ok := s.DeliverTo(to, "Message from "+sender+" (another agent session, not the user): "+strings.TrimSpace(a.Text))
+	if !ok {
+		return nil, userErr("%s could not take the message now", a.To)
+	}
+	s.Agents.Record(Line{Kind: "message", PID: to, From: sender, Text: strings.TrimSpace(a.Text), Outcome: report})
+	return map[string]any{"to": s.Agents.Name(to), "delivered": report}, nil
+}
+
+// sendLimit messages between the same two sessions in sendWindow, either
+// way: two agents answering each other's answers would talk forever.
+const (
+	sendLimit  = 4
+	sendWindow = time.Minute
+)
+
+// allowSend records a message from one session to another, unless the pair
+// already exchanged sendLimit within sendWindow.
+func (ag *Agents) allowSend(from, to uint32) bool {
+	if from > to {
+		from, to = to, from
+	}
+	key := [2]uint32{from, to}
+	ag.mu.Lock()
+	defer ag.mu.Unlock()
+	if ag.sends == nil {
+		ag.sends = map[[2]uint32][]time.Time{}
+	}
+	recent := ag.sends[key][:0]
+	for _, at := range ag.sends[key] {
+		if time.Since(at) < sendWindow {
+			recent = append(recent, at)
+		}
+	}
+	if len(recent) >= sendLimit {
+		ag.sends[key] = recent
+		return false
+	}
+	ag.sends[key] = append(recent, time.Now())
+	return true
+}

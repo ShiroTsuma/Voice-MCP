@@ -160,6 +160,18 @@ func Serve(ctx context.Context, api service.API, infoPath, version, exe string, 
 		return api.Mod(ctx, a)
 	})
 
+	// The session API, for any agent (docs/http-api.md).
+	for _, action := range []string{"register", "poll", "say", "event", "send", "end", "transcript"} {
+		handle("session/"+action, func(ctx context.Context, b []byte) (any, error) {
+			var a service.SessionArgs
+			if err := decodeInto(b, &a); err != nil {
+				return nil, err
+			}
+			a.Action = action
+			return api.Session(ctx, a)
+		})
+	}
+
 	if extra != nil {
 		extra(mux, info)
 	}

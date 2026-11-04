@@ -1255,6 +1255,11 @@ function renderLog() {
       b.textContent = 'You'; b.style.setProperty('--c', YOU);
       who.append(b);
       if (l.pid && l.name) { detail.textContent = l.name; who.append('to ', mark(l.name, 14), detail); }
+    } else if (l.kind === 'message') {
+      // One session's message to another.
+      b.textContent = l.from || 'A session'; b.style.setProperty('--c', colourOf(l.from));
+      who.append(b, 'to ', mark(l.name, 14));
+      detail.textContent = l.name || 'a session'; who.append(detail);
     } else {
       b.textContent = l.pid ? l.name || 'A session' : 'Default voice'; b.style.setProperty('--c', l.pid ? colourOf(l.name) : PLAIN);
       const w = l.pid ? whereOf(l.client, l.project) : '';
@@ -1265,7 +1270,7 @@ function renderLog() {
     if (you) { txt.innerHTML = '<span class="q">“</span><span></span><span class="q">”</span>'; txt.children[1].textContent = l.text; }
     else txt.textContent = l.text;
     body.append(who, txt);
-    if (you && l.outcome) { const out = document.createElement('div'); out.className = 'out'; out.textContent = cap(l.outcome); body.append(out); }
+    if ((you || l.kind === 'message') && l.outcome) { const out = document.createElement('div'); out.className = 'out'; out.textContent = cap(l.outcome); body.append(out); }
     ln.append(t, you ? mark('', 20, true) : l.pid ? mark(l.name, 20) : mark('', 20), body);
     box.append(ln);
   }

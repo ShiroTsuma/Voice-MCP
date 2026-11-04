@@ -34,7 +34,7 @@
 
 You run several agent sessions and none of them is on screen. voice gives each one a name and a voice: when a turn ends or an agent needs a decision, you hear it ("shop-api. Two tests fail. Should I fix them now?"). Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>, say "Anna, yes, fix them", and the message reaches that session, whether it is busy, idle or in a window you cannot see.
 
-voice is an [MCP](https://modelcontextprotocol.io) server: any MCP client can use its tools to speak (`voice_speak`), ask and listen for a spoken answer (`voice_listen`), control playback and characters and read the transcript (`voice_control`) and clone voices (`voice_clone`); see [MCP tools](#mcp-tools). For Claude Code and Codex it adds hooks and a Claude Code mod, so announcements and dictation work even when the agent does not call a tool.
+voice is an [MCP](https://modelcontextprotocol.io) server: any MCP client can use its tools to speak (`voice_speak`), ask and listen for a spoken answer (`voice_listen`), control playback and characters and read the transcript (`voice_control`) and clone voices (`voice_clone`); see [MCP tools](#mcp-tools). For Claude Code and Codex it adds hooks and a Claude Code mod, so announcements and dictation work even when the agent does not call a tool. Any other agent gets the same through the [session API](docs/http-api.md), with [examples/agent.py](examples/agent.py) as a starting point.
 
 Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recognition (Parakeet, Whisper) run on the CPU through sherpa-onnx; nothing you say leaves the machine. One Go binary that installs itself.
 
@@ -46,6 +46,7 @@ Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recogni
 | Keep sessions apart | Each session plays a character with its own name, voice, colour and personality |
 | Follow along | A transcript of everything said and dictated, and an optional corner popup while an agent speaks or while you dictate, with your words as they are heard |
 | Use your own voice | Clone a voice from a 5 to 15 second recording, from the microphone or a file |
+| Use another agent | Any agent, including one on a local model, can register over a small HTTP API, take dictation, speak, announce its turns and message other sessions: [docs/http-api.md](docs/http-api.md) |
 | Stay in control | Hotkeys to stop and mute, ducking of other apps, Esc or "cancel" to drop a dictation |
 
 <details>

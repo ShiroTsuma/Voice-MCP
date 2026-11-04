@@ -219,3 +219,20 @@ func (a *Agents) Matches(pid uint32) bool {
 	}
 	return start == s.start && strings.EqualFold(exe, s.exe)
 }
+
+// Client is pid's client kind (claude, codex) or, for another agent, the
+// name it registered with.
+func (a *Agents) Client(pid uint32) string {
+	if a == nil {
+		return ""
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if s := a.seen[pid]; s != nil {
+		if k := clientKind(s.client); k != "" {
+			return k
+		}
+		return s.client
+	}
+	return ""
+}

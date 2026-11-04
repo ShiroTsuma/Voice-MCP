@@ -293,8 +293,12 @@ func (c *controller) deliverTo(pid uint32, text string, hwnd uintptr, fgPID uint
 		return fmt.Sprintf("queued %d characters for %s, busy (its next hook passes them on)", n, who), true
 	}
 	if c.agents.HasMod(pid) {
-		// voice's Claude Code mod submits it as a prompt, on screen or not.
+		// voice's Claude Code mod submits it as a prompt, on screen or not; an
+		// agent on the session API takes it with its next poll.
 		c.agents.Enqueue(pid, text)
+		if c.agents.Client(pid) != "claude" {
+			return fmt.Sprintf("queued %d characters for %s (it takes them through the session API)", n, who), true
+		}
 		return fmt.Sprintf("queued %d characters for %s (its Claude Code mod submits them)", n, who), true
 	}
 	if thread := c.agents.CodexThread(pid); thread != "" {
@@ -529,6 +533,7 @@ var outcomes = []struct {
 }{
 	{regexp.MustCompile(`^queued \d+ characters for (.+), busy`), "Queued for $1, busy; it gets it with its next step"},
 	{regexp.MustCompile(`^queued \d+ characters for (.+) \(its Claude Code mod`), "Delivered to $1"},
+	{regexp.MustCompile(`^queued \d+ characters for (.+) \(it takes them through the session API`), "Delivered to $1"},
 	{regexp.MustCompile(`^queued \d+ characters for (.+) in Codex's queue`), "Delivered to $1"},
 	{regexp.MustCompile(`^queued \d+ characters for (.+) \(idle in`), "Queued for $1; it gets it with its next prompt"},
 	{regexp.MustCompile(`^typed \d+ characters into the console of (.+)`), "Typed into $1's console"},

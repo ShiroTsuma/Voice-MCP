@@ -80,6 +80,7 @@ type API interface {
 	Agent(ctx context.Context, a AgentArgs) (any, error)
 	Dictate(ctx context.Context, a DictateArgs) (any, error)
 	Mod(ctx context.Context, a ModArgs) (any, error)
+	Session(ctx context.Context, a SessionArgs) (any, error)
 }
 
 // DictateArgs hands text to the agent as if the user had dictated it.
@@ -112,6 +113,9 @@ type Service struct {
 	Agents   *Agents // agent processes that used voice; nil records nothing
 	// Deliver passes dictated text to an agent and says where it went.
 	Deliver func(text string) string
+	// DeliverTo passes a message to one agent the way dictation reaches it,
+	// never by typing into another window; ok is false when it took none.
+	DeliverTo func(pid uint32, text string) (report string, ok bool)
 }
 
 func (s *Service) presetFor(explicit, client string) string {

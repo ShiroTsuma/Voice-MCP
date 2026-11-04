@@ -19,7 +19,8 @@ type Line struct {
 	Project string    `json:"project,omitempty"` // its folder
 	Source  string    `json:"source,omitempty"`  // said: "hook" (an announcement) or "" (the agent itself)
 	Text    string    `json:"text"`
-	Outcome string    `json:"outcome,omitempty"` // dictated: where it went
+	Outcome string    `json:"outcome,omitempty"` // dictated, message: where it went
+	From    string    `json:"from,omitempty"`    // message: the session that sent it
 }
 
 // transcriptSize is how many lines the transcript keeps.

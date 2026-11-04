@@ -28,9 +28,10 @@ type Agents struct {
 	// Logf, when set, gets a line for everything voice says and every dictation.
 	Logf func(format string, args ...any)
 
-	transcript []Line // what was said and dictated, oldest first (Record)
-	path       string // where sessions are saved (Load); empty keeps them in memory
-	dirty      bool   // something worth saving changed
+	transcript []Line                    // what was said and dictated, oldest first (Record)
+	sends      map[[2]uint32][]time.Time // recent messages between two sessions (send)
+	path       string                    // where sessions are saved (Load); empty keeps them in memory
+	dirty      bool                      // something worth saving changed
 }
 
 // changed reports the queues to OnChange; the caller holds the lock and

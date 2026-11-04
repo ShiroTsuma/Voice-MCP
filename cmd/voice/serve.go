@@ -146,6 +146,11 @@ func runServe(args []string) error {
 		return ctl.deliver(text, hwnd, pid)
 	}
 	svc.Deliver = deliver
+	svc.DeliverTo = func(pid uint32, text string) (string, bool) {
+		hwnd, fg := inject.Foreground()
+		r, ok := ctl.deliverTo(pid, text, hwnd, fg, false)
+		return outcome(r), ok // the short form the transcript shows
+	}
 	err = daemon.Serve(ctx, svc, c.InfoPath, version, exe, extra)
 	if !*noTray {
 		tray.Close()

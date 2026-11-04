@@ -154,6 +154,10 @@ func (c *Client) Mod(ctx context.Context, a service.ModArgs) (any, error) {
 	return c.call(ctx, "mod", a, 5*time.Second)
 }
 
+func (c *Client) Session(ctx context.Context, a service.SessionArgs) (any, error) {
+	return c.call(ctx, "session/"+a.Action, a, 30*time.Second)
+}
+
 func (c *Client) Dictate(ctx context.Context, a service.DictateArgs) (any, error) {
 	return c.call(ctx, "dictate", a, 30*time.Second)
 }
