@@ -56,7 +56,13 @@ type Deps struct {
 	Clone func(ctx context.Context, a service.CloneArgs) (any, error)
 	// Integrations is the Integrations window's list.
 	Integrations *integrations.Registry
+	// Preview makes a passing preset from a tuning not saved yet and returns
+	// its name (PreviewPreset), for Hear it.
+	Preview func(p settings.Preset) string
 }
+
+// PreviewPreset is the passing preset Hear it plays a tuning with.
+const PreviewPreset = "voice-preview"
 
 const cookie = "voice_token"
 
@@ -200,8 +206,14 @@ func Register(mux *http.ServeMux, d Deps) {
 		reply(w, map[string]any{"restart": restart, "state": d.State()}, err)
 	})
 	api("test", func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ Preset, Text string }
+		var in struct {
+			Preset, Text string
+			Tune         *settings.Preset // hear a tuning before it is saved
+		}
 		json.NewDecoder(r.Body).Decode(&in)
+		if in.Tune != nil && d.Preview != nil {
+			in.Preset = d.Preview(*in.Tune)
+		}
 		reply(w, map[string]bool{"ok": true}, d.Test(in.Preset, in.Text))
 	})
 	api("restart", func(w http.ResponseWriter, r *http.Request) {
@@ -285,6 +297,21 @@ func merge(s *settings.Settings, in settings.Settings) {
 	set(&s.Serve.DictateTheme, in.Serve.DictateTheme)
 	if in.Characters != nil {
 		s.Characters = in.Characters
+	}
+	// Only the windows' own tuned voices; a preset of the user's in
+	// config.toml is never touched from here.
+	for name, p := range in.Presets {
+		if !strings.HasPrefix(name, settings.TunedPrefix) || name == PreviewPreset {
+			continue
+		}
+		if p == nil {
+			delete(s.Presets, name)
+			continue
+		}
+		if s.Presets == nil {
+			s.Presets = map[string]*settings.Preset{}
+		}
+		s.Presets[name] = p
 	}
 	setF(&s.Serve.DictateOverlayScale, in.Serve.DictateOverlayScale)
 	setB(&s.Serve.Personas, in.Serve.Personas)

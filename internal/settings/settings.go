@@ -25,7 +25,23 @@ type Settings struct {
 	Hooks         Hooks    `toml:"hooks,omitempty" json:"hooks"`
 	// Characters replaces config.toml's list when set.
 	Characters *[]Character `toml:"characters,omitempty" json:"characters,omitempty"`
+	// Presets are the voices tuned in the windows (named voice-...): a base
+	// preset with its own speed, pitch and effects. Sent with a null value, a
+	// preset is removed.
+	Presets map[string]*Preset `toml:"presets,omitempty" json:"presets,omitempty"`
 }
+
+// Preset is a tuned voice: what it changes on the preset it extends.
+type Preset struct {
+	Extends     string   `toml:"extends" json:"extends"`
+	Description string   `toml:"description,omitempty" json:"description,omitempty"`
+	Speed       *float64 `toml:"speed,omitempty" json:"speed,omitempty"`
+	Pitch       *float64 `toml:"pitch,omitempty" json:"pitch,omitempty"`
+	DSP         []string `toml:"dsp,omitempty" json:"dsp,omitempty"`
+}
+
+// TunedPrefix starts the names of the presets the windows tune.
+const TunedPrefix = "voice-"
 
 // Character is preset.Character in the settings file.
 type Character struct {

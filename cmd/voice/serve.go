@@ -137,6 +137,10 @@ func runServe(args []string) error {
 			Character:    func(pid uint32, name string) { agents.SetName(pid, name) },
 			Clone:        svc.Clone,
 			Integrations: newIntegrations(agents),
+			Preview: func(p settings.Preset) string {
+				b.cfg.SetPreset(settingsui.PreviewPreset, preset.Preset{Extends: p.Extends, Description: "Preview", Speed: p.Speed, Pitch: p.Pitch, DSP: p.DSP})
+				return settingsui.PreviewPreset
+			},
 		})
 		if !*noTray {
 			once.Do(func() { go tray.Run(b.trayActions()) })
@@ -276,10 +280,19 @@ func (b *backend) reload() (bool, error) {
 
 func (b *backend) state() map[string]any {
 	cfg := b.cfg
-	presets := []map[string]string{}
+	// Each preset with what the windows tune: a tuned one (voice-...) also
+	// says which preset it extends.
+	presets := []map[string]any{}
 	for _, name := range cfg.PresetNames() {
+		if name == settingsui.PreviewPreset {
+			continue
+		}
 		if r, err := cfg.Resolve(name); err == nil {
-			presets = append(presets, map[string]string{"name": name, "description": r.Description})
+			p := map[string]any{"name": name, "description": r.Description, "engine": r.Engine, "speed": r.Speed, "pitch": r.Pitch, "dsp": r.DSP}
+			if strings.HasPrefix(name, settings.TunedPrefix) {
+				p["extends"] = cfg.PresetExtends(name)
+			}
+			presets = append(presets, p)
 		}
 	}
 	outputs, _ := audio.Devices()

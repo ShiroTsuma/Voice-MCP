@@ -592,3 +592,10 @@ func (h Hooks) GoalWait() time.Duration {
 	}
 	return time.Duration(s * float64(time.Second))
 }
+
+// PresetExtends is the preset name extends, "" when it extends none.
+func (c *Config) PresetExtends(name string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Presets[name].Extends
+}

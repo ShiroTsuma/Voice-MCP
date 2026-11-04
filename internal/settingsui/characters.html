@@ -136,6 +136,30 @@
   .picacts .help { flex-basis: 100%; margin-top: 0; }
 
   .fields { padding: 0 36px 10px; max-width: 760px; }
+  /* ── Tuning a voice: speed, pitch, effects ────────────────── */
+  .tune { margin-top: 2px; border-radius: 8px; background: color-mix(in oklab, var(--field) 45%, transparent); }
+  .tune summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; font-size: 13.5px; color: var(--ink-2); }
+  .tune summary::-webkit-details-marker { display: none; }
+  .tune summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+  .tune[open] summary::before { transform: rotate(45deg); }
+  .tune summary:hover { color: var(--ink); }
+  .tune summary b { font-weight: 600; color: var(--ink); }
+  .tune .tuned { font: 12px var(--ui-small); color: var(--c); }
+  .tune .grid { display: grid; grid-template-columns: 110px 1fr 64px; align-items: center; gap: 10px 12px; padding: 4px 14px 14px; }
+  .tune .grid .lab { font-size: 13.5px; }
+  .tune .val { font: 12.5px var(--ui-small); color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+  .tune .span2 { grid-column: 2 / 4; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .seg { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
+  .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 5px; background: none; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .seg button:hover { color: var(--ink); background: var(--field-hi); }
+  .seg button.on { background: var(--ink); color: var(--ground); }
+  input[type=range] { appearance: none; width: 100%; height: 22px; margin: 0; background: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--ink) 0 var(--p, 50%), var(--field-hi) var(--p, 50%) 100%); }
+  input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 3px var(--ground); }
+  input[type=range]:focus-visible { outline: none; }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--ground), 0 0 0 5px var(--ink); }
+
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chips button { height: 28px; padding: 0 11px; border: 0; border-radius: 6px; background: var(--field); font-size: 13px; color: var(--ink-2); transition: background .12s, color .12s; }
   .chips button:hover { background: var(--field-hi); color: var(--ink); }
@@ -215,6 +239,17 @@
         <div class="row col">
           <label class="lab" for="preset">Voice<span class="help" id="presetHint"></span></label>
           <div class="pair"><select id="preset"></select><button class="btn" id="test" type="button"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3 1.5v9l7.5-4.5z"/></svg>Hear it</button></div>
+          <details class="tune" id="tune">
+            <summary><b>Tune</b> speed, pitch and effects <span class="tuned" id="tuned"></span></summary>
+            <div class="grid">
+              <label class="lab" for="tSpeed">Speed</label><input type="range" id="tSpeed" min="0.7" max="1.3" step="0.05"><span class="val" id="vSpeed"></span>
+              <label class="lab" for="tPitch">Pitch</label><input type="range" id="tPitch" min="-4" max="4" step="0.5"><span class="val" id="vPitch"></span>
+              <span class="lab">Room</span><div class="span2"><div class="seg" id="tReverb" role="group" aria-label="Room"><button type="button" data-v="">None</button><button type="button" data-v="small">Small</button><button type="button" data-v="room">Room</button><button type="button" data-v="hall">Hall</button></div></div>
+              <span class="lab">Evenness</span><div class="span2"><div class="seg" id="tCompress" role="group" aria-label="Compression"><button type="button" data-v="">Natural</button><button type="button" data-v="soft">Even</button><button type="button" data-v="medium">Steady</button></div></div>
+              <span class="lab">Softer</span><div class="span2"><label class="switch"><input type="checkbox" id="tSoft"><span></span></label><span class="help">Takes the edge off high sounds</span></div>
+              <span></span><div class="span2"><button class="btn" id="tReset" type="button">Back to the voice as it is</button></div>
+            </div>
+          </details>
         </div>
         <div class="row col">
           <div class="lab">Colour<span class="help">Its light when it speaks; automatic follows its place in the list</span></div>
@@ -387,11 +422,17 @@ function open(i) {
     box.append(b);
   }
   box.append(addChip(box));
+  // The list offers base voices; a character's tuned voice (voice-...) shows as its base plus the tuning.
   const sp = $('preset'); sp.textContent = '';
-  for (const p of [{ name: '' }].concat(state.options.presets)) {
+  for (const p of [{ name: '' }].concat((state.options.presets || []).filter(p => !p.extends))) {
     const o = document.createElement('option'); o.value = p.name; o.textContent = p.name || 'Default voice'; sp.append(o);
   }
-  sp.value = c.preset || '';
+  const tunedP = presetOf(c.preset);
+  tunedFrom = tunedP && tunedP.extends ? c.preset : '';
+  sp.value = tunedFrom ? tunedP.extends : (c.preset || '');
+  tune = fromPreset(tunedFrom ? tunedP : presetOf(sp.value || state.default_preset));
+  showTune();
+  $('tune').open = !!tunedFrom;
   hint();
   $('del').hidden = i >= chars.length;
   $('def').hidden = i <= 0 || i >= chars.length;
@@ -399,6 +440,56 @@ function open(i) {
   list();
   if (!c.name) $('name').focus();
 }
+
+// ── Tuning ──────────────────────────────────────────────────
+// tune is what the sliders show: speed, pitch and the effects the window
+// manages (room, evenness, softer); other effects of the base stay as they are.
+let tune = null, tunedFrom = '';
+const presetOf = name => (state.options.presets || []).find(p => p.name === name);
+function fromPreset(p) {
+  const dsp = (p && p.dsp) || [];
+  const t = { speed: p ? p.speed : 1, pitch: p ? p.pitch : 0, reverb: '', compress: '', soft: false, other: [] };
+  for (const d of dsp) {
+    const [k, v] = d.split(':');
+    if (k === 'reverb') t.reverb = v;
+    else if (k === 'compress') t.compress = v;
+    else if (k === 'lowpass' && +v <= 7000) t.soft = true;
+    else t.other.push(d);
+  }
+  return t;
+}
+function toDSP(t) {
+  const out = [...t.other];
+  if (t.soft) out.push('lowpass:6000');
+  if (t.compress) out.push('compress:' + t.compress);
+  if (t.reverb) out.push('reverb:' + t.reverb);
+  return out;
+}
+const baseName = () => $('preset').value || state.default_preset;
+// differs: the tuning changes something on the base voice.
+function differs() {
+  const b = fromPreset(presetOf(baseName()));
+  return Math.abs(tune.speed - b.speed) > 0.001 || Math.abs(tune.pitch - b.pitch) > 0.001 ||
+    JSON.stringify(toDSP(tune)) !== JSON.stringify(toDSP(b));
+}
+function fill(range) { range.style.setProperty('--p', ((range.value - range.min) / (range.max - range.min) * 100) + '%'); }
+function showTune() {
+  $('tSpeed').value = tune.speed; $('vSpeed').textContent = (+tune.speed).toFixed(2) + '×'; fill($('tSpeed'));
+  $('tPitch').value = tune.pitch; $('vPitch').textContent = (tune.pitch > 0 ? '+' : tune.pitch < 0 ? '−' : '±') + Math.abs(tune.pitch) + ' st'; fill($('tPitch'));
+  for (const [id, v] of [['tReverb', tune.reverb], ['tCompress', tune.compress]])
+    $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === (v || '')));
+  $('tSoft').checked = tune.soft;
+  $('tuned').textContent = differs() ? '· tuned' : '';
+}
+$('tSpeed').addEventListener('input', e => { tune.speed = +e.target.value; showTune(); });
+$('tPitch').addEventListener('input', e => { tune.pitch = +e.target.value; showTune(); });
+for (const [id, key] of [['tReverb', 'reverb'], ['tCompress', 'compress']])
+  $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tune[key] = b.dataset.v; showTune(); } });
+$('tSoft').addEventListener('change', e => { tune.soft = e.target.checked; showTune(); });
+$('tReset').addEventListener('click', () => { tune = fromPreset(presetOf(baseName())); showTune(); });
+// A tuned voice's preset: voice-<name>, extending the chosen voice.
+const tunedName = name => 'voice-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const tuning = () => ({ extends: baseName(), speed: tune.speed, pitch: tune.pitch, dsp: toDSP(tune) });
 
 // hint says what the chosen voice sounds like.
 function hint() {
@@ -433,8 +524,8 @@ function addChip(box) {
   return plus;
 }
 
-async function store(chars, keep) {
-  const r = await api('save', { characters: chars });
+async function store(chars, keep, presets) {
+  const r = await api('save', presets ? { characters: chars, presets } : { characters: chars });
   state = r.state;
   list();
   if (keep !== undefined) open(keep);
@@ -456,7 +547,7 @@ $('personas').addEventListener('change', async () => {
 });
 let nameTimer = 0;
 $('name').addEventListener('input', () => { clearTimeout(nameTimer); nameTimer = setTimeout(paint, 180); });
-$('preset').addEventListener('change', hint);
+$('preset').addEventListener('change', () => { tune = fromPreset(presetOf(baseName())); showTune(); hint(); });
 $('pickPic').addEventListener('click', () => $('file').click());
 $('noPic').addEventListener('click', () => { image = ''; paint(); });
 $('file').addEventListener('change', () => {
@@ -472,13 +563,16 @@ $('file').addEventListener('change', () => {
 });
 $('test').addEventListener('click', async () => {
   const name = $('name').value.trim() || 'your new character';
-  try { await api('test', { Preset: $('preset').value || state.default_preset, Text: 'Hi, I am ' + name + '. Nice to meet you.' }); }
+  const body = { Preset: baseName(), Text: 'Hi, I am ' + name + '. Nice to meet you.' };
+  if (differs()) body.Tune = tuning();
+  try { await api('test', body); }
   catch (e) { status(e.message, 'warn'); }
 });
 $('del').addEventListener('click', async () => {
   const chars = (state.characters || []).slice(); const gone = chars.splice(sel, 1)[0];
   if (!confirm('Delete ' + gone.name + '?')) return;
-  try { await store(chars); load(); } catch (e) { status(e.message, 'warn'); }
+  const p = presetOf(gone.preset), presets = p && p.extends ? { [gone.preset]: null } : undefined; // its tuned voice goes too
+  try { await store(chars, undefined, presets); load(); } catch (e) { status(e.message, 'warn'); }
 });
 $('def').addEventListener('click', async () => {
   const chars = (state.characters || []).slice(); chars.unshift(chars.splice(sel, 1)[0]);
@@ -489,10 +583,15 @@ $('form').addEventListener('submit', async e => {
   const name = $('name').value.trim(), chars = (state.characters || []).slice();
   if (!name) { status('Give the character a name', 'warn'); $('name').focus(); return; }
   if (chars.some((c, i) => i !== sel && c.name.toLowerCase() === name.toLowerCase())) { status('Another character has that name', 'warn'); return; }
+  // A tuning becomes the character's own preset; without one, it uses the voice as it is.
+  const presets = {};
+  let voice = $('preset').value;
+  if (differs()) { voice = tunedName(name); presets[voice] = Object.assign(tuning(), { description: 'The voice of ' + name }); }
+  if (tunedFrom && tunedFrom !== voice) presets[tunedFrom] = null; // renamed or untuned: the old one goes
   chars[sel] = { name, traits: [...$('traits').querySelectorAll('button.on')].map(b => b.textContent),
-    description: $('desc').value.trim(), preset: $('preset').value, image };
+    description: $('desc').value.trim(), preset: voice, image };
   if (color) chars[sel].color = color;
-  try { await store(chars, sel); status('Saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
+  try { await store(chars, sel, Object.keys(presets).length ? presets : undefined); status('Saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
 });
 load();
 </script>
