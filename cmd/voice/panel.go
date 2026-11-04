@@ -75,6 +75,9 @@ func (b *backend) panelStatus() map[string]any {
 	if d := b.ctl.Dictation(); d != nil {
 		out["dictation"] = d
 	}
+	if l := loadingStatus(); l != nil {
+		out["loading"] = l
+	}
 	if l := st.Line; l != nil {
 		line := map[string]any{"id": l.ID, "text": l.Text, "done": l.Done, "from": l.From, "to": l.To, "at": l.At, "seconds": l.Seconds}
 		for i := len(transcript) - 1; i >= 0; i-- {
@@ -269,4 +272,31 @@ func (b *backend) showSettings(section string) {
 	if err := settingsWin.Show(); err != nil {
 		logf("settings window: %v", err)
 	}
+}
+
+// What engine voice waits for while its server starts and loads the model
+// (httpengine.OnStarting): the settings window and the popup show it.
+var (
+	loadingMu    sync.Mutex
+	loadingName  string
+	loadingSince time.Time
+)
+
+func setLoading(engine string, on bool) {
+	loadingMu.Lock()
+	defer loadingMu.Unlock()
+	if on {
+		loadingName, loadingSince = engine, time.Now()
+	} else if loadingName == engine {
+		loadingName = ""
+	}
+}
+
+func loadingStatus() map[string]any {
+	loadingMu.Lock()
+	defer loadingMu.Unlock()
+	if loadingName == "" {
+		return nil
+	}
+	return map[string]any{"engine": loadingName, "since": loadingSince}
 }

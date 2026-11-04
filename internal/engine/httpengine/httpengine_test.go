@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"voice/internal/audio"
 	"voice/internal/engine"
@@ -77,5 +79,37 @@ func TestExpandPrefersTheBackendsOwnEnvironment(t *testing.T) {
 	}
 	if got := expand(`{sidecar}\x`); got != SidecarDir+`\x` {
 		t.Fatalf("sidecar: %s", got)
+	}
+}
+
+func TestAnotherProgramOnThePort(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler()) // like a dev web server on the same port
+	defer srv.Close()
+	e := &Engine{name: "chatterbox", url: srv.URL, start: []string{"python", "--backend", "chatterbox"}, timeout: time.Minute}
+	began := time.Now()
+	err := e.ensure(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "another program") {
+		t.Fatalf("got %v", err)
+	}
+	if time.Since(began) > 5*time.Second {
+		t.Fatal("it waited instead of saying so")
+	}
+	if up, other := e.probe(context.Background()); up || !other {
+		t.Fatalf("probe up=%v other=%v", up, other)
+	}
+}
+
+func TestOwnServerIsUp(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"backend":"chatterbox","ready":true}`))
+	}))
+	defer srv.Close()
+	e := &Engine{name: "chatterbox", url: srv.URL, start: []string{"python", "--backend", "chatterbox"}}
+	if up, other := e.probe(context.Background()); !up || other {
+		t.Fatalf("probe up=%v other=%v", up, other)
+	}
+	e.start = []string{"python", "--backend", "xtts"} // another backend answers there
+	if up, other := e.probe(context.Background()); up || !other {
+		t.Fatalf("other backend: up=%v other=%v", up, other)
 	}
 }

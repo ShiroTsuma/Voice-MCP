@@ -20,6 +20,7 @@ import (
 	"voice/internal/core"
 	"voice/internal/daemon"
 	"voice/internal/engine"
+	"voice/internal/engine/httpengine"
 	"voice/internal/inject"
 	"voice/internal/listen"
 	"voice/internal/preset"
@@ -151,6 +152,10 @@ func runServe(args []string) error {
 		return ctl.deliver(text, hwnd, pid)
 	}
 	svc.Deliver = deliver
+	httpengine.OnStarting = func(engine string, on bool) {
+		setLoading(engine, on)
+		b.speaking(on) // the popup shows the wait too; speech that follows keeps it up
+	}
 	svc.DeliverTo = func(pid uint32, text string) (string, bool) {
 		hwnd, fg := inject.Foreground()
 		r, ok := ctl.deliverTo(pid, text, hwnd, fg, false)

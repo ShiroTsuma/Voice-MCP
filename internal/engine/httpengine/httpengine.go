@@ -84,16 +84,41 @@ func expand(a string) string {
 }
 
 func (e *Engine) healthy(ctx context.Context) bool {
+	up, _ := e.probe(ctx)
+	return up
+}
+
+// probe asks the server for its health. up: the engine's server answered and
+// is ready; other: something answered that is not it (another program holds
+// the port), which starting the server again cannot fix.
+func (e *Engine) probe(ctx context.Context) (up, other bool) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, e.url+"/health", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return false
+		return false, false // nothing listens
 	}
-	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	defer resp.Body.Close()
+	var h struct {
+		Backend string `json:"backend"`
+		Ready   *bool  `json:"ready"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&h) != nil {
+		return false, true
+	}
+	// A server of voice's sidecar says its backend; any other server speaking
+	// the protocol may say nothing, and counts as up.
+	if h.Backend != "" && len(e.start) > 0 && !strings.Contains(strings.Join(e.start, " "), h.Backend) {
+		return false, true
+	}
+	return h.Ready == nil || *h.Ready, false
 }
+
+// OnStarting, when set, learns that voice waits for an engine's server to
+// start and load its model (on true) and that the wait is over (false), so the
+// settings window can say why the first sentence takes a while.
+var OnStarting func(engine string, starting bool)
 
 // ensure starts the server when it is down and a start command is set. The
 // server keeps running after voice exits, so later processes reuse it.
@@ -108,6 +133,13 @@ func (e *Engine) ensure(ctx context.Context) error {
 	}
 	if len(e.start) == 0 {
 		return fmt.Errorf("engine %q: no server at %s", e.name, e.url)
+	}
+	if _, other := e.probe(ctx); other {
+		return fmt.Errorf("engine %q: another program answers at %s, the port voice's %s server uses; close it, or give the engine another port in config.toml", e.name, e.url, e.name)
+	}
+	if fn := OnStarting; fn != nil {
+		fn(e.name, true)
+		defer fn(e.name, false)
 	}
 	// A server started earlier may have exited (it stops itself when idle);
 	// start a new one unless the last one is still loading.

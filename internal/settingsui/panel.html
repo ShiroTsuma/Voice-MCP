@@ -1025,8 +1025,22 @@ function fillTick() {
   reached = p;
   if (document.visibilityState === 'visible') fillRaf = requestAnimationFrame(fillTick);
 }
+// A GPU engine's server starting and loading its model: the first sentence waits for it.
+const engineTitle = n => ({ chatterbox: 'Chatterbox', xtts: 'XTTS v2', f5: 'F5-TTS' })[n] || n;
+function loadingText() {
+  const l = lastStatus.loading;
+  if (!l) return '';
+  return 'Starting ' + engineTitle(l.engine) + ' on the graphics card… ' + Math.max(0, Math.round((Date.now() - ms(l.since)) / 1000)) + ' s';
+}
 function renderSaid() {
   const muted = !!lastStatus.muted;
+  if (!line && lastStatus.loading) {
+    shown = 'loading';
+    saidCue('voice', loadingText().replace(/^Starting /, 'is starting ').replace(/ on the graphics card… .*/, ''), Math.round((Date.now() - ms(lastStatus.loading.since)) / 1000) + ' s');
+    $('line').className = 'line quiet'; $('line').title = '';
+    $('line').textContent = 'Loading the model on the graphics card; the first sentence follows. This takes a few seconds the first time, or after 10 idle minutes.';
+    return;
+  }
   if (line) {
     const key = 'line:' + line.id;
     if (shown !== key) {
@@ -1791,6 +1805,7 @@ function status(st) {
   if (Array.isArray(st.transcript)) transcript = st.transcript;
   if (line && (!st.line || st.line.id !== line.id) && stopRequested === line.id) stopped = { id: line.id, p: reached };
   line = st.line && st.line.text ? st.line : null;
+  if (cloneBusy && st.loading) cloneMsg(loadingText()); // Hear it or a clone waits for the engine
   const m = $('mute');
   m.classList.toggle('on', !!st.muted);
   m.setAttribute('aria-pressed', !!st.muted);
@@ -1857,7 +1872,7 @@ setInterval(() => {
   if (document.visibilityState !== 'visible') return;
   ticks++;
   // While voice speaks, often, so the next sentence starts filling in when it is heard; else once a second.
-  if (line || lastStatus.speaking || lastStatus.dictation || ticks % 4 === 0) poll();
+  if (line || lastStatus.speaking || lastStatus.dictation || lastStatus.loading || cloneBusy || ticks % 4 === 0) poll();
   // An older voice without sessions in the status: refresh them from the state now and then.
   if (lastStatus.agents === undefined && ticks % 12 === 0) api('state').then(s => setSessions(s.agents)).catch(() => {});
 }, 250);
