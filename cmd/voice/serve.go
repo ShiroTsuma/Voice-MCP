@@ -86,6 +86,7 @@ func runServe(args []string) error {
 	}
 	logf("voice %s serving (pid %d)", version, os.Getpid())
 
+	core.Logf = logf
 	sp := core.NewSpeaker(cfg)
 	defer sp.Close()
 	if cfg.DefaultPreset != "" {

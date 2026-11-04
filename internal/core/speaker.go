@@ -590,6 +590,10 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	return Result{Engine: used}
 }
 
+// Logf, when set, records what the log should know: an engine that failed
+// while a fallback spoke.
+var Logf func(format string, args ...any)
+
 // batchSize is how many sentences an engine that renders batches gets at once.
 const batchSize = 4
 
@@ -647,6 +651,10 @@ func (s *Speaker) render(ctx context.Context, engines []string, primary string, 
 				return nil
 			})
 			if err == nil && len(pcm) > 0 {
+				// Speaking with a fallback: say why the voice wanted did not.
+				if i > 0 && Logf != nil {
+					Logf("speech: %s spoke instead of %s: %s", name, engines[0], strings.Join(errs, "; "))
+				}
 				return pcm, name, engines[i:], nil
 			}
 			if err == nil {
