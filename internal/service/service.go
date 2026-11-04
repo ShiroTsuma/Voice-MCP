@@ -155,6 +155,9 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	}
 	if !a.Wait {
 		out := map[string]any{"id": t.ID, "queue_position": t.Position}
+		if t.Note != "" {
+			out["voice_note"] = t.Note + ". Tell the user once."
+		}
 		if persona, changed := s.takePersona(a.PID, false); changed {
 			out["note"] = "The user changed your character. From now on: " + persona
 		}
@@ -165,7 +168,11 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 		if res.Err != nil {
 			return nil, UserError{res.Err.Error()}
 		}
-		return map[string]any{"id": t.ID, "engine": res.Engine}, nil
+		out := map[string]any{"id": t.ID, "engine": res.Engine}
+		if t.Note != "" {
+			out["voice_note"] = t.Note + ". Tell the user once."
+		}
+		return out, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

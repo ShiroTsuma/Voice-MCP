@@ -48,7 +48,8 @@ type Result struct {
 
 type Ticket struct {
 	ID       string
-	Position int // 0: plays next
+	Position int    // 0: plays next
+	Note     string // the default voice speaks because the preset's voice is gone
 	Done     <-chan Result
 }
 
@@ -81,6 +82,7 @@ type Speaker struct {
 	muted     bool
 	nextID    int
 	lastErr   string
+	gone      map[string]bool // presets whose missing voice was already reported
 	wake      chan struct{}
 	closed    chan struct{}
 }
@@ -147,10 +149,22 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	if err != nil {
 		return Ticket{}, err
 	}
-	// A missing cloned voice is the caller's mistake; report it now rather
-	// than speaking with a fallback voice.
-	if _, err := resolveVoice(p.For(lang).Voice); err != nil {
+	// A removed cloned voice falls back to the default preset; other voice
+	// errors are reported now rather than at playback.
+	gone := p.Name
+	p, note, err := voiceOrDefault(s.cfg, p, lang)
+	if err != nil {
 		return Ticket{}, err
+	}
+	if note != "" {
+		if s.gone[gone] {
+			note = "" // said once; the user knows
+		} else {
+			if s.gone == nil {
+				s.gone = map[string]bool{}
+			}
+			s.gone[gone] = true
+		}
 	}
 	s.nextID++
 	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: p, cache: req.Cache, done: make(chan Result, 1)}
@@ -163,7 +177,7 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 		pos++
 	}
 	s.signal()
-	return Ticket{ID: it.id, Position: pos, Done: it.done}, nil
+	return Ticket{ID: it.id, Position: pos, Done: it.done, Note: note}, nil
 }
 
 // Stop silences the current utterance and clears the queue.

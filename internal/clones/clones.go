@@ -105,6 +105,9 @@ func Add(name, src, text, engineName, rights string, replace bool) (Profile, err
 	return Get(name)
 }
 
+// ErrNotFound: no cloned voice of that name is stored (never made, or removed).
+var ErrNotFound = errors.New("no cloned voice")
+
 func Get(name string) (Profile, error) {
 	if err := ValidName(name); err != nil {
 		return Profile{}, err
@@ -113,7 +116,7 @@ func Get(name string) (Profile, error) {
 	var p Profile
 	if _, err := toml.DecodeFile(filepath.Join(d, "voice.toml"), &p); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Profile{}, fmt.Errorf("no cloned voice %q; see `voice clone list`", name)
+			return Profile{}, fmt.Errorf("%w %q; see `voice clone list`", ErrNotFound, name)
 		}
 		return Profile{}, fmt.Errorf("voice %q: %w", name, err)
 	}
