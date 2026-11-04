@@ -367,6 +367,34 @@
   .tune .val { font-size: 12px; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
   .tune .span2 { grid-column: 2 / 4; display: flex; gap: 8px; align-items: center; }
 
+  /* ── Two windows from one page ────────────────────────────────
+     The flyout keeps what is used every day; rows and groups marked "more" show only in the full
+     settings window (?full=1), which shows one section at a time beside a list of them, and the
+     characters and integrations pages in place. */
+  html:not(.full) .more { display: none !important; }
+  nav.side { display: none; }
+  html.full .win { flex-direction: row; }
+  html.full .top, html.full footer, html.full .g[data-g="transcript"], html.full .g[data-g="characters"], html.full .g.win { display: none !important; }
+  html.full nav.side { display: flex; flex-direction: column; width: 220px; flex: none; border-right: 1px solid var(--rule); padding: 18px 8px 12px; }
+  nav.side h1 { margin: 0 12px 12px; font: 600 20px/1.3 var(--ui-display); letter-spacing: -.01em; }
+  nav.side button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 12px; border-radius: 6px; font: 14px/1.3 var(--ui); color: var(--ink-2); }
+  nav.side button:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); color: var(--ink); }
+  nav.side button.sel { background: var(--field); color: var(--ink); font-weight: 600; }
+  nav.side .grow { flex: 1; }
+  nav.side small { margin: 0 12px; font: 12px var(--ui-small); color: var(--ink-3); }
+  html.full main { border-top: 0; display: flex; flex-direction: column; }
+  html.full .groups { flex: 1; }
+  html.full .g { display: none; }
+  html.full .g.sel { display: block; background: none; }
+  html.full .g.sel + .g { border-top: 0; }
+  html.full .g.sel > .head { pointer-events: none; padding: 22px 28px 4px; }
+  html.full .g.sel > .head .name { font: 600 18px/1.3 var(--ui-display); }
+  html.full .g.sel > .head svg, html.full .g.sel > .head .sum { display: none; }
+  html.full .g.sel > .body { grid-template-rows: 1fr; }
+  html.full .g.sel > .body > div { padding: 4px 28px 28px; max-width: 640px; }
+  html.full .frame { display: none; flex: 1; width: 100%; border: 0; background: var(--ground); }
+  html.full .frame.sel { display: block; }
+
   /* The speaking popup (?popup=1): the top alone, shown and never touched. */
   html.popup main, html.popup footer, html.popup .acts, html.popup .empty, html.popup .tg, html.popup .strip { display: none !important; }
   html.popup, html.popup * { pointer-events: none !important; }
@@ -407,8 +435,17 @@
     <div class="empty">No sessions yet. A Claude Code session appears when it starts; Codex after its first voice call.</div>
   </div>
 
+  <nav class="side" id="side" aria-label="Settings">
+    <h1>Settings</h1>
+    <div id="sideList"></div>
+    <span class="grow"></span>
+    <small id="sideVer"></small>
+  </nav>
+
   <main>
     <div class="notes" id="notes"></div>
+    <iframe class="frame" data-s="characters" title="Characters"></iframe>
+    <iframe class="frame" data-s="integrations" title="Integrations"></iframe>
 
     <div class="groups">
       <section class="g" data-g="transcript">
@@ -437,7 +474,7 @@
           <div class="row col">
             <label class="lab" for="preset">Default voice<span class="help" id="presetHint"></span></label>
             <div class="pair"><select id="preset"></select><button class="btn" id="test" type="button"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3 1.5v9l7.5-4.5z"/></svg>Hear it</button></div>
-            <details class="tune" id="tune">
+            <details class="tune more" id="tune">
               <summary><b>Tune</b> speed, pitch, effects <span class="help" id="tuned" style="margin:0"></span></summary>
               <div class="grid">
                 <label for="tSpeed">Speed</label><input type="range" id="tSpeed" min="0.7" max="1.3" step="0.05"><span class="val" id="vSpeed"></span>
@@ -453,15 +490,15 @@
             <label class="lab" for="volume">Volume</label>
             <div class="slider"><input type="range" id="volume" min="0" max="1.5" step="0.05" value="1"><span class="val" id="volumeVal"></span></div>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="lang">Language<span class="help">When the agent does not say</span></label>
             <select id="lang"><option value="en">English</option><option value="pl">Polish</option><option value="auto">Detect from text</option></select>
           </div>
-          <div class="row">
+          <div class="more row">
             <div class="lab">Stop speaking key</div>
             <button class="key" id="stopKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
           </div>
-          <div class="row">
+          <div class="more row">
             <div class="lab">Mute key<span class="help">Click, then press the keys. Esc cancels, Backspace turns it off</span></div>
             <button class="key" id="muteKey" type="button"></button>
           </div>
@@ -473,11 +510,11 @@
             <label class="lab" for="speakingPopup">Show who speaks<span class="help">In the screen corner while an agent speaks</span></label>
             <label class="switch"><input type="checkbox" id="speakingPopup"><span></span></label>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="popupDictation">Show it while you dictate<span class="help">Your words in the corner as they are heard</span></label>
             <label class="switch"><input type="checkbox" id="popupDictation"><span></span></label>
           </div>
-          <div class="row" id="lingerRow">
+          <div class="more row" id="lingerRow">
             <div class="lab">Stays after<span class="help">How long the corner keeps the last words</span></div>
             <div class="seg" id="popupLinger" role="group" aria-label="Stays after"><button type="button" data-v="4">4 s</button><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button></div>
           </div>
@@ -491,23 +528,23 @@
             <label class="lab" for="hooks">Announce agent events<span class="help">When a session finishes a turn or needs you</span></label>
             <label class="switch"><input type="checkbox" id="hooks"><span></span></label>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="summary">Say what was finished<span class="help">In the agent's own words, when it answered in the voice's language</span></label>
             <label class="switch"><input type="checkbox" id="summary"><span></span></label>
           </div>
-          <div class="row col sub" id="summaryRow">
+          <div class="more row col sub" id="summaryRow">
             <div class="lab">How much</div>
             <div class="seg" id="summaryPart" role="group" aria-label="How much" style="align-self: flex-start"><button type="button" data-v="start:1">First</button><button type="button" data-v="end:1">Last</button><button type="button" data-v="end:2">Last 2</button><button type="button" data-v="end:3">Last 3</button></div>
           </div>
-          <div class="row">
+          <div class="more row">
             <div class="lab">Codex goals<span class="help">A thread working toward a goal goes on by itself: wait before announcing its turn</span></div>
             <div class="seg" id="goalWait" role="group" aria-label="Codex goals"><button type="button" data-v="0">Off</button><button type="button" data-v="3">3 s</button><button type="button" data-v="10">10 s</button></div>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="project">Start with the project name</label>
             <label class="switch"><input type="checkbox" id="project"><span></span></label>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="hookPreset">Voice<span class="help">Without characters</span></label>
             <select id="hookPreset"></select>
           </div>
@@ -517,7 +554,7 @@
       <section class="g" data-g="dictation">
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Dictation</span><span class="sum" id="sumDictation"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
-          <div class="row">
+          <div class="more row">
             <div class="lab">Hotkey<span class="help">Press to talk, press again or pause to send. Click to change</span></div>
             <button class="key" id="dictateKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
           </div>
@@ -525,19 +562,19 @@
             <label class="lab" for="dictateRouting">Pick the agent by name<span class="help">Start with a name, Claude, Codex or the project: "Clara, …". "Everyone, …" reaches all</span></label>
             <label class="switch"><input type="checkbox" id="dictateRouting"><span></span></label>
           </div>
-          <div class="row">
+          <div class="more row">
             <div class="lab">Show it</div>
             <div class="seg" id="dictateFeedback" role="group" aria-label="Show it"><button type="button" data-v="screen">Screen</button><button type="button" data-v="voice">Voice</button><button type="button" data-v="both">Both</button></div>
           </div>
-          <div class="row sub" id="lookRow">
+          <div class="more row sub" id="lookRow">
             <label class="lab" for="dictateTheme">Look<span class="help">The animation in the screen corner; a change plays a demo</span></label>
             <select id="dictateTheme"></select>
           </div>
-          <div class="row sub" id="sizeRow">
+          <div class="more row sub" id="sizeRow">
             <div class="lab">Size</div>
             <div class="seg" id="overlayScale" role="group" aria-label="Size"><button type="button" data-v="1">100%</button><button type="button" data-v="1.5">150%</button><button type="button" data-v="2">200%</button></div>
           </div>
-          <div class="row col">
+          <div class="more row col">
             <label class="lab" for="dictateTarget">Type into</label>
             <select id="dictateTarget">
               <option value="auto">The agent's terminal or app, else the window in front</option>
@@ -559,26 +596,26 @@
             <label class="lab" for="device">Speakers</label>
             <select id="device"></select>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="duckOn">Lower other apps while speaking</label>
             <label class="switch"><input type="checkbox" id="duckOn"><span></span></label>
           </div>
-          <div class="row col sub">
+          <div class="more row col sub">
             <label class="lab" for="duck">Down to</label>
             <div class="slider"><input type="range" id="duck" min="0" max="0.9" step="0.05" value="0.35"><span class="val" id="duckVal"></span></div>
           </div>
-          <div class="row col">
+          <div class="more row col">
             <label class="lab" for="mic">Microphone</label>
             <select id="mic"></select>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="barge">Stop when I start talking<span class="help">Use headphones, or voice may hear itself</span></label>
             <label class="switch"><input type="checkbox" id="barge"><span></span></label>
           </div>
         </div></div>
       </section>
 
-      <section class="g" data-g="clone" id="cloneGroup">
+      <section class="g more" data-g="clone" id="cloneGroup">
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Voice clone</span><span class="sum" id="sumClone"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
           <div class="clones" id="clones"></div>
@@ -606,7 +643,7 @@
           <p class="help" id="cloneMsg"></p>
         </div></div>
       </section>
-      <section class="g" data-g="models">
+      <section class="g more" data-g="models">
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Listening and memory</span><span class="sum" id="sumModels"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
           <div class="row col">
@@ -624,9 +661,9 @@
         </div></div>
       </section>
 
-      <!-- Not a folded group: it opens the Integrations window. -->
+      <!-- Not a folded group: it opens the full settings window. -->
       <section class="g win">
-        <button class="head" type="button" id="openIntegrations"><span class="t"><span class="name">Integrations</span><span class="sum">Claude Code, Codex, other agents, voices, models and GPU backends</span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5h2.5V5M9.5 2.5L5.5 6.5M8.5 7v2.5h-6v-6H5"/></svg></button>
+        <button class="head" type="button" id="openIntegrations"><span class="t"><span class="name">All settings</span><span class="sum">Keys, effects, dictation details, cloning, models, characters and integrations</span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5h2.5V5M9.5 2.5L5.5 6.5M8.5 7v2.5h-6v-6H5"/></svg></button>
       </section>
     </div>
   </main>
@@ -1262,8 +1299,45 @@ function characterList() {
   $('castNote').textContent = list.length ? '' : 'No characters yet.';
 }
 const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
-function openCharacters() { if (host) host.postMessage('characters'); }
-document.getElementById('openIntegrations').addEventListener('click', () => { if (host) host.postMessage('integrations'); });
+function openCharacters() { if (host) host.postMessage('settings:characters'); }
+document.getElementById('openIntegrations').addEventListener('click', () => { if (host) host.postMessage('settings'); });
+
+// ── The full settings window (?full=1): a list of sections, one shown ──
+const fullMode = new URLSearchParams(location.search).has('full');
+if (fullMode) {
+  document.documentElement.classList.add('full');
+  const sections = [...document.querySelectorAll('.g[data-g]')].filter(g => g.dataset.g !== 'transcript' && g.dataset.g !== 'characters') // the flyout's own; the full window has the Characters page
+    .map(g => ({ id: g.dataset.g, title: g.querySelector('.name').textContent, el: g }));
+  // Characters right after Speaking, where the voices are; Integrations last.
+  sections.splice(sections.findIndex(s => s.id === 'speaking') + 1, 0, { id: 'characters-page', title: 'Characters', frame: 'characters' });
+  sections.push({ id: 'integrations-page', title: 'Integrations', frame: 'integrations' });
+  const list = document.getElementById('sideList');
+  const show = id => {
+    for (const s of sections) {
+      const on = s.id === id;
+      list.querySelector('[data-id="' + s.id + '"]').classList.toggle('sel', on);
+      if (s.el) { s.el.classList.toggle('sel', on); s.el.classList.toggle('open', on); s.el.querySelector('.body > div').inert = !on; }
+      if (s.frame) {
+        const fr = document.querySelector('.frame[data-s="' + s.frame + '"]');
+        fr.classList.toggle('sel', on);
+        if (on && !fr.src) fr.src = '/settings/' + s.frame;
+      }
+    }
+    document.querySelector('.groups').hidden = !!sections.find(s => s.id === id).frame;
+    try { localStorage.setItem('voice.section', id); } catch (e) {}
+  };
+  for (const s of sections) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.id = s.id; b.textContent = s.title;
+    b.addEventListener('click', () => show(s.id));
+    list.append(b);
+  }
+  // ?section=characters opens there (the flyout's Manage characters); else where it was left.
+  const asked = new URLSearchParams(location.search).get('section');
+  let first = asked ? (asked + '-page') : null;
+  try { first = first || localStorage.getItem('voice.section'); } catch (e) {}
+  // After the rest of the script: the folded groups start inert, and the shown one must not be.
+  setTimeout(() => show(sections.some(s => s.id === first) ? first : 'speaking'), 0);
+}
 $('charManage').addEventListener('click', openCharacters);
 $('personas').addEventListener('change', () => {
   if (state) state.serve.personas = $('personas').checked;
@@ -1492,6 +1566,7 @@ function render(s) {
   fill($('model'), o.models.map(m => ({ value: m.dir, label: m.label })), s.listen.model);
   $('unload').value = s.serve.unload_after || '15m';
   $('ver').textContent = s.version ? 'voice ' + s.version : '';
+  $('sideVer').textContent = $('ver').textContent;
   // Until the first status poll, the sessions and the transcript come from the state.
   if (lastStatus.agents === undefined && Array.isArray(s.agents)) sessions = ordered(s.agents);
   if (lastStatus.transcript === undefined && Array.isArray(s.transcript)) transcript = s.transcript;

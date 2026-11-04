@@ -32,7 +32,11 @@ func (b *backend) panel() *flyout.Window {
 				case "characters":
 					b.showCharacters()
 				case "integrations":
-					b.showIntegrations()
+					b.showSettings("integrations")
+				case "settings":
+					b.showSettings("")
+				case "settings:characters":
+					b.showSettings("characters")
 				}
 			},
 		})
@@ -228,5 +232,41 @@ func (b *backend) showIntegrations() {
 	b.panel().Hide()
 	if err := integrationsWin.Show(); err != nil {
 		logf("integrations window: %v", err)
+	}
+}
+
+// The full settings window: every setting, characters and integrations,
+// beside a list of sections. The flyout keeps what is used every day.
+var (
+	settingsOnce    sync.Once
+	settingsWin     *flyout.Window
+	settingsMu      sync.Mutex
+	settingsSection string // the section the next show opens, "" for the last one
+)
+
+func (b *backend) showSettings(section string) {
+	settingsMu.Lock()
+	settingsSection = section
+	settingsMu.Unlock()
+	settingsOnce.Do(func() {
+		settingsWin = flyout.New(flyout.Options{
+			Normal: true, Title: "voice · Settings", Width: 980, Height: 700,
+			URL: func() string {
+				settingsMu.Lock()
+				defer settingsMu.Unlock()
+				u := "http://" + b.info.Addr + "/settings?full=1&t=" + b.info.Token
+				if settingsSection != "" {
+					u += "&section=" + settingsSection
+				}
+				return u
+			},
+			DataDir:    filepath.Join(core.DataDir(), "webview"),
+			Background: 0x16161d,
+			OnShow:     "onPanelShow()",
+		})
+	})
+	b.panel().Hide()
+	if err := settingsWin.Show(); err != nil {
+		logf("settings window: %v", err)
 	}
 }

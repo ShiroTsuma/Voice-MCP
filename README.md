@@ -280,7 +280,7 @@ One background process, `voice serve`, owns the audio device, the models and the
 
 - one persistent **voice** entry with an icon in the Windows volume mixer, where its volume can be set or muted and Windows remembers it;
 - a **tray icon**: switch voice, mute, stop, ducking and barge-in, open the settings window, folders and the log, restart or quit;
-- a **settings window** (click the tray icon): a dark flyout above the tray with who is speaking, your last dictation, the sessions and every setting. Changes apply at once and go to `settings.toml`, which overlays your `config.toml`. It closes when you click elsewhere or press Esc. It renders with WebView2;
+- a **settings window** (click the tray icon): a dark flyout above the tray with who is speaking, your last dictation, the sessions, the transcript and the settings used every day. **All settings** at its bottom opens the full window: every setting by section (voice tuning, keys, dictation details, cloning, recognition), with Characters and Integrations. Changes apply at once and go to `settings.toml`, which overlays your `config.toml`. It closes when you click elsewhere or press Esc. It renders with WebView2;
 - an optional **speaking popup** (Speaking → Show who speaks): the top of the settings window in the screen corner while an agent speaks, for 4, 8 or 12 seconds after; it never takes focus or clicks, and appears too when you close the settings window mid-sentence;
 - **hotkeys**: stop speaking (`Ctrl+Alt+End`), mute (`Ctrl+Alt+M`) and dictation (`Ctrl+Alt+D`);
 - **ducking**: other apps play at 35% while voice speaks;
