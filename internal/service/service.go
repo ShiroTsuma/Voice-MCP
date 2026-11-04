@@ -17,6 +17,7 @@ import (
 	"voice/internal/audio"
 	"voice/internal/clones"
 	"voice/internal/core"
+	"voice/internal/engine/httpengine"
 	"voice/internal/listen"
 	"voice/internal/preset"
 	"voice/sidecar"
@@ -389,7 +390,20 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		if rights == "" {
 			rights = "confirmed by the user to the agent"
 		}
-		p, err := clones.Add(a.Name, a.ClipPath, a.Transcript, a.Engine, rights, a.Replace)
+		clip, text := a.ClipPath, a.Transcript
+		// A reference description (dataset tools write them): the recording
+		// and what it says, in one JSON file.
+		if strings.EqualFold(filepath.Ext(clip), ".json") {
+			c, t, err := clones.Reference(clip)
+			if err != nil {
+				return nil, UserError{err.Error()}
+			}
+			clip = c
+			if text == "" {
+				text = t
+			}
+		}
+		p, err := clones.Add(a.Name, clip, text, a.Engine, rights, a.Replace)
 		if err != nil {
 			return nil, UserError{err.Error()}
 		}
@@ -399,7 +413,35 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		if NeedsTranscript(p.Engine) && p.Text == "" {
 			out["warning"] = p.Engine + " needs a transcript; call set_transcript"
 		}
+		// An engine that keeps voice prompts makes one now: speech then needs
+		// no recording.
+		if KeepsPrompts(p.Engine) && p.Text != "" {
+			if info, err := s.makePrompt(ctx, p); err != nil {
+				out["warning"] = "the voice works from its recording; its prompt was not made: " + err.Error()
+			} else {
+				out["prompt"] = info
+			}
+		}
 		return out, nil
+	case "make_prompt":
+		if err := need("name"); err != nil {
+			return nil, err
+		}
+		p, err := clones.Get(a.Name)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		if !KeepsPrompts(p.Engine) {
+			return nil, userErr("%s keeps no voice prompts; %s does", p.Engine, strings.Join(promptEngines(), ", "))
+		}
+		if p.Text == "" {
+			return nil, userErr("a voice prompt needs the transcript; call set_transcript first")
+		}
+		info, err := s.makePrompt(ctx, p)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		return map[string]any{"name": p.Name, "prompt": info}, nil
 	case "list":
 		rows := [][]any{}
 		for _, p := range clones.List() {
@@ -441,6 +483,52 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		return "removed " + a.Name, nil
 	}
 	return nil, userErr("unknown action %q", a.Action)
+}
+
+// KeepsPrompts reports whether an engine can save a voice prompt, so a
+// cloned voice speaks without its recording (sidecar/backends.json).
+func KeepsPrompts(engine string) bool {
+	b, ok := sidecar.Find(engine)
+	return ok && b.Prompts
+}
+
+func promptEngines() []string {
+	var out []string
+	for _, b := range sidecar.Backends() {
+		if b.Prompts {
+			out = append(out, b.Name)
+		}
+	}
+	return out
+}
+
+// makePrompt has the voice's engine make its prompt from the original
+// recording (the source copy, else ref.wav) and records it in the profile.
+func (s *Service) makePrompt(ctx context.Context, p clones.Profile) (map[string]any, error) {
+	e, err := s.Speaker.Engine(p.Engine)
+	if err != nil {
+		return nil, err
+	}
+	maker, ok := e.(interface {
+		MakePrompt(ctx context.Context, ref, text, out string) (httpengine.PromptInfo, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("engine %s cannot make a voice prompt", p.Engine)
+	}
+	ref := p.Ref
+	if p.OriginalPath != "" {
+		if _, err := os.Stat(p.OriginalPath); err == nil {
+			ref = p.OriginalPath
+		}
+	}
+	info, err := maker.MakePrompt(ctx, ref, p.Text, clones.PromptFile(p.Name))
+	if err != nil {
+		return nil, err
+	}
+	if err := clones.SetPrompt(p.Name, p.Engine, info.Model, info.Revision); err != nil {
+		return nil, err
+	}
+	return map[string]any{"file": clones.PromptFile(p.Name), "model": info.Model, "revision": info.Revision, "from": filepath.Base(ref)}, nil
 }
 
 // NeedsTranscript reports whether a cloning engine needs the clip's

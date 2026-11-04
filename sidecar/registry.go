@@ -40,6 +40,7 @@ type Backend struct {
 	Port       int            `json:"port"`
 	Clones     bool           `json:"clones"`
 	Transcript bool           `json:"transcript"` // cloning needs the clip's transcript
+	Prompts    bool           `json:"prompts"`    // saves a voice prompt, so a clone speaks without its recording
 	Languages  []string       `json:"languages"`  // what it speaks: en, pl, ...
 	Hidden     bool           `json:"hidden"`     // not offered in the windows (test)
 	Extra      map[string]any `json:"extra"`      // per-request settings voice sends

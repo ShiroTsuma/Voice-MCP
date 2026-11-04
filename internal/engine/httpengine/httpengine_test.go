@@ -150,3 +150,37 @@ func TestServerWithOtherOptionsMakesWay(t *testing.T) {
 		t.Fatal("the server with the chosen model is not healthy")
 	}
 }
+
+func TestVoicePromptGoesToItsEngineAndModel(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/synthesize" {
+			got = nil
+			json.NewDecoder(r.Body).Decode(&got)
+			w.Write(audio.EncodeWAV([]float32{0.1, 0.2}, 24000))
+			return
+		}
+		w.Write([]byte(`{"ready":true}`))
+	}))
+	defer srv.Close()
+	send := func(name, model string, v engine.Voice) bool {
+		ei, _ := New(name, engine.Config{"url": srv.URL, "start": []any{"x", "--option", "model=" + model}})
+		e := ei.(*Engine)
+		e.start = nil // the fake server is up; nothing to start
+		if err := e.Synthesize(context.Background(), engine.Request{Text: "hi", Voice: v}, func(engine.Chunk) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		_, ok := got["voice_prompt"]
+		return ok
+	}
+	v := engine.Voice{Ref: "ref.wav", Prompt: "prompt.pt", PromptEngine: "qwen3", PromptModel: "big"}
+	if !send("qwen3", "big", v) {
+		t.Fatal("the prompt did not go to its engine")
+	}
+	if send("qwen3", "small", v) {
+		t.Fatal("a prompt went to another model size")
+	}
+	if send("chatterbox", "big", v) {
+		t.Fatal("a qwen3 prompt went to chatterbox")
+	}
+}

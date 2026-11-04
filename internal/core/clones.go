@@ -52,7 +52,15 @@ func resolveVoice(v engine.Voice) (engine.Voice, error) {
 		if err != nil {
 			return engine.Voice{}, err
 		}
-		v = engine.Voice{Ref: p.Ref, RefText: p.Text}
+		v = engine.Voice{Ref: p.Ref, RefText: p.Text, Prompt: p.PromptPath, PromptEngine: p.PromptEngine, PromptModel: p.PromptModel}
+	}
+	// A saved voice prompt stands for the recording: speech from it needs no
+	// WAV, so a missing one is no reason to fall back.
+	if v.Prompt != "" {
+		if _, err := os.Stat(v.Prompt); err == nil {
+			return v, nil
+		}
+		v.Prompt, v.PromptEngine, v.PromptModel = "", "", ""
 	}
 	if v.Ref != "" {
 		if _, err := os.Stat(v.Ref); errors.Is(err, os.ErrNotExist) {

@@ -27,6 +27,11 @@ type Voice struct {
 	Mix     map[string]float64
 	Ref     string
 	RefText string
+	// Prompt is a voice prompt file engine PromptEngine made from Ref once;
+	// that engine reads no recording, the others use Ref as before.
+	Prompt       string
+	PromptEngine string
+	PromptModel  string // the model it was made with; another model uses Ref
 }
 
 // ErrNoCloning is returned by engines that cannot use a reference clip.

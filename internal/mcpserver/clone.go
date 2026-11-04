@@ -28,12 +28,12 @@ var cloneSchema = map[string]any{
 	"required": []string{"action"},
 	"properties": map[string]any{
 		"action": map[string]any{
-			"type": "string", "enum": []string{"record", "add", "list", "preview", "set_transcript", "remove"},
-			"description": "record: record the user from the microphone (three ticks count down, a chime starts and ends it), check the quality and add it as a cloned voice; tell the user to read a few natural sentences aloud first. add: import an existing clip as a cloned voice (creates preset clone-<name>); list: stored voices; preview: say a sample with a voice; set_transcript: store what the clip says; remove: delete a voice.",
+			"type": "string", "enum": []string{"record", "add", "list", "preview", "set_transcript", "make_prompt", "remove"},
+			"description": "record: record the user from the microphone (three ticks count down, a chime starts and ends it), check the quality and add it as a cloned voice; tell the user to read a few natural sentences aloud first. add: import an existing clip as a cloned voice (creates preset clone-<name>); list: stored voices; preview: say a sample with a voice; set_transcript: store what the clip says; make_prompt: make the voice's saved prompt again (qwen3 keeps one, so the voice speaks without its recording; add makes it already); remove: delete a voice.",
 		},
 		"seconds":    map[string]any{"type": "number", "minimum": 6, "maximum": 30, "description": "record: length of the recording in seconds (default 12)."},
 		"name":       map[string]any{"type": "string", "description": "Voice name: lowercase letters, digits, - or _ (max 40)."},
-		"clip_path":  map[string]any{"type": "string", "description": "add: absolute path to the recording (WAV; other formats need ffmpeg). 3-15 s of one clear speaker works best."},
+		"clip_path":  map[string]any{"type": "string", "description": "add: absolute path to the recording (WAV; other formats need ffmpeg), or to a reference .json with \"audio\" and \"text\". 3-15 s of one clear speaker works best."},
 		"transcript": map[string]any{"type": "string", "description": "add/set_transcript: exact words spoken in the clip. Optional for pocket, required for zipvoice and the GPU engines marked so below."},
 		"engine": map[string]any{
 			"type":        "string",

@@ -4,6 +4,7 @@ package clones
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -41,6 +42,18 @@ type Profile struct {
 	Engine   string    `toml:"engine"` // preferred engine
 	Rights   string    `toml:"rights"` // who confirmed the right to use this voice
 	Duration float64   `toml:"duration_seconds"`
+	// Original is the recording as it came (source.<ext>), kept as the
+	// source copy: ref.wav is trimmed and resampled from it.
+	Original string `toml:"original,omitempty"`
+	// Prompt is a voice prompt file (prompt.pt) an engine made from the
+	// recording once; with it, speech needs no recording. Its engine, model
+	// and model revision say what it works with.
+	Prompt         string `toml:"prompt,omitempty"`
+	PromptEngine   string `toml:"prompt_engine,omitempty"`
+	PromptModel    string `toml:"prompt_model,omitempty"`
+	PromptRevision string `toml:"prompt_revision,omitempty"`
+	PromptPath     string `toml:"-"` // Prompt as a full path, when there is one
+	OriginalPath   string `toml:"-"`
 }
 
 func dir(name string) string { return filepath.Join(Dir, name) }
@@ -88,6 +101,20 @@ func Add(name, src, text, engineName, rights string, replace bool) (Profile, err
 	}
 	var meta bytes.Buffer
 	toml.NewEncoder(&meta).Encode(p)
+	// The recording as it came stays as the source copy.
+	if orig, err := os.ReadFile(src); err == nil {
+		ext := strings.ToLower(filepath.Ext(src))
+		if ext == "" || len(ext) > 6 {
+			ext = ".wav"
+		}
+		p.Original = "source" + ext
+		meta.Reset()
+		toml.NewEncoder(&meta).Encode(p)
+		if err := os.WriteFile(filepath.Join(stage, p.Original), orig, 0o644); err != nil {
+			os.RemoveAll(stage)
+			return Profile{}, err
+		}
+	}
 	files := map[string][]byte{"ref.wav": audio.EncodeWAV(pcm, refRate), "voice.toml": meta.Bytes()}
 	if p.Text != "" {
 		files["ref.txt"] = []byte(p.Text + "\n")
@@ -125,7 +152,54 @@ func Get(name string) (Profile, error) {
 	if b, err := os.ReadFile(filepath.Join(d, "ref.txt")); err == nil {
 		p.Text = strings.TrimSpace(string(b))
 	}
+	if p.Prompt != "" {
+		p.PromptPath = filepath.Join(d, filepath.Base(p.Prompt))
+	}
+	if p.Original != "" {
+		p.OriginalPath = filepath.Join(d, filepath.Base(p.Original))
+	}
 	return p, nil
+}
+
+// PromptFile is where a voice's prompt goes.
+func PromptFile(name string) string { return filepath.Join(dir(name), "prompt.pt") }
+
+// SetPrompt records the prompt an engine saved to PromptFile(name).
+func SetPrompt(name, engine, model, revision string) error {
+	p, err := Get(name)
+	if err != nil {
+		return err
+	}
+	p.Prompt, p.PromptEngine, p.PromptModel, p.PromptRevision = "prompt.pt", engine, model, revision
+	var meta bytes.Buffer
+	if err := toml.NewEncoder(&meta).Encode(p); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir(name), "voice.toml"), meta.Bytes(), 0o644)
+}
+
+// Reference reads a reference description: a JSON file with the recording
+// ("audio", relative to the file's folder when relative) and what it says
+// ("text"), as dataset tools write them.
+func Reference(path string) (clip, text string, err error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	var r struct {
+		Audio string `json:"audio"`
+		Text  string `json:"text"`
+	}
+	if err := json.Unmarshal(bytes.TrimPrefix(b, []byte("\xEF\xBB\xBF")), &r); err != nil {
+		return "", "", fmt.Errorf("%s: %w", path, err)
+	}
+	if r.Audio == "" {
+		return "", "", fmt.Errorf("%s names no audio", path)
+	}
+	if !filepath.IsAbs(r.Audio) {
+		r.Audio = filepath.Join(filepath.Dir(path), r.Audio)
+	}
+	return r.Audio, strings.TrimSpace(r.Text), nil
 }
 
 func List() []Profile {

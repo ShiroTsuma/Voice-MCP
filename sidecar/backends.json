@@ -44,6 +44,7 @@
       "port": 8768,
       "clones": true,
       "transcript": true,
+      "prompts": true,
       "languages": ["de", "en", "es", "fr", "it", "ja", "ko", "pt", "ru", "zh"],
       "start_timeout": 1800,
       "prefetch": ["Qwen/Qwen3-TTS-12Hz-1.7B-Base"],

@@ -269,6 +269,40 @@ func (e *Engine) ensure(ctx context.Context) error {
 	return fmt.Errorf("engine %q: server did not come up within %s; see %s", e.name, e.timeout, filepath.Join(SidecarDir, e.name+".log"))
 }
 
+// PromptInfo is what a saved voice prompt was made with.
+type PromptInfo struct {
+	Model    string `json:"model"`
+	Revision string `json:"revision"`
+}
+
+// MakePrompt has the server make a voice prompt from a recording and its
+// transcript and save it to out (see the sidecar's POST /prompt).
+func (e *Engine) MakePrompt(ctx context.Context, ref, text, out string) (PromptInfo, error) {
+	if err := e.ensure(ctx); err != nil {
+		return PromptInfo{}, err
+	}
+	body, _ := json.Marshal(map[string]string{"ref_audio": ref, "ref_text": text, "out": out})
+	hr, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/prompt", bytes.NewReader(body))
+	hr.Header.Set("Content-Type", "application/json")
+	resp, err := e.client.Do(hr)
+	if err != nil {
+		return PromptInfo{}, fmt.Errorf("engine %q: %w", e.name, err)
+	}
+	defer resp.Body.Close()
+	var out2 struct {
+		PromptInfo
+		Error string `json:"error"`
+	}
+	json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out2)
+	if resp.StatusCode != http.StatusOK {
+		if out2.Error == "" {
+			out2.Error = resp.Status
+		}
+		return PromptInfo{}, fmt.Errorf("engine %q: %s", e.name, out2.Error)
+	}
+	return out2.PromptInfo, nil
+}
+
 func (e *Engine) Voices(ctx context.Context) ([]engine.VoiceInfo, error) {
 	if err := e.ensure(ctx); err != nil {
 		return nil, err
@@ -288,10 +322,18 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 	if err := e.ensure(ctx); err != nil {
 		return err
 	}
-	body, _ := json.Marshal(map[string]any{
+	payload := map[string]any{
 		"text": req.Text, "lang": req.Lang, "voice": req.Voice.Primary(),
 		"ref_audio": req.Voice.Ref, "ref_text": req.Voice.RefText, "speed": req.Speed, "extra": e.extra,
-	})
+	}
+	// A voice prompt this engine made, with the model it runs now: it reads
+	// that, not the recording. With another model size it uses the recording.
+	if v := req.Voice; v.Prompt != "" && v.PromptEngine == e.name {
+		if m := e.want()["model"]; v.PromptModel == "" || m == "" || m == v.PromptModel {
+			payload["voice_prompt"] = v.Prompt
+		}
+	}
+	body, _ := json.Marshal(payload)
 	hr, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/synthesize", bytes.NewReader(body))
 	hr.Header.Set("Content-Type", "application/json")
 	resp, err := e.client.Do(hr)

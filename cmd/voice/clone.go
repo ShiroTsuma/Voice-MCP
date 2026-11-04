@@ -21,6 +21,10 @@ var cloneUsage = `usage:
       three ticks count down, a chime starts and ends the recording; read a few
       natural sentences aloud. The clip is checked (level, clipping, noise) and added.
   voice clone add <name> <clip> [-text transcript] [-engine name] [-rights who] [-replace]
+      <clip> may be a reference.json with "audio" and "text" (as dataset tools write).
+  voice clone prompt <name>
+      makes the voice's prompt again (engines that keep one: qwen3), e.g. after
+      the model size changed. With a prompt the voice speaks without its recording.
   voice clone list
   voice clone preview <name> [-out file.wav] [text]
   voice clone text <name> <transcript>
@@ -101,6 +105,12 @@ func runClone(args []string) error {
 				fmt.Printf("quality: %v\n", w)
 			}
 		}
+		if pr, ok := m["prompt"].(map[string]any); ok {
+			fmt.Printf("voice prompt: %v (%v %v); it speaks without its recording now\n", pr["file"], pr["model"], pr["revision"])
+		}
+		if w, ok := m["warning"].(string); ok {
+			fmt.Println("warning: " + w)
+		}
 		if t, _ := m["transcript"].(string); t != "" {
 			fmt.Printf("transcript: %s\n", t)
 		} else {
@@ -114,8 +124,23 @@ func runClone(args []string) error {
 			if p.Text != "" {
 				hasText = "transcript"
 			}
-			fmt.Fprintf(w, "%s\t%.1f s\t%s\t%s\t%s\n", p.Name, p.Duration, p.Engine, hasText, p.Source)
+			prompt := ""
+			if p.Prompt != "" {
+				prompt = "prompt (" + p.PromptModel + ")"
+			}
+			fmt.Fprintf(w, "%s\t%.1f s\t%s\t%s\t%s\t%s\n", p.Name, p.Duration, p.Engine, hasText, prompt, p.Source)
 		}
+	case "prompt":
+		if len(pos) != 1 {
+			return errors.New(cloneUsage)
+		}
+		raw, err := c.Clone(ctx, service.CloneArgs{Action: "make_prompt", Name: pos[0]})
+		if err != nil {
+			return err
+		}
+		m, _ := raw.(map[string]any)
+		pr, _ := m["prompt"].(map[string]any)
+		fmt.Printf("voice prompt for %s: %v (%v %v, from %v)\n", pos[0], pr["file"], pr["model"], pr["revision"], pr["from"])
 	case "text":
 		if len(pos) < 2 {
 			return errors.New(cloneUsage)

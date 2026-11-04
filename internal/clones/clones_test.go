@@ -95,3 +95,36 @@ func TestCheckJudgesRecordings(t *testing.T) {
 		t.Error("noisy clip passed without a warning")
 	}
 }
+
+func TestReferenceSourceCopyAndPrompt(t *testing.T) {
+	Dir = t.TempDir()
+	src := clip(t, 0.3, 3)
+	ref := filepath.Join(filepath.Dir(src), "reference.json")
+	os.WriteFile(ref, []byte("\xEF\xBB\xBF"+`{"audio": "clip.wav", "text": " Hello there. ", "duration": 3}`), 0o644)
+	c, text, err := Reference(ref)
+	if err != nil || c != src || text != "Hello there." {
+		t.Fatalf("reference: %q %q %v", c, text, err)
+	}
+	p, err := Add("luna", c, text, "qwen3", "the speaker's consent", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ = Get("luna")
+	orig, _ := os.ReadFile(src)
+	if kept, err := os.ReadFile(p.OriginalPath); err != nil || string(kept) != string(orig) {
+		t.Fatalf("source copy %q: %v", p.OriginalPath, err)
+	}
+	if p.PromptPath != "" {
+		t.Fatal("a prompt before one was made")
+	}
+	if err := SetPrompt("luna", "qwen3", "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "abc123"); err != nil {
+		t.Fatal(err)
+	}
+	p, _ = Get("luna")
+	if p.PromptPath != PromptFile("luna") || p.PromptModel != "Qwen/Qwen3-TTS-12Hz-1.7B-Base" || p.PromptRevision != "abc123" || p.Rights != "the speaker's consent" || p.Text != "Hello there." {
+		t.Fatalf("after SetPrompt: %+v", p)
+	}
+	if _, _, err := Reference(filepath.Join(Dir, "missing.json")); err == nil {
+		t.Fatal("a missing reference read")
+	}
+}

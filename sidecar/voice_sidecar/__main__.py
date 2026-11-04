@@ -6,6 +6,10 @@ POST /synthesize  {"text", "lang", "voice", "ref_audio", "ref_text", "speed", "e
 GET  /health      {"backend", "ready", "clones", "options"}
 GET  /voices      [{"name", "lang", "gender"}]
 POST /shutdown    exits, so voice can start it with other options (a model size)
+POST /prompt      {"ref_audio", "ref_text", "out"} -> {"model", "revision", ...}: a
+                  backend that keeps voice prompts (qwen3) makes one from the clip
+                  and saves it to out; /synthesize then takes "voice_prompt" (that
+                  file) instead of ref_audio and reads no recording.
 
 The built-in backends are listed in ../backends.json, which voice and
 setup.ps1 read too.
@@ -97,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
             print("voice_sidecar asked to exit", file=sys.stderr, flush=True)
             threading.Thread(target=lambda: (time.sleep(0.2), os._exit(0)), daemon=True).start()
             return
-        if self.path != "/synthesize":
+        if self.path not in ("/synthesize", "/prompt"):
             self.reply(404, {"error": "not found"})
             return
         try:
@@ -105,8 +109,24 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             self.reply(400, {"error": f"bad JSON: {e}"})
             return
+        if self.path == "/prompt":
+            make = getattr(self.backend, "make_prompt", None)
+            if make is None:
+                self.reply(400, {"error": f"backend {self.name} keeps no voice prompts"})
+                return
+            try:
+                with self.lock:
+                    meta = make(req.get("ref_audio") or "", req.get("ref_text") or "", req.get("out") or "")
+                self.reply(200, meta)
+            except Exception as e:
+                traceback.print_exc(file=sys.stderr)
+                self.reply(500, {"error": f"{type(e).__name__}: {e}"})
+            return
         if not str(req.get("text", "")).strip():
             self.reply(400, {"error": "text is empty"})
+            return
+        if req.get("voice_prompt") and not hasattr(self.backend, "make_prompt"):
+            self.reply(400, {"error": f"backend {self.name} cannot use a voice prompt"})
             return
         if req.get("ref_audio") and not getattr(self.backend, "clones", False):
             self.reply(400, {"error": f"backend {self.name} cannot clone voices"})

@@ -32,6 +32,7 @@ voice runs large speech models in its Python **sidecar**: one small HTTP server 
 - `port`: unique, on 127.0.0.1. voice's server answers only there.
 - `clones`: the backend takes a reference clip. `transcript`: cloning needs what the clip says. voice then asks for it, and fills it with speech recognition when that is installed.
 - `extra`: settings sent with every request (`req["extra"]`).
+- `prompts`: the backend saves a **voice prompt** (see below), so a cloned voice speaks without its recording.
 - `option` (optional): one setting the Integrations window offers as a picker. The server gets it as `--option key=value`. A change is saved as `[sidecar.<name>] key = "..."` in `settings.toml`, and voice starts the server again with it on the next request, since `/health` reports the options a server runs with.
 
 `go test ./sidecar` checks the list: required fields, unique ports, an option default that is one of its choices.
@@ -56,6 +57,8 @@ class Backend:
 `req` has `text`, `lang` (en, pl, ...), `ref_audio` (a WAV path), `ref_text`, `speed` and `extra`. Return float samples in -1..1 and their rate.
 
 **VoicePrints** keeps whatever the model computes from a reference clip (an embedding, a prompt), so the clip is analysed once, not for every sentence. It keeps the result in memory and as a file in `sidecar_dir\voiceprints`, keyed by the clip (path, size, time), the transcript and the tag. Put into the tag whatever else the result depends on (the model, a mode). Then a new recording, transcript or model makes a new one by itself.
+
+**Saved voice prompts** (optional, `"prompts": true`). Give the backend `make_prompt(ref_audio, ref_text, out)`: it computes everything cloning needs from the recording once, saves it to `out` together with the model and its revision, and returns `{"model", "revision", ...}`. voice calls it through `POST /prompt` when a voice is cloned, or on `voice clone prompt <name>`. From then on `req["voice_prompt"]` names that file, and the backend reads it instead of `ref_audio`, without opening or even looking for the recording. voice sends the prompt only to the engine and model size that made it; another model size gets the recording, as before. `qwen3.py` is the example: the prompt keeps the speaker embedding, the reference audio's codes, the transcript and the mode flags, not just the embedding.
 
 Load the model in `__init__`: the server listens only after that, so `/health` answering means ready. Keep everything local. Downloading public model weights is fine, and they go to `sidecar_dir\models` (`HF_HOME`). Recordings, transcripts and profiles never leave the machine.
 
