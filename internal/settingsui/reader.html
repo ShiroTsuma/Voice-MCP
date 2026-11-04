@@ -36,8 +36,11 @@
   #list { flex: 1; overflow: hidden; padding: 24px 32px; display: flex; flex-direction: column; gap: 14px;
     mask-image: linear-gradient(to bottom, transparent 0, #000 40px, #000 100%); }
   #list::after { content: ""; flex: 0 0 8px; }
-  .msg { --light: var(--plain); padding-left: 14px; border-left: 3px solid color-mix(in oklab, var(--light) 70%, transparent);
+  /* As in the side window: who speaks as a square on the left, the words beside it. */
+  .msg { --light: var(--plain); display: grid; grid-template-columns: 40px 1fr; column-gap: 14px; align-items: start;
     opacity: .7; transition: opacity .5s var(--ease); animation: rise .35s var(--ease); }
+  .msg.live, .msg.last { grid-template-columns: 64px 1fr; }
+  .msg > div { min-width: 0; }
   .msg.live, .msg.last { opacity: 1; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   .head { display: flex; gap: 10px; align-items: baseline; font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
@@ -45,7 +48,8 @@
   .head .state { color: var(--ink-2); }
   .text { font: 15px/1.45 var(--ui-display); color: var(--ink-2); text-wrap: pretty; }
   .msg.live .text, .msg.last .text { font-size: 18px; line-height: 1.5; color: var(--ink); }
-  .msg.dictated .text, .msg.dictated.last .text { color: var(--you); }
+  .msg.dictated .text { color: color-mix(in oklab, var(--you) 75%, var(--ground)); }
+  .msg.dictated.last .text { color: var(--you); }
   .msg.dictated.last .text { font-size: 16px; }
   .text .br { display: block; height: 6px; }
   .text .who { font-weight: 600; color: var(--c, var(--ink-2)); }
@@ -60,13 +64,10 @@
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--light) 32%, transparent); }
   #empty { margin: auto; color: var(--ink-3); }
 
-  /* Who speaks: the character's picture, or their initial in their colour. */
-  .pic { flex: none; width: 22px; height: 22px; border-radius: 50%; object-fit: cover; align-self: center;
-    display: inline-grid; place-items: center; font: 600 11px/1 var(--ui); color: var(--ground);
-    background: var(--light); box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--light) 60%, transparent); }
-  .msg.live .head .pic, .msg.last .head .pic { width: 30px; height: 30px; font-size: 14px; }
-  .head { align-items: center; }
-  .text .who .pic { width: 20px; height: 20px; margin: 0 8px 0 1px; vertical-align: -4px; font-size: 10px; --light: var(--c, var(--plain)); }
+  /* Who speaks: the character's picture, or the shape of their voice in their colour. */
+  .pic { display: block; width: 100%; aspect-ratio: 1; border-radius: 4px; margin-top: 2px;
+    background: oklch(17% 0.003 260) no-repeat; }
+  .text .who-pic { display: inline-block; width: 22px; height: 22px; margin: 0 7px 0 0; vertical-align: -5px; }
 
   /* Opened with its hotkey: it scrolls, and says how it goes away. */
   .pinned #list { overflow-y: auto; scrollbar-width: thin; scrollbar-color: oklch(40% 0.003 260) transparent; }
@@ -104,15 +105,73 @@ const colourOf = n => { const c = charOf(n); return c ? (c.color || PALETTE[char
 const agentOf = pid => (status.agents || []).find(a => a.pid === pid);
 const nameOf = l => (l.pid && agentOf(l.pid) && agentOf(l.pid).name) || l.name || (l.pid ? 'A session' : 'voice');
 const pinned = () => !!status.reader_pinned;
-// A picture of whoever name is: the character's portrait, else their initial on their colour.
-function pic(name) {
+const YOU = 'oklch(90% 0.03 205)', PLAIN = 'oklch(80% 0.004 260)';
+
+// No picture: the shape of the voice, as in the side window. A spectrogram of a short phrase seeded by
+// the name, drawn in the character's colour.
+const printCache = {};
+const bell = (d, w) => Math.exp(-(d / w) * (d / w));
+function seeded(text, salt) {
+  let seed = [...String(text)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, salt);
+  return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+function voiceprint(c) {
+  const colour = c.colour, key = c.name + '|' + colour;
+  if (printCache[key]) return printCache[key];
+  const p = seeded(c.name, 11);
+  const v = { f0: 165 + p() * 85, pace: .75 + p() * .7, glide: -.15 + p() * .35 };
+  const W = 226, H = 124, fmax = 3400, r = seeded(c.name, 7);
+  const vowel = () => [320 + r() * 480, 950 + r() * 1350, 2350 + r() * 650];
+  const syl = []; let t = .04 + r() * .03, paused = false;
+  while (t < .97) {
+    const len = (.07 + r() * .07) / v.pace;
+    syl.push({ c: t + len / 2, w: len / 2.3, loud: .65 + r() * .35, F: vowel(), fric: r() < .35 });
+    t += len + (!paused && t > .4 && r() < .5 ? (paused = true, .07 / v.pace) : .004);
+  }
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H);
+  const ph = r() * 6;
+  for (let x = 0; x < W; x++) {
+    const tt = (x + .5) / W;
+    let env = 0, wsum = 0, F = [0, 0, 0], hiss = 0;
+    for (const g of syl) {
+      env = Math.max(env, bell(tt - g.c, g.w * 1.3) * g.loud);
+      const wt = bell(tt - g.c, g.w * 1.6) + 1e-6; wsum += wt;
+      F = F.map((f, i) => f + g.F[i] * wt);
+      if (g.fric) hiss += bell(tt - (g.c - g.w * 1.4), g.w * .7);
+    }
+    F = F.map(f => f / wsum);
+    const f0 = v.f0 * (1 + v.glide * (tt - .5) + .07 * Math.sin(tt * 7 + ph));
+    for (let y = 0; y < H; y++) {
+      const f = (1 - (y + .5) / H) * fmax, hn = f / f0, n = Math.round(hn), d = hn - n;
+      const comb = n >= 1 ? .78 + .22 * Math.exp(-d * d / .03) : 0;
+      const bw = .55 + .45 * env;
+      const res = .2 * Math.exp(-f / 600) + bell(f - F[0], 210 * bw) + .75 * bell(f - F[1], 260 * bw) + .5 * bell(f - F[2], 300 * bw);
+      let I = env * comb * res * Math.exp(-f / 3600) * 1.6;
+      I += Math.min(1, hiss) * .12 * bell(f - 3000, 600) * (.6 + .4 * r());
+      img.data[(y * W + x) * 4 + 3] = Math.min(255, Math.pow(I * 1.25, .62) * 255);
+    }
+  }
+  for (let i = 0; i < img.data.length; i += 4) img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+  ctx.putImageData(img, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = colour;
+  ctx.fillRect(0, 0, W, H);
+  return printCache[key] = cv.toDataURL();
+}
+
+// The square of whoever name is: the character's portrait, else the shape of their voice.
+function pic(name, colour, cls) {
+  const el = document.createElement('i'); el.className = cls || 'pic';
   const c = charOf(name);
   if (c && c.image) {
-    const img = document.createElement('img'); img.className = 'pic'; img.alt = ''; img.src = '/settings/avatar/' + c.image;
-    return img;
+    el.style.backgroundImage = 'url("/settings/avatar/' + c.image + '")';
+    el.style.backgroundSize = '108%'; el.style.backgroundPosition = '50% 30%';
+  } else {
+    el.style.backgroundImage = 'url("' + voiceprint({ name: (c && c.name) || name || '?', colour: colour || (c && colourOf(c.name)) || PLAIN }) + '")';
+    el.style.backgroundSize = '100% 100%';
   }
-  const s = document.createElement('span'); s.className = 'pic'; s.textContent = (String(name || '?').trim()[0] || '?').toUpperCase();
-  return s;
+  return el;
 }
 const appear = () => (state && state.serve && state.serve.reader_appear) === 'block' ? 'block' : 'words';
 
@@ -162,8 +221,7 @@ function build(l) {
   where.textContent = you ? (l.name ? 'to ' + l.name : '') : [clientName(l.client), l.project].filter(Boolean).join(' in ');
   const st = document.createElement('span'); st.className = 'state';
   const when = document.createElement('time'); when.textContent = clock(l.at);
-  if (you) head.append(who, where, st, when);
-  else head.append(pic(nameOf(l)), who, where, st, when);
+  head.append(who, where, st, when);
   const text = document.createElement('div'); text.className = 'text';
   const toks = tokens(l.text), spans = [];
   toks.forEach((t, i) => {
@@ -175,11 +233,12 @@ function build(l) {
       if (i) text.append(Object.assign(document.createElement('span'), { className: 'br' }));
       s.classList.add('who');
       const c = colourOf(t.w.slice(0, -1)); if (c) s.style.setProperty('--c', c);
-      text.append(pic(t.w.slice(0, -1)));
+      text.append(pic(t.w.slice(0, -1), null, 'pic who-pic'));
     } else if (i) text.append(' ');
     text.append(s); spans.push(s);
   });
-  el.append(head, text);
+  const body = document.createElement('div'); body.append(head, text);
+  el.append(you ? pic('You', YOU) : pic(nameOf(l)), body);
   return { el, toks, spans, st, l };
 }
 
@@ -187,7 +246,10 @@ function render() {
   const list = $('list');
   // Opened to read back, all the transcript keeps; else the last few.
   const t = (status.transcript || []).filter(l => l.kind === 'said' || l.kind === 'dictated').slice(pinned() ? -50 : -8);
+  // Opened to read back: start at the end, the newest in full.
+  const atEnd = pinned() && !document.body.classList.contains('pinned');
   document.body.classList.toggle('pinned', pinned());
+  if (atEnd) requestAnimationFrame(() => { const ls = $('list'); ls.scrollTop = ls.scrollHeight; followTop = ls.scrollTop; });
   if (!pinned()) away = false;
   const key = state && state.serve && state.serve.reader_hotkey;
   const hint = 'Scroll to read back' + (key && key !== 'none' ? ' · ' + key.replace(/\+/g, ' + ') + ' hides it' : '');
@@ -231,7 +293,8 @@ function dictation(list) {
   if (!el) {
     el = document.createElement('div'); el.id = 'dict'; el.className = 'msg dictated last';
     el.style.setProperty('--light', 'var(--you)');
-    el.innerHTML = '<div class="head"><b>You</b><span class="state"></span></div><div class="text"></div>';
+    el.innerHTML = '<div><div class="head"><b>You</b><span class="state"></span></div><div class="text"></div></div>';
+    el.prepend(pic('You', YOU));
   }
   if (list.lastElementChild !== el) list.append(el);
   const st = d.state === 'transcribing' ? 'transcribing…' : 'listening';
