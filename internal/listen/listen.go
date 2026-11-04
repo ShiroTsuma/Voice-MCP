@@ -27,14 +27,37 @@ type Listener struct {
 	cfg    preset.Listen
 	device string // output device for the chimes
 
-	mu   sync.Mutex
-	rec  *sherpa.Recognizer
-	used time.Time // last recognition, for idle unloading
-	busy int       // recognitions or recordings in progress
+	mu    sync.Mutex
+	rec   *sherpa.Recognizer
+	stale bool      // rec was loaded for another model; replace it when free
+	used  time.Time // last recognition, for idle unloading
+	busy  int       // recognitions or recordings in progress
 }
 
 func New(cfg *preset.Config) *Listener { return &Listener{cfg: cfg.Listen, device: cfg.Device} }
 
+// SetModel switches the recognition model, its language (Whisper) and
+// threads while voice runs: the loaded recognizer is replaced as soon as no
+// recognition uses it, and the next one loads the new model.
+func (l *Listener) SetModel(model, language string, threads int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if model == l.cfg.Model && language == l.cfg.Language && threads == l.cfg.Threads {
+		return
+	}
+	l.cfg.Model, l.cfg.Language, l.cfg.Threads = model, language, threads
+	if l.rec == nil {
+		return
+	}
+	if l.busy == 0 {
+		l.rec.Close()
+		l.rec = nil
+		return
+	}
+	l.stale = true
+}
+
+// modelDir: call with mu held.
 func (l *Listener) modelDir() string {
 	if filepath.IsAbs(l.cfg.Model) {
 		return l.cfg.Model
@@ -44,14 +67,23 @@ func (l *Listener) modelDir() string {
 
 // Available reports whether a recognition model is installed.
 func (l *Listener) Available() bool {
-	_, err := os.Stat(l.modelDir())
-	return l.cfg.Model != "" && err == nil
+	l.mu.Lock()
+	model, dir := l.cfg.Model, l.modelDir()
+	l.mu.Unlock()
+	_, err := os.Stat(dir)
+	return model != "" && err == nil
 }
 
 func (l *Listener) recognizer() (*sherpa.Recognizer, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.used = time.Now()
+	// The model changed: drop the old recognizer once only the caller holds
+	// the listener (callers take hold first; Warm does not).
+	if l.rec != nil && l.stale && l.busy <= 1 {
+		l.rec.Close()
+		l.rec, l.stale = nil, false
+	}
 	if l.rec != nil {
 		return l.rec, nil
 	}
@@ -94,7 +126,7 @@ func (l *Listener) UnloadIdle(after time.Duration) bool {
 		return false
 	}
 	l.rec.Close()
-	l.rec = nil
+	l.rec, l.stale = nil, false
 	return true
 }
 

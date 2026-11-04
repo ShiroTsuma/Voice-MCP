@@ -124,7 +124,7 @@ func runServe(args []string) error {
 	agents.Logf = logf
 	agents.Load(filepath.Join(core.DataDir(), "agents.json"))
 	ctl := startExtras(ctx, cfg, sp, l, agents)
-	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath}
+	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device + "\x00" + cfg.Listen.InputDevice}
 	ctl.onSpeaking, ctl.onDictating = b.speaking, b.dictating
 
 	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents}
@@ -178,6 +178,7 @@ type backend struct {
 	exe     string
 	logPath string
 	info    daemon.Info
+	devices string // output and input device this process opened
 }
 
 func (b *backend) save(fn func(*settings.Settings)) {
@@ -268,7 +269,14 @@ func (b *backend) reload() (bool, error) {
 		return false, err
 	}
 	cur := b.cfg
-	restart := next.Device != cur.Device || next.Listen.Model != cur.Listen.Model || next.Listen.InputDevice != cur.Listen.InputDevice
+	// The audio devices are opened once, at start; the recognizer switches live.
+	restart := next.Device+"\x00"+next.Listen.InputDevice != b.devices
+	if b.ctl != nil && b.ctl.l != nil {
+		b.ctl.l.SetModel(next.Listen.Model, next.Listen.Language, next.Listen.Threads)
+	}
+	// The windows show what is saved, a device waiting for the restart too,
+	// and dictation uses the words as saved.
+	cur.Device, cur.Listen = next.Device, next.Listen
 	cur.DefaultLang, cur.Volume, cur.Serve, cur.Hooks = next.DefaultLang, next.Volume, next.Serve, next.Hooks
 	cur.Characters = next.Characters
 	// Compare with the active preset too: voice_control set_preset switches it
