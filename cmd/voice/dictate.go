@@ -134,6 +134,39 @@ func (c *controller) feedback() (screen, voice bool) {
 	return true, false
 }
 
+// cornerSpeech shows the agent's ring in the screen corner while it speaks,
+// moving with the voice, in tint (0xRRGGBB, 0 for the default); off hides it.
+func (c *controller) cornerSpeech(on bool, tint uint32) {
+	if c.ov == nil {
+		return
+	}
+	c.speechMu.Lock()
+	defer c.speechMu.Unlock()
+	if c.speechStop != nil {
+		close(c.speechStop)
+		c.speechStop = nil
+	}
+	if !on {
+		c.ov.Set(func(s *overlay.State) { s.Speaking, s.SpeakLevel = false, 0 })
+		return
+	}
+	stop := make(chan struct{})
+	c.speechStop = stop
+	go func() {
+		tick := time.NewTicker(33 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			level := c.sp.Level()
+			c.ov.Set(func(s *overlay.State) { s.Speaking, s.SpeakLevel, s.Tint = true, level, tint })
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+			}
+		}
+	}()
+}
+
 // show changes the overlay, when dictation reports on screen.
 func (c *controller) show(change func(*overlay.State)) {
 	if screen, _ := c.feedback(); screen {

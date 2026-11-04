@@ -71,7 +71,8 @@ type Overlay struct {
 	scale     float64 // size on screen relative to the theme's canvas; 0 is 1
 	// Used on the window's thread only.
 	scene look.Scene
-	shown string // the theme scene draws
+	inner look.Scene // the agent's ring inside the user's: the same theme, smaller
+	shown string     // the theme scene draws
 	last  time.Time
 	timer bool
 	pos   point // where it shows this time
@@ -194,7 +195,7 @@ func (o *Overlay) paint(hwnd uintptr) {
 	o.mu.Unlock()
 	if o.scene == nil || name != o.shown {
 		// A new theme starts from nothing and grows in like any appearance.
-		o.scene, o.shown = theme(name).New(), name
+		o.scene, o.inner, o.shown = theme(name).New(), theme(name).New(), name
 	}
 	now := time.Now()
 	dt := now.Sub(o.last).Seconds()
@@ -202,7 +203,17 @@ func (o *Overlay) paint(hwnd uintptr) {
 		dt = 1.0 / 30
 	}
 	o.last = now
-	if !o.scene.Step(s.Show(now), s, now.Sub(o.start).Seconds(), dt) {
+	// Two rings of one theme: the user's (dictation) and, inside it, the
+	// agent's while it speaks: the recording animation moving with the
+	// voice, smaller and in the speaking character's colour.
+	t := now.Sub(o.start).Seconds()
+	outer := o.scene.Step(s.Show(now), s, t, dt)
+	si, innerKind := s, Hidden
+	if s.Speaking {
+		innerKind, si.Level = Recording, s.SpeakLevel
+	}
+	inner := o.inner.Step(innerKind, si, t, dt)
+	if !outer && !inner {
 		procKillTimer.Call(hwnd, 1)
 		procShowWindow.Call(hwnd, swHide)
 		o.timer = false
@@ -221,7 +232,21 @@ func (o *Overlay) paint(hwnd uintptr) {
 	if side != o.side {
 		o.pos, o.side = corner(int32(side)), side // a new size keeps to the corner
 	}
-	o.update(hwnd, scaled(o.scene.Render(), o.scene.Size(), side), int32(side), o.pos)
+	size := o.scene.Size()
+	var px []byte
+	if outer {
+		px = o.scene.Render()
+	} else {
+		px = make([]byte, size*size*4)
+	}
+	if inner {
+		tint := s.Tint
+		if tint == 0 {
+			tint = defaultTint
+		}
+		px = within(px, tinted(o.inner.Render(), tint), size, innerShare)
+	}
+	o.update(hwnd, scaled(px, size, side), int32(side), o.pos)
 	procShowWindow.Call(hwnd, swShowNA)
 }
 

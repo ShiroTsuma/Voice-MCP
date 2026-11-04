@@ -33,6 +33,9 @@ type controller struct {
 	l      *listen.Listener
 	agents *service.Agents
 	ov     *overlay.Overlay // dictation's state in the screen corner; nil if it could not open
+	// The agent's ring in the corner while it speaks: speechStop ends its feed.
+	speechMu   sync.Mutex
+	speechStop chan struct{}
 	// onSpeaking learns when speech starts and ends, onDictating when the user
 	// starts and stops dictating (the speaking popup).
 	onSpeaking, onDictating func(on bool)

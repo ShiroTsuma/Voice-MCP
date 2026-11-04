@@ -599,16 +599,8 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <label class="switch"><input type="checkbox" id="dictateRouting"><span></span></label>
           </div>
           <div class="more row">
-            <div class="lab">Show it</div>
-            <div class="seg" id="dictateFeedback" role="group" aria-label="Show it"><button type="button" data-v="screen">Screen</button><button type="button" data-v="voice">Voice</button><button type="button" data-v="both">Both</button></div>
-          </div>
-          <div class="more row sub" id="lookRow">
-            <label class="lab" for="dictateTheme">Look<span class="help">The animation in the screen corner; a change plays a demo</span></label>
-            <select id="dictateTheme"></select>
-          </div>
-          <div class="more row sub" id="sizeRow">
-            <div class="lab">Size</div>
-            <div class="seg" id="overlayScale" role="group" aria-label="Size"><button type="button" data-v="1">100%</button><button type="button" data-v="1.5">150%</button><button type="button" data-v="2">200%</button></div>
+            <label class="lab" for="dictateSay">Say what happened<span class="help">A short spoken line: sent, queued, or on the clipboard. The corner animation shows it too, see Corner animation</span></label>
+            <label class="switch"><input type="checkbox" id="dictateSay"><span></span></label>
           </div>
           <div class="more row col">
             <label class="lab" for="dictateTarget">Type into</label>
@@ -621,6 +613,28 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
           <div class="row">
             <label class="lab" for="dictateSubmit">Press Enter after typing<span class="help">Off: you check the text and send it yourself</span></label>
             <label class="switch"><input type="checkbox" id="dictateSubmit"><span></span></label>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g more" data-g="corner">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Corner animation</span><span class="sum" id="sumCorner"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row">
+            <label class="lab" for="cornerDictate">While you dictate<span class="help">The outer ring moves with your voice, then shows what happened to the message</span></label>
+            <label class="switch"><input type="checkbox" id="cornerDictate"><span></span></label>
+          </div>
+          <div class="row">
+            <label class="lab" for="cornerSpeak">While an agent speaks<span class="help">A smaller ring inside moves with its voice, in its character's colour, when no popup or settings window shows who speaks</span></label>
+            <label class="switch"><input type="checkbox" id="cornerSpeak"><span></span></label>
+          </div>
+          <div class="row" id="lookRow">
+            <label class="lab" for="dictateTheme">Look<span class="help">A change plays a demo</span></label>
+            <select id="dictateTheme"></select>
+          </div>
+          <div class="row" id="sizeRow">
+            <div class="lab">Size</div>
+            <div class="seg" id="overlayScale" role="group" aria-label="Size"><button type="button" data-v="1">100%</button><button type="button" data-v="1.5">150%</button><button type="button" data-v="2">200%</button></div>
           </div>
         </div></div>
       </section>
@@ -1114,7 +1128,7 @@ function renderSaid() {
       shown = key; spans = []; toks = [];
       if (fillRaf) { cancelAnimationFrame(fillRaf); fillRaf = 0; }
       $('line').className = 'line quiet preparing'; $('line').scrollTop = 0; $('line').title = '';
-      $('line').textContent = 'Getting the voice ready; the words follow as they are spoken.';
+      $('line').textContent = 'The voice is getting ready.';
     }
     saidCue(speakerName(line), 'is getting ready', speakerWhere(line));
     showPortrait(pidKey(line.pid), nameNow(line));
@@ -1591,7 +1605,8 @@ function summaries() {
   const goal = segValue('goalWait');
   $('sumAnnounce').textContent = !$('hooks').checked ? 'Off'
     : ($('summary').checked ? 'Says ' + part : 'Says only who finished') + ($('project').checked ? ', project first' : '') + (!goal || goal === '0' ? '' : ', Codex goals wait ' + goal + ' s');
-  const fb = segValue('dictateFeedback');
+  const fb = feedbackValue();
+  $('sumCorner').textContent = [$('cornerDictate').checked ? 'while you dictate' : '', $('cornerSpeak').checked ? 'while an agent speaks' : ''].filter(Boolean).join(' and ').replace(/^./, c => c.toUpperCase()) || 'Off';
   const tgt = { auto: "into the agent's terminal", console: 'into terminals only', window: 'into the window in front' }[$('dictateTarget').value];
   $('sumDictation').textContent = keyText($('dictateKey').dataset.value) + ', ' + ($('dictateRouting').checked ? 'to the agent you name' : tgt) + ', '
     + ({ screen: 'shown on screen', voice: 'told by voice', both: 'shown and told' }[fb] || 'shown on screen') + ($('dictateSubmit').checked ? ', Enter pressed' : '');
@@ -1747,7 +1762,9 @@ function render(s) {
   $('voiceReplies').checked = !!s.serve.voice_replies;
   setKey($('stopKey'), s.serve.stop_hotkey); setKey($('muteKey'), s.serve.mute_hotkey); setKey($('dictateKey'), s.serve.dictate_hotkey);
   $('dictateTarget').value = s.serve.dictate_target || 'auto'; $('dictateSubmit').checked = !!s.serve.dictate_submit;
-  seg('dictateFeedback', s.serve.dictate_feedback || 'screen'); overlayUI();
+  const fbNow = s.serve.dictate_feedback || 'screen';
+  $('cornerDictate').checked = fbNow !== 'voice'; $('dictateSay').checked = fbNow !== 'screen';
+  $('cornerSpeak').checked = s.serve.corner_speaking !== false;
   seg('overlayScale', String(s.serve.dictate_overlay_scale || 1.5));
   fill($('dictateTheme'), (o.themes || []).map(t => ({ value: t.name, label: t.label })), s.serve.dictate_theme || 'reference');
   $('dictateRouting').checked = !!s.serve.dictate_routing;
@@ -1777,7 +1794,12 @@ function seg(id, v) {
 }
 const segValue = id => ($(id).querySelector('button.on') || {}).dataset?.v;
 // The overlay's look and size matter only when dictation shows on screen.
-function overlayUI() { const screen = segValue('dictateFeedback') !== 'voice'; $('lookRow').hidden = $('sizeRow').hidden = !screen; }
+// Dictation's feedback from its two switches: the corner and a spoken line.
+// With both off the corner stays, so a dictation never ends unseen.
+function feedbackValue() {
+  const screen = $('cornerDictate').checked, voice = $('dictateSay').checked;
+  return screen && voice ? 'both' : voice ? 'voice' : 'screen';
+}
 function summaryUI() { $('summaryRow').hidden = !$('summary').checked; }
 function notes(list) { $('notes').textContent = (list || []).join('\n'); }
 // ── Tuning the default voice ──
@@ -2023,7 +2045,9 @@ const onSeg = (id, fn) => on(id, 'click', e => {
   if (!b || b.classList.contains('on')) return;
   seg(id, b.dataset.v); fn(b.dataset.v);
 });
-onSeg('dictateFeedback', v => { overlayUI(); save({ serve: { dictate_feedback: v } }); });
+on('cornerDictate', 'change', () => { if (!$('cornerDictate').checked && !$('dictateSay').checked) $('dictateSay').checked = true; save({ serve: { dictate_feedback: feedbackValue() } }); });
+on('dictateSay', 'change', () => { if (!$('cornerDictate').checked && !$('dictateSay').checked) $('cornerDictate').checked = true; save({ serve: { dictate_feedback: feedbackValue() } }); });
+on('cornerSpeak', 'change', () => save({ serve: { corner_speaking: $('cornerSpeak').checked } }));
 onSeg('overlayScale', v => save({ serve: { dictate_overlay_scale: +v } }));
 onSeg('goalWait', v => save({ hooks: { codex_goal_wait: +v } }));
 onSeg('popupLinger', v => save({ serve: { popup_linger: +v } }));

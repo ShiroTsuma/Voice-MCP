@@ -97,6 +97,10 @@ type Serve struct {
 	DictateRouting *bool `toml:"dictate_routing"`
 	// DictateTheme: how the overlay looks (overlay.Themes names).
 	DictateTheme string `toml:"dictate_theme"`
+	// CornerSpeaking: while an agent speaks and no popup or settings window
+	// shows it, a smaller ring in the corner animation moves with its voice
+	// (default on).
+	CornerSpeaking *bool `toml:"corner_speaking"`
 	// DictateOverlayScale: the overlay's size on screen, 1 = the theme's canvas.
 	DictateOverlayScale *float64 `toml:"dictate_overlay_scale"`
 	// Personas: sessions become their character (tone and voice); off keeps
@@ -309,6 +313,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if sv.DictateRouting != nil {
 		c.Serve.DictateRouting = sv.DictateRouting
+	}
+	if sv.CornerSpeaking != nil {
+		c.Serve.CornerSpeaking = sv.CornerSpeaking
 	}
 	if sv.DictateTheme != "" {
 		c.Serve.DictateTheme = sv.DictateTheme

@@ -14,10 +14,13 @@ const (
 	Queued            // State.Queued messages (1..7) wait for a busy agent
 	Done              // a message was delivered or typed: a short success moment
 	Problem           // failed or left on the clipboard: a short warning
+	// Speaking: an agent speaks. The overlay draws it as a smaller ring
+	// inside the user's (State.Speaking), so every theme shows it.
+	Speaking
 )
 
 func (k Kind) String() string {
-	return [...]string{"hidden", "recording", "transcribing", "queued", "done", "problem"}[k]
+	return [...]string{"hidden", "recording", "transcribing", "queued", "done", "problem", "speaking"}[k]
 }
 
 // State is what the overlay should show; the most important part wins.
@@ -28,9 +31,16 @@ type State struct {
 	Queued       int
 	Flash        Kind      // Done or Problem, shown until FlashUntil
 	FlashUntil   time.Time // then the theme lets it fade
+	// Speaking: an agent speaks and nothing else shows who (no popup, no
+	// settings window); SpeakLevel is the voice's level 0..1, Tint the
+	// speaking character's colour as 0xRRGGBB (0: the default).
+	Speaking   bool
+	SpeakLevel float64
+	Tint       uint32
 }
 
-// Show is the Kind s shows at now.
+// Show is the Kind the user's ring shows at now; an agent speaking is the
+// inner ring (State.Speaking), drawn beside whatever this is.
 func (s State) Show(now time.Time) Kind {
 	switch {
 	case s.Recording:

@@ -83,8 +83,11 @@ type Speaker struct {
 	nextID    int
 	lastErr   string
 	gone      map[string]bool // presets whose missing voice was already reported
-	wake      chan struct{}
-	closed    chan struct{}
+	// The sentence playing: its loudness every levelStep, from levelAt.
+	levels  []float32
+	levelAt time.Time
+	wake    chan struct{}
+	closed  chan struct{}
 }
 
 // OnActivity sets a callback for when speech starts (true) and when the
@@ -257,10 +260,44 @@ func (s *Speaker) Status() Status {
 // playing records that the runes [from, to) of it's text start now and last
 // pcm's length; everything before from is said.
 func (s *Speaker) playing(it *item, from, to int, pcm []float32) {
+	levels := envelope(pcm)
 	s.mu.Lock()
 	it.line.Done, it.line.From, it.line.To = from, from, to
 	it.line.At, it.line.Seconds = time.Now(), float64(len(pcm))/float64(audio.DeviceRate)
+	s.levels, s.levelAt = levels, it.line.At
 	s.mu.Unlock()
+}
+
+const levelStep = 40 * time.Millisecond
+
+// envelope is pcm's loudness every levelStep, 0..1.
+func envelope(pcm []float32) []float32 {
+	n := int(float64(audio.DeviceRate) * levelStep.Seconds())
+	out := make([]float32, 0, len(pcm)/n+1)
+	for i := 0; i < len(pcm); i += n {
+		end := min(i+n, len(pcm))
+		var sum float64
+		for _, v := range pcm[i:end] {
+			sum += float64(v) * float64(v)
+		}
+		rms := math.Sqrt(sum / float64(end-i))
+		out = append(out, float32(min(1, rms*4))) // speech peaks near 0.25 rms
+	}
+	return out
+}
+
+// Level is how loud the voice is now, 0..1, for an animation; 0 when quiet.
+func (s *Speaker) Level() float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.current == nil || len(s.levels) == 0 {
+		return 0
+	}
+	i := int(time.Since(s.levelAt) / levelStep)
+	if i < 0 || i >= len(s.levels) {
+		return 0
+	}
+	return float64(s.levels[i])
 }
 
 // Warm loads the active preset's engine for the default language, so the

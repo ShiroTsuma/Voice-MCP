@@ -30,6 +30,7 @@ type (
 const (
 	Hidden       = look.Hidden
 	Recording    = look.Recording
+	Speaking     = look.Speaking
 	Transcribing = look.Transcribing
 	Queued       = look.Queued
 	Done         = look.Done

@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -163,6 +165,34 @@ func (b *backend) speaking(on bool) {
 		b.showPopupLocked()
 	}
 	b.lingerLocked()
+	// Nothing on screen says who speaks (no popup, no settings window): the
+	// agent's ring in the corner does, in its character's colour.
+	sv := b.cfg.Serve
+	popupOn := sv.SpeakingPopup != nil && *sv.SpeakingPopup
+	corner := on && (sv.CornerSpeaking == nil || *sv.CornerSpeaking) && !popupOn && !b.panel().Visible()
+	b.ctl.cornerSpeech(corner, b.speakerTint())
+}
+
+// speakerTint is the colour of the character speaking now, 0xRRGGBB, or 0.
+func (b *backend) speakerTint() uint32 {
+	l := b.sp.Status().Line
+	if l == nil {
+		return 0
+	}
+	name := ""
+	for _, t := range b.ctl.agents.Transcript() {
+		if t.ID == l.ID {
+			name = t.Name
+		}
+	}
+	for _, ch := range b.cfg.Characters {
+		if name != "" && strings.EqualFold(ch.Name, name) {
+			if v, err := strconv.ParseUint(strings.TrimPrefix(ch.Color, "#"), 16, 32); err == nil && len(strings.TrimPrefix(ch.Color, "#")) == 6 {
+				return uint32(v)
+			}
+		}
+	}
+	return 0
 }
 
 // panelHidden brings the popup up when the settings window closes while an

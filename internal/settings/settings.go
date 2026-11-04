@@ -69,6 +69,7 @@ type Serve struct {
 	DictateFeedback     *string  `toml:"dictate_feedback,omitempty" json:"dictate_feedback,omitempty"`
 	DictateRouting      *bool    `toml:"dictate_routing,omitempty" json:"dictate_routing,omitempty"`
 	DictateTheme        *string  `toml:"dictate_theme,omitempty" json:"dictate_theme,omitempty"`
+	CornerSpeaking      *bool    `toml:"corner_speaking,omitempty" json:"corner_speaking,omitempty"`
 	DictateOverlayScale *float64 `toml:"dictate_overlay_scale,omitempty" json:"dictate_overlay_scale,omitempty"`
 	Personas            *bool    `toml:"personas,omitempty" json:"personas,omitempty"`
 	SpeakingPopup       *bool    `toml:"speaking_popup,omitempty" json:"speaking_popup,omitempty"`
