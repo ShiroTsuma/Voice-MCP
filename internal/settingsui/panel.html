@@ -392,7 +392,8 @@
   html.full .g.sel > .head svg, html.full .g.sel > .head .sum { display: none; }
   html.full .g.sel > .body { grid-template-rows: 1fr; }
   html.full .g.sel > .body > div { padding: 4px 28px 28px; max-width: 640px; }
-  html.full .frame { display: none; flex: 1; width: 100%; border: 0; background: var(--ground); }
+  .frame { display: none; }  /* only the full window shows them */
+  html.full .frame { flex: 1; width: 100%; border: 0; background: var(--ground); }
   html.full .frame.sel { display: block; }
 
   /* The speaking popup (?popup=1): the top alone, shown and never touched. */
