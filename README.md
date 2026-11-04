@@ -22,6 +22,7 @@
   <a href="#automatic-agent-setup">Automatic agent setup</a> ·
   <a href="#talk-to-your-agents">Talk to your agents</a> ·
   <a href="#characters">Characters</a> ·
+  <a href="#add-your-own-voice">Add your own voice</a> ·
   <a href="#updating-from-an-earlier-version">Updating</a> ·
   <a href="#reference">Reference</a>
 </p>
@@ -161,6 +162,70 @@ Sessions take their names from a list of characters (settings window → Charact
 Change a session's character by right-clicking it in the settings window, with `/character` in Claude Code (`/character Rebekka` switches at once; without a name it asks), or with `$character` in Codex.
 
 With **Give sessions characters** on, the agent plays its character in every reply, written and spoken, and speaks with its voice. The character changes only the tone: the agent still works correctly and keeps helping. Off, the names still route dictation, and agents keep their usual tone and the default voice.
+
+## Add your own voice
+
+A voice comes in three layers, each in `config.toml` next to `voice.exe` (create it from `config.example.toml`):
+
+1. An **engine** makes the sound. Kokoro, Piper, Windows SAPI and the GPU backends (Chatterbox, XTTS, F5) are built in. Any program that writes a WAV file can be another one (`type = "exec"`), and so can any server that speaks voice's HTTP protocol (`type = "http"`).
+2. A **preset** picks an engine and tunes it: voice, speed, pitch, effects, a different engine for Polish. The built-in `calm-mature` is Kokoro's `af_nicole`, slower and lower.
+3. A **character** speaks with a preset. Pick it in the Characters window (Voice), or set `preset` in its `[[characters]]` entry.
+
+For example, Chatterbox's own voice for one character, and a program of your own for another:
+
+```toml
+# 2. A preset on a built-in engine (install Chatterbox in Integrations first).
+[presets.rebekka-voice]
+engine = "chatterbox"
+description = "Chatterbox, English and Polish"
+
+# 1. An engine of your own: any command that turns text into a WAV.
+#    Placeholders: {text} {voice} {lang} {speed} {wpm} {out}; without {text}
+#    the text goes to stdin, with {out} the WAV is read from that file.
+[engines.my-tts]
+type = "exec"
+command = 'D:\tools\my-tts\my-tts.exe'
+args = ["--text", "{text}", "--out", "{out}"]
+
+[presets.clara-voice]
+engine = "my-tts"
+description = "My own TTS"
+speed = 0.95
+dsp = ["compress:soft", "reverb:room"]
+
+# 3. Characters with those presets.
+[[characters]]
+name = "Rebekka"
+traits = ["teasing", "playful"]
+preset = "rebekka-voice"
+
+[[characters]]
+name = "Clara"
+traits = ["calm", "formal"]
+preset = "clara-voice"
+```
+
+`voice presets` lists the presets with their engines, and **Hear it** in the settings window plays one. Cloning makes a preset for you: `voice clone add me clip.wav -engine chatterbox` creates `clone-me`. More engine and preset fields are in [config.example.toml](config.example.toml).
+
+**Show it in the Integrations window.** When your engine has something to install, a TOML file in the data folder's `integrations` folder (`voice paths` shows where) puts it in the window, with its state and the commands behind its buttons:
+
+```toml
+id    = "my-tts"
+group = "speech"
+title = "My TTS"
+about = "My own text-to-speech for the Clara voice."
+[check]
+path = 'D:\tools\my-tts\my-tts.exe'
+[[actions]]
+id = "install"
+label = "Install"
+when = "missing"
+long = true
+primary = true
+command = ["powershell", "-NoProfile", "-File", 'D:\tools\my-tts\install.ps1']
+```
+
+The window lists what can be installed; the preset in `config.toml` is what makes a character use it. [integrations/README.md](integrations/README.md) has every field, the built-in handlers and dependencies between integrations (`requires`).
 
 ## Updating from an earlier version
 
