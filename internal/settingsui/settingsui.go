@@ -226,7 +226,8 @@ func Register(mux *http.ServeMux, d Deps) {
 			reply(w, nil, fmt.Errorf("integrations run in the background process"))
 			return
 		}
-		reply(w, map[string]any{"groups": integrations.Groups, "items": d.Integrations.List()}, nil)
+		// The languages the user speaks, so the window can say what speaks them.
+		reply(w, map[string]any{"groups": integrations.Groups, "items": d.Integrations.List(), "languages": d.State()["languages"]}, nil)
 	})
 	api("integration", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ ID, Action string }
@@ -322,8 +323,9 @@ func merge(s *settings.Settings, in settings.Settings) {
 	set(&s.Serve.UnloadAfter, in.Serve.UnloadAfter)
 	set(&s.Listen.Model, in.Listen.Model)
 	set(&s.Listen.InputDevice, in.Listen.InputDevice)
-	if in.Listen.Languages != nil {
-		s.Listen.Languages = in.Listen.Languages
+	if in.Languages != nil {
+		s.Languages = in.Languages
+		s.Listen.Languages = nil
 	}
 	if in.Listen.Words != nil {
 		s.Listen.Words = in.Listen.Words

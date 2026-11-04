@@ -80,6 +80,8 @@
     font: 12px/1.45 var(--mono); color: var(--ink-2); white-space: pre-wrap; user-select: text; }
   .log .fail { color: var(--err); }
   .empty { margin-top: 30px; color: var(--ink-2); }
+  .langs { margin: 3px 0 0; font: 12.5px/1.45 var(--ui-small); color: var(--ink-2); }
+  .langs.miss { color: var(--part); }
   /* A setting of the integration, such as a model size. */
   .pick { margin: 8px 0 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 12.5px var(--ui-small); color: var(--ink-2); }
   .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
@@ -113,8 +115,25 @@ async function api(path, body) {
   return j;
 }
 
+// An integration shows in its group and in the ones it names in also (a GPU
+// voice that clones is under Cloning too).
+const inGroup = (i, g) => i.group === g || (i.also || []).includes(g);
+
+// Language names from the browser, and what speaks the user's languages.
+const langName = code => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
+const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+function languagesLine(it) {
+  const langs = it.languages || [], mine = data.languages || [];
+  if (!langs.length) return '';
+  if (langs.includes('*')) return mine.length ? 'Speaks your languages' : 'Nearly every language';
+  if (!mine.length) return langs.length > 4 ? langs.length + ' languages' : andList(langs.map(langName));
+  const yes = mine.filter(l => langs.includes(l)), no = mine.filter(l => !langs.includes(l));
+  if (!yes.length) return 'None of your languages (' + andList(no.map(langName)) + ')';
+  return (no.length ? 'Your ' + andList(yes.map(langName)) + '; not ' + andList(no.map(langName)) : 'Your ' + andList(yes.map(langName))) + (langs.length > yes.length ? ' (' + langs.length + ' languages in all)' : '');
+}
+
 function count(g) {
-  const items = data.items.filter(i => i.group === g.id);
+  const items = data.items.filter(i => inGroup(i, g.id));
   const on = items.filter(i => i.status.state === 'on').length;
   return items.length ? on + ' of ' + items.length + ' set up' : 'Nothing here yet';
 }
@@ -122,7 +141,7 @@ function count(g) {
 function renderGroups() {
   const nav = $('groups'); nav.textContent = '';
   for (const g of data.groups) {
-    if (!data.items.some(i => i.group === g.id)) continue;
+    if (!data.items.some(i => inGroup(i, g.id))) continue;
     const b = document.createElement('button'); b.type = 'button';
     b.className = g.id === group ? 'sel' : '';
     b.innerHTML = '<b></b><small></small>';
@@ -143,7 +162,8 @@ function renderMain() {
   const h = document.createElement('h2'); h.textContent = g.title;
   const p = document.createElement('p'); p.textContent = g.about;
   main.append(h, p);
-  const items = data.items.filter(i => i.group === group);
+  // The group's own first, then those from other groups that show here too.
+  const items = data.items.filter(i => inGroup(i, group)).sort((a, b) => (a.group === group ? 0 : 1) - (b.group === group ? 0 : 1));
   if (!items.length) { const e = document.createElement('p'); e.className = 'empty'; e.textContent = 'Nothing in this group.'; main.append(e); }
   for (const it of items) {
     const row = document.createElement('div'); row.className = 'it';
@@ -156,6 +176,13 @@ function renderMain() {
     h3.append(name, st);
     left.append(h3);
     if (it.about) { const a = document.createElement('p'); a.className = 'about'; a.textContent = it.about; left.append(a); }
+    const langs = languagesLine(it);
+    if (langs) {
+      const l = document.createElement('p'); l.className = 'langs'; l.textContent = langs;
+      const mine = data.languages || [];
+      if (mine.length && !(it.languages || []).includes('*') && !mine.some(m => it.languages.includes(m))) l.classList.add('miss');
+      left.append(l);
+    }
     const bits = [it.status.detail, it.size].filter(Boolean);
     if (bits.length || it.link) {
       const d = document.createElement('p'); d.className = 'detail'; d.textContent = bits.join(' · ');

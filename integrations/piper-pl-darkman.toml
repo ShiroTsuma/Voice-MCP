@@ -3,5 +3,6 @@ group = "speech"
 order = 32
 title = "Piper Polish: Darkman"
 about = "A Polish male voice."
+languages = ["pl"]
 uses = "model"
 model = "piper-pl-darkman"

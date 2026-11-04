@@ -75,6 +75,13 @@ type Integration struct {
 	// Requires names integrations this one needs: a long action installs
 	// the missing ones first (their primary action), in the same job.
 	Requires []string
+	// Also names other groups the integration shows in: a GPU voice that
+	// clones is under Cloning too.
+	Also []string
+	// Languages it speaks or recognizes (en, pl, ...; "*" for nearly all);
+	// empty when language does not apply. The window compares them with the
+	// languages the user speaks.
+	Languages []string
 	// Status reports the state; Do runs one of the actions Status offered.
 	Status func() Status
 	Do     func(ctx context.Context, action string, log func(string)) error
@@ -91,21 +98,23 @@ type Group struct {
 var Groups = []Group{
 	{"agents", "Agents", "The programs voice talks for and takes dictation to"},
 	{"speech", "Speaking", "Voices for what agents say"},
-	{"gpu", "GPU voices", "Larger voices and cloning in Polish, on a graphics card"},
+	{"gpu", "GPU voices", "Larger voices and cloning in more languages, on a graphics card"},
 	{"cloning", "Cloning", "Engines that make a voice from a recording"},
 	{"listening", "Listening", "Speech recognition for dictation and answers"},
 }
 
 // View is an integration as the window shows it.
 type View struct {
-	ID     string `json:"id"`
-	Group  string `json:"group"`
-	Title  string `json:"title"`
-	About  string `json:"about,omitempty"`
-	Size   string `json:"size,omitempty"`
-	Link   string `json:"link,omitempty"`
-	Status Status `json:"status"`
-	Job    *Job   `json:"job,omitempty"` // the running or last action
+	ID        string   `json:"id"`
+	Group     string   `json:"group"`
+	Also      []string `json:"also,omitempty"`
+	Languages []string `json:"languages,omitempty"`
+	Title     string   `json:"title"`
+	About     string   `json:"about,omitempty"`
+	Size      string   `json:"size,omitempty"`
+	Link      string   `json:"link,omitempty"`
+	Status    Status   `json:"status"`
+	Job       *Job     `json:"job,omitempty"` // the running or last action
 }
 
 // Job is an action that runs in the background.
@@ -155,7 +164,7 @@ func (r *Registry) List() []View {
 	sort.SliceStable(items, func(a, b int) bool { return order[items[a].Group] < order[items[b].Group] })
 	out := make([]View, 0, len(items))
 	for _, i := range items {
-		v := View{ID: i.ID, Group: i.Group, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link}
+		v := View{ID: i.ID, Group: i.Group, Also: i.Also, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link, Languages: i.Languages}
 		v.Status = safeStatus(i)
 		if missing := r.missing(i, items); len(missing) > 0 && v.Status.State != On {
 			names := make([]string, len(missing))

@@ -3,5 +3,6 @@ group = "speech"
 order = 30
 title = "Piper Polish: Gosia"
 about = "A Polish female voice, used when a request asks for Polish."
+languages = ["pl"]
 uses = "model"
 model = "piper-pl-gosia"

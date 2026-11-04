@@ -3,5 +3,6 @@ group = "speech"
 order = 31
 title = "Piper Polish: Justyna"
 about = "Another Polish female voice."
+languages = ["pl"]
 uses = "model"
 model = "piper-pl-justyna"

@@ -47,7 +47,12 @@ type integrationFile struct {
 	Uses     string   `toml:"uses"`     // a handler: claude-hooks, claude-mod, codex, session-api, model, sidecar, python, builtin
 	Requires []string `toml:"requires"` // integrations installed first (their ids)
 	Model    string   `toml:"model"`    // uses = "model": the name in `voice models`
-	Backend  string   `toml:"backend"`  // uses = "sidecar": chatterbox, xtts, f5
+	Backend  string   `toml:"backend"`  // uses = "sidecar": a name in sidecar/backends.json
+	// Also: other groups it shows in. Languages: what it speaks or
+	// recognizes (en, pl, ...; "*" for nearly all); a sidecar backend's come
+	// from sidecar/backends.json when the file names none.
+	Also      []string `toml:"also"`
+	Languages []string `toml:"languages"`
 
 	Check struct {
 		Path    string   `toml:"path"`    // installed when this exists (relative to the file's folder)
@@ -110,7 +115,10 @@ func readIntegrationFile(path string) integrationFile {
 }
 
 func makeIntegration(f integrationFile, handlers map[string]handler) integrations.Integration {
-	it := integrations.Integration{ID: f.ID, Group: f.Group, Title: f.Title, About: f.About, Size: f.Size, Link: f.Link, Requires: f.Requires}
+	it := integrations.Integration{ID: f.ID, Group: f.Group, Title: f.Title, About: f.About, Size: f.Size, Link: f.Link, Requires: f.Requires, Also: f.Also, Languages: f.Languages}
+	if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" && len(it.Languages) == 0 {
+		it.Languages = b.Languages
+	}
 	if f.Uses == "model" && it.Size == "" {
 		if m, ok := models.Find(f.Model); ok {
 			it.Size = fmt.Sprintf("%d MB", m.SizeMB)
@@ -512,14 +520,14 @@ func cloneEngines() []map[string]any {
 		return ok && models.Installed(m, engine.Dirs.Models, engine.Dirs.Runtime)
 	}
 	out := []map[string]any{
-		{"name": "pocket", "label": "Pocket", "note": "English, on the CPU; the default", "ready": model("pocket")},
-		{"name": "zipvoice", "label": "ZipVoice", "note": "English and Chinese, on the CPU; needs the transcript", "ready": model("zipvoice"), "transcript": true},
+		{"name": "pocket", "label": "Pocket", "note": "on the CPU; the default", "ready": model("pocket"), "languages": []string{"en"}},
+		{"name": "zipvoice", "label": "ZipVoice", "note": "on the CPU", "ready": model("zipvoice"), "transcript": true, "languages": []string{"en", "zh"}},
 	}
 	// The GPU backends, from sidecar/backends.json.
 	for _, b := range sidecar.Backends() {
 		if b.Clones && !b.Hidden {
 			out = append(out, map[string]any{"name": b.Name, "label": b.Label, "note": b.Note,
-				"ready": sidecarStatus(b.Name).State == integrations.On, "transcript": b.Transcript})
+				"ready": sidecarStatus(b.Name).State == integrations.On, "transcript": b.Transcript, "languages": b.Languages})
 		}
 	}
 	return out

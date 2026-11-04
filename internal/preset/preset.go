@@ -38,6 +38,10 @@ type Config struct {
 	StateDir   string                   `toml:"state_dir"`   // phrase cache, shared mute; default <data_root>\data
 	SidecarDir string                   `toml:"sidecar_dir"` // Python venv and GPU weights (GBs); default <data_root>\sidecar
 	Engines    map[string]engine.Config `toml:"engines"`
+	// Languages the user speaks (en, pl, ...): speech recognition keeps to
+	// them, and the windows say which voices and engines speak them. A later
+	// layer's list replaces it.
+	Languages []string `toml:"languages"`
 	// Sidecar holds the settings of the GPU backends (sidecar/backends.json),
 	// such as qwen3's model size: [sidecar.qwen3] model = "...".
 	Sidecar map[string]map[string]string `toml:"sidecar"`
@@ -118,8 +122,8 @@ type Listen struct {
 	// Words the recognizer should get right: names, terms, or "heard -> meant".
 	Words   []string `toml:"words"`
 	Threads int      `toml:"threads"`
-	// Languages the user speaks (en, pl, ...): Whisper recognizes only these
-	// instead of guessing among a hundred. Empty: any; language wins when set.
+	// Languages recognition keeps to: the top-level languages (set at load).
+	// [listen] languages from earlier versions is read when that is unset.
 	Languages []string `toml:"languages"`
 }
 
@@ -213,6 +217,11 @@ func Load(paths ...string) (*Config, error) {
 		}
 		cfg.merge(user)
 	}
+	// Languages are general; recognition reads them through Listen.
+	if len(cfg.Languages) == 0 {
+		cfg.Languages = cfg.Listen.Languages
+	}
+	cfg.Listen.Languages = cfg.Languages
 	// The GPU backends' engines come from sidecar/backends.json, with the
 	// user's settings; an [engines.<name>] table in config.toml replaces one.
 	if cfg.Engines == nil {
@@ -368,6 +377,9 @@ func (c *Config) merge(o *Config) {
 	}
 	for k, v := range o.Engines {
 		c.Engines[k] = v
+	}
+	if o.Languages != nil {
+		c.Languages = o.Languages
 	}
 	for name, set := range o.Sidecar {
 		if c.Sidecar == nil {

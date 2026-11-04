@@ -85,3 +85,19 @@ func TestBuiltinTraitsAndChoices(t *testing.T) {
 		t.Fatalf("choices: %v", got)
 	}
 }
+
+func TestLanguagesAreGeneral(t *testing.T) {
+	dir := t.TempDir()
+	old := filepath.Join(dir, "old.toml")
+	os.WriteFile(old, []byte("[listen]\nlanguages = [\"pl\", \"en\"]\n"), 0o644)
+	cfg, err := Load(old)
+	if err != nil || len(cfg.Languages) != 2 || cfg.Languages[0] != "pl" || len(cfg.Listen.Languages) != 2 {
+		t.Fatalf("[listen] languages from earlier versions: %v %v %v", cfg.Languages, cfg.Listen.Languages, err)
+	}
+	top := filepath.Join(dir, "top.toml")
+	os.WriteFile(top, []byte("languages = [\"de\"]\n"), 0o644)
+	cfg, err = Load(old, top)
+	if err != nil || len(cfg.Languages) != 1 || cfg.Languages[0] != "de" || cfg.Listen.Languages[0] != "de" {
+		t.Fatalf("top-level languages win: %v %v %v", cfg.Languages, cfg.Listen.Languages, err)
+	}
+}

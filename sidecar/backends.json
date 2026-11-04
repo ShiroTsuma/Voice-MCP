@@ -4,43 +4,47 @@
     {
       "name": "chatterbox",
       "label": "Chatterbox",
-      "note": "Polish and 22 more languages, on the GPU",
+      "note": "expressive speech and cloning, on the GPU",
       "pip": ["chatterbox-tts"],
       "module": "chatterbox",
       "port": 8765,
       "clones": true,
       "transcript": false,
+      "languages": ["ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh"],
       "extra": { "exaggeration": 0.4, "cfg_weight": 0.4 }
     },
     {
       "name": "f5",
       "label": "F5-TTS",
-      "note": "on an NVIDIA GPU; non-commercial",
+      "note": "cloning on an NVIDIA GPU; non-commercial",
       "pip": ["f5-tts"],
       "module": "f5_tts",
       "port": 8766,
       "clones": true,
-      "transcript": true
+      "transcript": true,
+      "languages": ["en", "zh"]
     },
     {
       "name": "xtts",
       "label": "XTTS v2",
-      "note": "17 languages incl. Polish, on the GPU; non-commercial",
+      "note": "cloning on the GPU; non-commercial",
       "pip": ["coqui-tts"],
       "module": "TTS",
       "port": 8767,
       "clones": true,
-      "transcript": false
+      "transcript": false,
+      "languages": ["ar", "cs", "de", "en", "es", "fr", "hi", "hu", "it", "ja", "ko", "nl", "pl", "pt", "ru", "tr", "zh"]
     },
     {
       "name": "qwen3",
       "label": "Qwen3-TTS",
-      "note": "10 languages (no Polish), close cloning from the clip and its transcript, on the GPU",
+      "note": "the closest cloning, from the clip and its transcript, on the GPU",
       "pip": ["qwen-tts"],
       "module": "qwen_tts",
       "port": 8768,
       "clones": true,
       "transcript": true,
+      "languages": ["de", "en", "es", "fr", "it", "ja", "ko", "pt", "ru", "zh"],
       "start_timeout": 1800,
       "prefetch": ["Qwen/Qwen3-TTS-12Hz-1.7B-Base"],
       "option": {

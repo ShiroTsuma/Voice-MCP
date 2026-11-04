@@ -3,5 +3,6 @@ group = "cloning"
 order = 10
 title = "Pocket"
 about = "Clones a voice from a short clip on the CPU, English; non-commercial license. The default cloning engine."
+languages = ["en"]
 uses = "model"
 model = "pocket"

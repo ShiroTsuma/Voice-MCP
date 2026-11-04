@@ -292,11 +292,11 @@ func (b *backend) reload() (bool, error) {
 	restart := next.Device+"\x00"+next.Listen.InputDevice != b.devices
 	if b.ctl != nil && b.ctl.l != nil {
 		b.ctl.l.SetModel(next.Listen.Model, next.Listen.Language, next.Listen.Threads)
-		b.ctl.l.SetLanguages(next.Listen.Languages)
+		b.ctl.l.SetLanguages(next.Languages)
 	}
 	// The windows show what is saved, a device waiting for the restart too,
 	// and dictation uses the words as saved.
-	cur.Device, cur.Listen = next.Device, next.Listen
+	cur.Device, cur.Listen, cur.Languages = next.Device, next.Listen, next.Languages
 	// A GPU backend's option (qwen3's model size) applies from the next
 	// request: its server is started again with it.
 	for _, sb := range sidecar.Backends() {
@@ -371,7 +371,8 @@ func (b *backend) state() map[string]any {
 			"dictate_hotkey": orNone(cfg.Serve.DictateHotkey), "dictate_submit": boolOr(cfg.Serve.DictateSubmit, false),
 			"dictate_target": cfg.Serve.DictateTarget, "dictate_feedback": cfg.Serve.DictateFeedback, "dictate_routing": boolOr(cfg.Serve.DictateRouting, false), "dictate_theme": cfg.Serve.DictateTheme, "dictate_overlay_scale": floatOr(cfg.Serve.DictateOverlayScale, 1.5), "personas": boolOr(cfg.Serve.Personas, false), "speaking_popup": boolOr(cfg.Serve.SpeakingPopup, false), "popup_linger": floatOr(cfg.Serve.PopupLinger, 8), "popup_dictation": boolOr(cfg.Serve.PopupDictation, false), "voice_replies": boolOr(cfg.Serve.VoiceReplies, false),
 		},
-		"listen":     map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice, "words": cfg.Listen.Words, "languages": cfg.Listen.Languages},
+		"listen":     map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice, "words": cfg.Listen.Words},
+		"languages":  cfg.Languages,
 		"characters": cfg.Characters,            // who sessions become; the settings window edits the list
 		"transcript": b.ctl.agents.Transcript(), // what voice said and what the user dictated, oldest first
 		"hooks": map[string]any{

@@ -29,6 +29,8 @@ type Settings struct {
 	// preset with its own speed, pitch and effects. Sent with a null value, a
 	// preset is removed.
 	Presets map[string]*Preset `toml:"presets,omitempty" json:"presets,omitempty"`
+	// Languages the user speaks; replaces config.toml's list when set.
+	Languages *[]string `toml:"languages,omitempty" json:"languages,omitempty"`
 	// Sidecar holds the GPU backends' chosen options, such as qwen3's model
 	// size ([sidecar.qwen3] model = "...").
 	Sidecar map[string]map[string]string `toml:"sidecar,omitempty" json:"sidecar,omitempty"`
@@ -81,7 +83,8 @@ type Listen struct {
 	InputDevice *string `toml:"input_device,omitempty" json:"input_device,omitempty"`
 	// Words replaces config.toml's list when set.
 	Words *[]string `toml:"words,omitempty" json:"words,omitempty"`
-	// Languages replaces config.toml's list when set.
+	// Languages: where earlier versions kept the top-level languages; read
+	// as long as those are unset, cleared when they are saved.
 	Languages *[]string `toml:"languages,omitempty" json:"languages,omitempty"`
 }
 

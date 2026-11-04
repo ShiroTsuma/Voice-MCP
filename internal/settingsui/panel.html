@@ -471,6 +471,19 @@
         </div></div>
       </section>
 
+      <section class="g more" data-g="languages">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Languages</span><span class="sum" id="sumLanguages"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row col">
+            <span class="lab" id="langsLab">Languages you speak<span class="help">Speech recognition keeps to these, so a short sentence is not taken for another language, and Integrations and Voice clone say which voices speak them. None: any.</span></span>
+            <div class="seg langs" id="langs" role="group" aria-labelledby="langsLab"></div>
+          </div>
+          <div class="row">
+            <label class="lab" for="lang">Speaking language<span class="help">When the agent does not say which</span></label>
+            <select id="lang"></select>
+          </div>
+        </div></div>
+      </section>
       <section class="g" data-g="speaking">
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Speaking</span><span class="sum" id="sumSpeaking"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
@@ -493,10 +506,7 @@
             <label class="lab" for="volume">Volume</label>
             <div class="slider"><input type="range" id="volume" min="0" max="1.5" step="0.05" value="1"><span class="val" id="volumeVal"></span></div>
           </div>
-          <div class="more row">
-            <label class="lab" for="lang">Language<span class="help">When the agent does not say</span></label>
-            <select id="lang"><option value="en">English</option><option value="pl">Polish</option><option value="auto">Detect from text</option></select>
-          </div>
+
           <div class="more row">
             <div class="lab">Stop speaking key</div>
             <button class="key" id="stopKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
@@ -653,10 +663,7 @@
             <label class="lab" for="model">Speech recognition</label>
             <select id="model"></select>
           </div>
-          <div class="row col">
-            <span class="lab" id="langsLab">Languages you speak<span class="help">Whisper recognizes only these, so a short sentence is not taken for another language. None: any. Parakeet knows its 25 languages by itself.</span></span>
-            <div class="seg langs" id="langs" role="group" aria-labelledby="langsLab"></div>
-          </div>
+
           <div class="row col">
             <label class="lab" for="words">Words to get right<span class="help">One per line: names and terms (character and project names are known already), or <i>heard -> meant</i> for what the recognizer keeps mishearing</span></label>
             <textarea id="words" class="words" rows="4" spellcheck="false" placeholder="README&#10;Codex&#10;rytmi -> README"></textarea>
@@ -718,7 +725,18 @@ function fill(select, items, current, extra) {
 
 const pct = v => Math.round(v * 100) + '%';
 function paintRange(el) { el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
-const langNames = { en: 'English', pl: 'Polish', auto: 'language from text' };
+// Language names from the browser, in the window's language: "Polish", and
+// a language in its own name for the toggles: "polski".
+const langName = code => { if (code === 'auto') return 'language from text'; try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
+const ownName = code => { try { const n = new Intl.DisplayNames([code], { type: 'language' }).of(code) || code; return n.charAt(0).toLocaleUpperCase(code) + n.slice(1); } catch { return code; } };
+// What speaks the user's languages: "speaks English and Polish", "speaks English; not Polish".
+function forMine(langs, mine) {
+  if (!langs || !langs.length || !mine || !mine.length) return '';
+  if (langs.includes('*')) return 'speaks your languages';
+  const yes = mine.filter(l => langs.includes(l)), no = mine.filter(l => !langs.includes(l));
+  if (!yes.length) return 'none of your languages (' + andList(no.map(langName)) + ')';
+  return 'speaks ' + andList(yes.map(langName)) + (no.length ? '; not ' + andList(no.map(langName)) : '');
+}
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : '';
 const clientName = c => /codex/i.test(c || '') ? 'Codex' : /claude/i.test(c || '') ? 'Claude' : cap(c || '');
 const whereOf = (client, project) => [clientName(client), project].filter(Boolean).join(' in ');
@@ -1069,7 +1087,7 @@ function renderSaid() {
     if (shown !== key) {
       shown = key; spans = []; toks = [];
       $('line').className = 'line quiet'; $('line').scrollTop = 0; $('line').title = '';
-      $('line').textContent = (muted ? 'Muted. ' : 'Quiet. ') + 'Default voice ' + defaultVoice() + ', ' + cap(langNames[(state && state.default_lang) || 'en'] || 'English') + '.';
+      $('line').textContent = (muted ? 'Muted. ' : 'Quiet. ') + 'Default voice ' + defaultVoice() + ', ' + cap(langName((state && state.default_lang) || 'en')) + '.';
     }
     saidCue('voice', 'has not spoken yet', '');
     showPortrait('voice', '');
@@ -1441,7 +1459,9 @@ function summaries() {
   $('sumCharacters').textContent = !$('personas').checked ? 'Off; sessions keep just their names'
     : !list.length ? 'On; no characters yet'
     : 'On; ' + (free.length ? andList(free) + ' not in a session' : 'all ' + list.length + ' in sessions');
-  $('sumSpeaking').textContent = [$('preset').value, pct($('volume').value), optText('lang').replace('Detect from text', 'language from text'),
+  const mine = (state && state.languages) || [];
+  $('sumLanguages').textContent = (mine.length ? andList(mine.map(langName)) : 'Any language') + '; speaks ' + langName($('lang').value || 'en') + ' when not told';
+  $('sumSpeaking').textContent = [$('preset').value, pct($('volume').value),
     'stop ' + keyText($('stopKey').dataset.value), 'mute ' + keyText($('muteKey').dataset.value)].join(', ');
   const part = { 'start:1': 'the first sentence', 'end:1': 'the last sentence', 'end:2': 'the last 2 sentences', 'end:3': 'the last 3 sentences' }[segValue('summaryPart')] || 'the last sentences';
   const goal = segValue('goalWait');
@@ -1546,7 +1566,8 @@ function fillCloneEngines(s) {
 }
 function cloneEngineHint() {
   const e = ((state && state.options.clone_engines) || []).find(x => x.name === $('cloneEngine').value);
-  $('cloneEngineHint').textContent = e ? e.note + (e.transcript ? '. It needs what the clip says: speech recognition writes it down' : '') + (e.ready ? '' : '. Not installed: see Integrations') : '';
+  const fit = e ? forMine(e.languages, state && state.languages) : '';
+  $('cloneEngineHint').textContent = e ? cap(e.note) + (fit ? '; ' + fit : '') + (e.transcript ? '. It needs what the clip says: speech recognition writes it down' : '') + (e.ready ? '' : '. Not installed: see Integrations') : '';
 }
 async function cloneFrom(file) {
   const a = cloneArgs(); if (!a || !file) return;
@@ -1580,7 +1601,7 @@ function render(s) {
   notes(s.notes);
   fillCloneEngines(s);
   if (document.activeElement !== $('words')) $('words').value = ((s.listen && s.listen.words) || []).join('\n');
-  renderLangs((s.listen && s.listen.languages) || []);
+  renderLangs(s.languages || []);
   // Base voices in the list; a tuned default (voice-default) shows as its base plus the tuning.
   const presets = o.presets.filter(p => !p.extends).map(p => ({ value: p.name, label: p.name }));
   const tunedDefault = o.presets.find(p => p.name === s.default_preset && p.extends);
@@ -1588,7 +1609,7 @@ function render(s) {
   if (!tuneTouched) { tune = fromPreset(tunedDefault || presetOf($('preset').value)); showTune(); }
   hint();
   $('volume').value = s.volume; $('volumeVal').textContent = pct(s.volume); paintRange($('volume'));
-  $('lang').value = s.default_lang || 'en';
+  fillLang(s);
   fill($('device'), o.outputs.map(d => ({ value: d, label: d })), s.device || 'default', [{ value: 'default', label: 'System default' }]);
   fill($('mic'), o.inputs.map(d => ({ value: d, label: d })), s.listen.input_device || 'default', [{ value: 'default', label: 'System default' }]);
   const duck = s.serve.duck;
@@ -1731,17 +1752,17 @@ on('tSoft', 'change', e => retune(() => { tune.soft = e.target.checked; }));
 on('words', 'change', () => save({ listen: { words: $('words').value.split('\n').map(w => w.trim()).filter(Boolean) } }));
 
 // Languages: common ones as toggles, plus any saved that the list lacks.
-const LANGS = [['en', 'English'], ['pl', 'Polski'], ['de', 'Deutsch'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano'], ['pt', 'Português'], ['nl', 'Nederlands'], ['cs', 'Čeština'], ['uk', 'Українська']];
+const LANGS = ['en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl', 'cs', 'uk', 'ru', 'zh', 'ja', 'ko'];
 let langsOn = [];
 function renderLangs(saved) {
   langsOn = saved.map(l => String(l).toLowerCase());
-  const all = LANGS.concat(langsOn.filter(l => !LANGS.some(([c]) => c === l)).map(l => [l, l]));
+  const all = LANGS.concat(langsOn.filter(l => !LANGS.includes(l)));
   const box = $('langs');
-  box.replaceChildren(...all.map(([code, name]) => {
+  box.replaceChildren(...all.map(code => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = code.toUpperCase();
-    b.title = name;
+    b.title = ownName(code) + ' (' + langName(code) + ')';
     b.dataset.lang = code;
     b.className = langsOn.includes(code) ? 'on' : '';
     b.setAttribute('aria-pressed', langsOn.includes(code) ? 'true' : 'false');
@@ -1754,8 +1775,16 @@ on('langs', 'click', e => {
   const code = b.dataset.lang;
   const next = langsOn.includes(code) ? langsOn.filter(l => l !== code) : langsOn.concat(code);
   renderLangs(next);
-  save({ listen: { languages: next } });
+  save({ languages: next });
 });
+// The speaking language: one of the user's (English when they chose none),
+// or detected from the text.
+function fillLang(s) {
+  const sel = $('lang'), cur = s.default_lang || 'en';
+  const codes = [...new Set([...(s.languages && s.languages.length ? s.languages : ['en']), ...(cur === 'auto' ? [] : [cur])])];
+  sel.replaceChildren(...[...codes, 'auto'].map(c => { const o = document.createElement('option'); o.value = c; o.textContent = c === 'auto' ? 'Detect from text' : langName(c); return o; }));
+  sel.value = cur;
+}
 on('tReset', 'click', () => retune(() => { tune = fromPreset(presetOf($('preset').value)); }));
 on('volume', 'input', () => { $('volumeVal').textContent = pct($('volume').value); paintRange($('volume')); save({ volume: +$('volume').value }, 350); });
 on('lang', 'change', () => save({ default_lang: $('lang').value }));
