@@ -1,0 +1,8 @@
+id = "chatterbox"
+group = "gpu"
+order = 10
+title = "Chatterbox"
+about = "Expressive speech and cloning, Polish included; NVIDIA or AMD."
+size = "5-10 GB"
+uses = "sidecar"
+backend = "chatterbox"

@@ -1,0 +1,6 @@
+id = "claude-mod"
+group = "agents"
+order = 20
+title = "Claude Code mod"
+about = "Starts a turn with dictation in an idle session, shows its name, adds /character and answers question dialogs by voice."
+uses = "claude-mod"

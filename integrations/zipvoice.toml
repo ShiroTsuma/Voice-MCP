@@ -1,0 +1,7 @@
+id = "zipvoice"
+group = "cloning"
+order = 20
+title = "ZipVoice"
+about = "Clones from a clip and its transcript, English and Chinese, on the CPU."
+uses = "model"
+model = "zipvoice"

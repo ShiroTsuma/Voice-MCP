@@ -1,0 +1,7 @@
+id = "parakeet"
+group = "listening"
+order = 20
+title = "Parakeet"
+about = "Fast speech recognition in 25 European languages, Polish and English among them. The default."
+uses = "model"
+model = "asr-parakeet"

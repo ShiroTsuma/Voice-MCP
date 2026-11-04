@@ -1,0 +1,7 @@
+id = "piper-pl-justyna"
+group = "speech"
+order = 31
+title = "Piper Polish: Justyna"
+about = "Another Polish female voice."
+uses = "model"
+model = "piper-pl-justyna"

@@ -134,8 +134,9 @@ func runServe(args []string) error {
 			Token: info.Token, SettingsPath: settingsPath(*cfgPath),
 			State: b.state, Reload: b.reload, Test: b.test, Restart: b.restart,
 			Status: b.panelStatus, Control: b.control, Session: agents.SetSwitches, AvatarDir: filepath.Join(core.DataDir(), "avatars"),
-			Character: func(pid uint32, name string) { agents.SetName(pid, name) },
-			Clone:     svc.Clone,
+			Character:    func(pid uint32, name string) { agents.SetName(pid, name) },
+			Clone:        svc.Clone,
+			Integrations: newIntegrations(agents),
 		})
 		if !*noTray {
 			once.Do(func() { go tray.Run(b.trayActions()) })

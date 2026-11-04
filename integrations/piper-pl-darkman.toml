@@ -1,0 +1,7 @@
+id = "piper-pl-darkman"
+group = "speech"
+order = 32
+title = "Piper Polish: Darkman"
+about = "A Polish male voice."
+uses = "model"
+model = "piper-pl-darkman"

@@ -1,0 +1,7 @@
+id = "session-api"
+group = "agents"
+order = 40
+title = "Other agents"
+about = "Any agent, a local model's too, can register over HTTP, take dictation, speak and message other sessions."
+link = "https://github.com/ShiroTsuma/Voice-MCP/blob/main/docs/http-api.md"
+uses = "session-api"

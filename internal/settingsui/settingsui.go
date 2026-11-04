@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 
+	"voice/internal/integrations"
 	"voice/internal/service"
 	"voice/internal/settings"
 )
@@ -24,6 +25,9 @@ var page []byte
 
 //go:embed characters.html
 var charactersPage []byte
+
+//go:embed integrations.html
+var integrationsPage []byte
 
 type Deps struct {
 	Token        string
@@ -50,6 +54,8 @@ type Deps struct {
 	AvatarDir string
 	// Clone runs a voice_clone action (record, add, list, preview, remove).
 	Clone func(ctx context.Context, a service.CloneArgs) (any, error)
+	// Integrations is the Integrations window's list.
+	Integrations *integrations.Registry
 }
 
 const cookie = "voice_token"
@@ -89,6 +95,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	servePage("/settings", page)
 	servePage("/settings/characters", charactersPage)
+	servePage("/settings/integrations", integrationsPage)
 	// Character pictures, by the names saveAvatar gives them.
 	mux.HandleFunc("/settings/avatar/", func(w http.ResponseWriter, r *http.Request) {
 		path, err := avatarPath(d.AvatarDir, strings.TrimPrefix(r.URL.Path, "/settings/avatar/"))
@@ -202,6 +209,22 @@ func Register(mux *http.ServeMux, d Deps) {
 		go d.Restart()
 	})
 	api("status", func(w http.ResponseWriter, r *http.Request) { reply(w, d.Status(), nil) })
+	api("integrations", func(w http.ResponseWriter, r *http.Request) {
+		if d.Integrations == nil {
+			reply(w, nil, fmt.Errorf("integrations run in the background process"))
+			return
+		}
+		reply(w, map[string]any{"groups": integrations.Groups, "items": d.Integrations.List()}, nil)
+	})
+	api("integration", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ ID, Action string }
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || d.Integrations == nil {
+			reply(w, nil, fmt.Errorf("integration needs id and action"))
+			return
+		}
+		job, err := d.Integrations.Start(in.ID, in.Action)
+		reply(w, job, err)
+	})
 	api("control", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Action string }
 		json.NewDecoder(r.Body).Decode(&in)

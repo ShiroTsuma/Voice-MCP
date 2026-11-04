@@ -249,3 +249,21 @@ func TestCodexServer(t *testing.T) {
 		t.Fatalf("after remove:\n%s", b)
 	}
 }
+
+func TestHasHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	if HasHooks(path) {
+		t.Fatal("no file")
+	}
+	if _, err := Claude(path, exe); err != nil {
+		t.Fatal(err)
+	}
+	if !HasHooks(path) {
+		b, _ := os.ReadFile(path)
+		t.Fatalf("hooks Claude wrote are not found:\n%s", b)
+	}
+	if _, err := RemoveClaude(path); err != nil || HasHooks(path) {
+		t.Fatalf("after remove: %v", err)
+	}
+}

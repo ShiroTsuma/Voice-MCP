@@ -1,0 +1,7 @@
+id = "whisper"
+group = "listening"
+order = 30
+title = "Whisper"
+about = "Recognition in about 100 languages, several times slower on the CPU."
+uses = "model"
+model = "asr-whisper"

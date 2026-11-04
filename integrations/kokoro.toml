@@ -1,0 +1,7 @@
+id = "kokoro"
+group = "speech"
+order = 20
+title = "Kokoro"
+about = "54 voices, English at its best; the default voices."
+uses = "model"
+model = "kokoro"

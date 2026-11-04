@@ -28,8 +28,11 @@ func (b *backend) panel() *flyout.Window {
 			OnHide: b.panelHidden,
 			// The panel's "Manage characters" button opens the characters window.
 			OnMessage: func(m string) {
-				if m == "characters" {
+				switch m {
+				case "characters":
 					b.showCharacters()
+				case "integrations":
+					b.showIntegrations()
 				}
 			},
 		})
@@ -204,4 +207,26 @@ func (b *backend) lingerLocked() {
 		return
 	}
 	popupHide = time.AfterFunc(b.cfg.Serve.Linger(), popup.Hide)
+}
+
+// The Integrations window: an ordinary window like the characters one.
+var (
+	integrationsOnce sync.Once
+	integrationsWin  *flyout.Window
+)
+
+func (b *backend) showIntegrations() {
+	integrationsOnce.Do(func() {
+		integrationsWin = flyout.New(flyout.Options{
+			Normal: true, Title: "voice · Integrations", Width: 960, Height: 680,
+			URL:        func() string { return "http://" + b.info.Addr + "/settings/integrations?t=" + b.info.Token },
+			DataDir:    filepath.Join(core.DataDir(), "webview"),
+			Background: 0x16161d,
+			OnShow:     "onShow()",
+		})
+	})
+	b.panel().Hide()
+	if err := integrationsWin.Show(); err != nil {
+		logf("integrations window: %v", err)
+	}
 }

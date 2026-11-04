@@ -1,0 +1,244 @@
+// Package integrations is the list behind voice's Integrations window: the
+// agents voice is wired into, its speech, cloning and listening models, the
+// GPU backends. Each integration is a module of the same shape, a status and
+// the actions it offers, so a new one is one more entry in the registry and
+// the window needs no change. Actions that take long (a download, a backend
+// setup) run as jobs whose log the window follows.
+package integrations
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+// State is how an integration stands.
+type State string
+
+const (
+	On      State = "on"      // installed and in use
+	Off     State = "off"     // installed, switched off
+	Missing State = "missing" // not installed; an action adds it
+	Partly  State = "partly"  // some of it is set up, or it needs a step by the user
+	Error   State = "error"   // it should work and does not
+)
+
+// Action is something the user can do with an integration.
+type Action struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	// Long actions run as a job with a log (a download, a setup).
+	Long bool `json:"long,omitempty"`
+	// Primary is the one the window shows as the main button.
+	Primary bool `json:"primary,omitempty"`
+}
+
+// Status is an integration's state now, with a line saying why, and what can
+// be done.
+type Status struct {
+	State   State    `json:"state"`
+	Detail  string   `json:"detail,omitempty"`
+	Actions []Action `json:"actions,omitempty"`
+}
+
+// Integration is one module. Status must be quick (it runs on every refresh
+// of the window); Do runs an action and writes what it does to log.
+type Integration struct {
+	ID    string
+	Group string // one of Groups
+	Title string
+	About string // one sentence: what it gives the user
+	Size  string // what it takes on disk, when it is a download
+	Link  string // where to read more
+	// Status reports the state; Do runs one of the actions Status offered.
+	Status func() Status
+	Do     func(ctx context.Context, action string, log func(string)) error
+}
+
+// Group is a section of the window.
+type Group struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	About string `json:"about"`
+}
+
+// Groups orders the window's sections.
+var Groups = []Group{
+	{"agents", "Agents", "The programs voice talks for and takes dictation to"},
+	{"speech", "Speaking", "Voices for what agents say"},
+	{"gpu", "GPU voices", "Larger voices and cloning in Polish, on a graphics card"},
+	{"cloning", "Cloning", "Engines that make a voice from a recording"},
+	{"listening", "Listening", "Speech recognition for dictation and answers"},
+}
+
+// View is an integration as the window shows it.
+type View struct {
+	ID     string `json:"id"`
+	Group  string `json:"group"`
+	Title  string `json:"title"`
+	About  string `json:"about,omitempty"`
+	Size   string `json:"size,omitempty"`
+	Link   string `json:"link,omitempty"`
+	Status Status `json:"status"`
+	Job    *Job   `json:"job,omitempty"` // the running or last action
+}
+
+// Job is an action that runs in the background.
+type Job struct {
+	ID      string    `json:"id"`
+	Action  string    `json:"action"`
+	Started time.Time `json:"started"`
+	Done    bool      `json:"done"`
+	Error   string    `json:"error,omitempty"`
+	Log     []string  `json:"log"`
+}
+
+// Registry holds the integrations and their jobs.
+type Registry struct {
+	mu    sync.Mutex
+	items []Integration
+	jobs  map[string]*Job // by integration ID: the latest
+	seq   int
+}
+
+// Add registers an integration; a later one with the same ID replaces it.
+func (r *Registry) Add(i Integration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k, x := range r.items {
+		if x.ID == i.ID {
+			r.items[k] = i
+			return
+		}
+	}
+	r.items = append(r.items, i)
+}
+
+// List is every integration with its status, in group order.
+func (r *Registry) List() []View {
+	r.mu.Lock()
+	items := append([]Integration(nil), r.items...)
+	jobs := map[string]Job{}
+	for id, j := range r.jobs {
+		jobs[id] = j.copy()
+	}
+	r.mu.Unlock()
+	order := map[string]int{}
+	for k, g := range Groups {
+		order[g.ID] = k
+	}
+	sort.SliceStable(items, func(a, b int) bool { return order[items[a].Group] < order[items[b].Group] })
+	out := make([]View, 0, len(items))
+	for _, i := range items {
+		v := View{ID: i.ID, Group: i.Group, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link}
+		v.Status = safeStatus(i)
+		if j, ok := jobs[i.ID]; ok {
+			v.Job = &j
+			if !j.Done {
+				v.Status.Actions = nil // one action at a time
+			}
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func safeStatus(i Integration) (st Status) {
+	defer func() {
+		if p := recover(); p != nil {
+			st = Status{State: Error, Detail: fmt.Sprint("status failed: ", p)}
+		}
+	}()
+	if i.Status == nil {
+		return Status{State: On}
+	}
+	return i.Status()
+}
+
+// Start runs action on integration id: at once for a short action, as a job
+// for a long one. It returns the job; a short action's job is already done.
+func (r *Registry) Start(id, action string) (Job, error) {
+	r.mu.Lock()
+	var it *Integration
+	for k := range r.items {
+		if r.items[k].ID == id {
+			it = &r.items[k]
+		}
+	}
+	if it == nil {
+		r.mu.Unlock()
+		return Job{}, fmt.Errorf("no integration %q", id)
+	}
+	if j := r.jobs[id]; j != nil && !j.Done {
+		r.mu.Unlock()
+		return Job{}, fmt.Errorf("%s is busy with %s", it.Title, j.Action)
+	}
+	i := *it
+	r.mu.Unlock()
+
+	var act *Action
+	for _, a := range safeStatus(i).Actions {
+		if a.ID == action {
+			a := a
+			act = &a
+		}
+	}
+	if act == nil || i.Do == nil {
+		return Job{}, fmt.Errorf("%s cannot %s now", i.Title, action)
+	}
+
+	r.mu.Lock()
+	if r.jobs == nil {
+		r.jobs = map[string]*Job{}
+	}
+	r.seq++
+	j := &Job{ID: fmt.Sprintf("%s-%d", id, r.seq), Action: action, Started: time.Now(), Log: []string{}}
+	r.jobs[id] = j
+	r.mu.Unlock()
+
+	log := func(line string) {
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			return
+		}
+		r.mu.Lock()
+		j.Log = append(j.Log, line)
+		if n := len(j.Log); n > 400 {
+			j.Log = append([]string(nil), j.Log[n-400:]...)
+		}
+		r.mu.Unlock()
+	}
+	run := func() {
+		err := func() (err error) {
+			defer func() {
+				if p := recover(); p != nil {
+					err = fmt.Errorf("%v", p)
+				}
+			}()
+			return i.Do(context.Background(), action, log)
+		}()
+		r.mu.Lock()
+		j.Done = true
+		if err != nil {
+			j.Error = err.Error()
+		}
+		r.mu.Unlock()
+	}
+	if act.Long {
+		go run()
+	} else {
+		run()
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return j.copy(), nil
+}
+
+func (j *Job) copy() Job {
+	c := *j
+	c.Log = append([]string(nil), j.Log...)
+	return c
+}

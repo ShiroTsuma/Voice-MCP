@@ -1,0 +1,6 @@
+id = "claude-hooks"
+group = "agents"
+order = 10
+title = "Claude Code hooks"
+about = "Announces finished turns and questions, and passes dictation into a running turn."
+uses = "claude-hooks"

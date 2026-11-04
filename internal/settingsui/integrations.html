@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>voice · Integrations</title>
+<!--
+  The Integrations window, in the characters window's look. On the left the groups (agents, speaking,
+  GPU voices, cloning, listening) with how much of each is set up; on the right the group's integrations,
+  each with its state, what it gives, and its one or two actions. Long actions show their log in place.
+  Every entry comes from a file in integrations\ (integrations/README.md).
+-->
+<style>
+  :root {
+    --ground:   oklch(21.5% 0.003 260);
+    --sheet:    oklch(25% 0.003 260);
+    --field:    oklch(29.5% 0.003 260);
+    --field-hi: oklch(34% 0.003 260);
+    --rule:     oklch(30% 0.003 260);
+    --ink:      oklch(94% 0.002 260);
+    --ink-2:    oklch(72% 0.003 260);
+    --ink-3:    oklch(54% 0.003 260);
+    --on:       oklch(76% 0.13 152);
+    --part:     oklch(80% 0.12 92);
+    --err:      oklch(74% 0.15 18);
+
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-small: "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  html { background: var(--ground); }
+  body { margin: 0; display: flex; overflow: hidden; font: 14px/1.4 var(--ui); color: var(--ink); background: var(--ground); user-select: none; cursor: default; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* ── Groups ───────────────────────────────────────────────── */
+  aside { width: 260px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--rule); }
+  aside header { padding: 18px 20px 10px; }
+  aside h1 { margin: 0 0 6px; font: 600 20px/1.3 var(--ui-display); letter-spacing: -.01em; }
+  aside header p { margin: 0; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); }
+  nav { flex: 1; overflow-y: auto; padding: 6px 8px; }
+  nav button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 12px; border-radius: 6px; }
+  nav button:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); }
+  nav button.sel { background: var(--field); }
+  nav b { display: block; font: 600 14px/1.3 var(--ui); }
+  nav small { display: block; font: 12px/1.35 var(--ui-small); color: var(--ink-2); }
+  aside footer { padding: 12px 20px 14px; border-top: 1px solid var(--rule); font: 12px/1.45 var(--ui-small); color: var(--ink-3); }
+
+  /* ── A group's integrations ───────────────────────────────── */
+  main { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 32px 32px; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; }
+  main h2 { margin: 0 0 2px; font: 600 18px/1.3 var(--ui-display); }
+  main > p { margin: 0 0 16px; font: 13px/1.4 var(--ui-small); color: var(--ink-2); }
+  .it { display: grid; grid-template-columns: 1fr auto; column-gap: 18px; padding: 14px 0; border-top: 1px solid var(--rule); }
+  .it:first-of-type { border-top: 0; }
+  .it h3 { margin: 0; display: flex; align-items: baseline; gap: 10px; font: 600 14.5px/1.35 var(--ui); }
+  .state { font: 12px var(--ui-small); color: var(--ink-3); display: inline-flex; align-items: center; gap: 6px; }
+  .state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+  .state.on { color: var(--on); } .state.on::before { background: var(--on); }
+  .state.partly { color: var(--part); } .state.partly::before { background: var(--part); }
+  .state.error { color: var(--err); } .state.error::before { background: var(--err); }
+  .state.off::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+  .state.missing::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+  .about { margin: 3px 0 0; font: 13px/1.45 var(--ui-small); color: var(--ink-2); }
+  .detail { margin: 3px 0 0; font: 12.5px/1.45 var(--ui-small); color: var(--ink-3); user-select: text; }
+  .detail a { color: var(--ink-2); }
+  .acts { display: flex; gap: 8px; align-items: flex-start; }
+  .btn { height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--field); font: 600 13px var(--ui); white-space: nowrap; }
+  .btn:hover { background: var(--field-hi); }
+  .btn.primary { background: var(--ink); color: var(--ground); }
+  .btn.primary:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
+  .btn:disabled { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); cursor: default; }
+  .log { grid-column: 1 / -1; margin-top: 10px; }
+  .log summary { font: 12.5px var(--ui-small); color: var(--ink-2); cursor: pointer; }
+  .log pre { margin: 6px 0 0; max-height: 180px; overflow: auto; padding: 8px 10px; border-radius: 6px; background: var(--sheet);
+    font: 12px/1.45 var(--mono); color: var(--ink-2); white-space: pre-wrap; user-select: text; }
+  .log .fail { color: var(--err); }
+  .empty { margin-top: 30px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1>Integrations</h1>
+    <p>What voice is wired into, and the models and backends it can use.</p>
+  </header>
+  <nav id="groups" aria-label="Groups"></nav>
+  <footer>Each entry is a file in voice's <b>integrations</b> folder. Drop a .toml file in the data folder's integrations folder to add your own.</footer>
+</aside>
+<main id="main" aria-live="polite"></main>
+
+<script>
+const $ = id => document.getElementById(id);
+let data = { groups: [], items: [] }, group = 'agents', timer = 0, openLogs = new Set();
+
+async function api(path, body) {
+  const r = await fetch('/settings/api/' + path, body === undefined ? {} :
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function count(g) {
+  const items = data.items.filter(i => i.group === g.id);
+  const on = items.filter(i => i.status.state === 'on').length;
+  return items.length ? on + ' of ' + items.length + ' set up' : 'Nothing here yet';
+}
+
+function renderGroups() {
+  const nav = $('groups'); nav.textContent = '';
+  for (const g of data.groups) {
+    if (!data.items.some(i => i.group === g.id)) continue;
+    const b = document.createElement('button'); b.type = 'button';
+    b.className = g.id === group ? 'sel' : '';
+    b.innerHTML = '<b></b><small></small>';
+    b.querySelector('b').textContent = g.title;
+    b.querySelector('small').textContent = count(g);
+    b.onclick = () => { group = g.id; render(); };
+    nav.append(b);
+  }
+}
+
+const stateText = { on: 'Set up', off: 'Off', missing: 'Not installed', partly: 'Needs a step', error: 'Problem' };
+
+function renderMain() {
+  const main = $('main'), g = data.groups.find(x => x.id === group);
+  const keepScroll = main.scrollTop;
+  main.textContent = '';
+  if (!g) return;
+  const h = document.createElement('h2'); h.textContent = g.title;
+  const p = document.createElement('p'); p.textContent = g.about;
+  main.append(h, p);
+  const items = data.items.filter(i => i.group === group);
+  if (!items.length) { const e = document.createElement('p'); e.className = 'empty'; e.textContent = 'Nothing in this group.'; main.append(e); }
+  for (const it of items) {
+    const row = document.createElement('div'); row.className = 'it';
+    const left = document.createElement('div');
+    const h3 = document.createElement('h3');
+    const name = document.createElement('span'); name.textContent = it.title;
+    const st = document.createElement('span'); st.className = 'state ' + it.status.state;
+    const running = it.job && !it.job.done;
+    st.textContent = running ? 'Working…' : stateText[it.status.state] || it.status.state;
+    h3.append(name, st);
+    left.append(h3);
+    if (it.about) { const a = document.createElement('p'); a.className = 'about'; a.textContent = it.about; left.append(a); }
+    const bits = [it.status.detail, it.size].filter(Boolean);
+    if (bits.length || it.link) {
+      const d = document.createElement('p'); d.className = 'detail'; d.textContent = bits.join(' · ');
+      if (it.link) { const l = document.createElement('a'); l.href = it.link; l.textContent = 'More'; l.target = '_blank'; d.append(bits.length ? ' · ' : '', l); }
+      left.append(d);
+    }
+    const acts = document.createElement('div'); acts.className = 'acts';
+    for (const a of it.status.actions || []) {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = 'btn' + (a.primary ? ' primary' : '');
+      b.textContent = a.label;
+      b.onclick = async () => {
+        b.disabled = true;
+        try { await api('integration', { id: it.id, action: a.id }); openLogs.add(it.id); } catch (e) { alert(e.message); }
+        refresh();
+      };
+      acts.append(b);
+    }
+    row.append(left, acts);
+    if (it.job && (it.job.log.length || it.job.error)) {
+      const det = document.createElement('details'); det.className = 'log';
+      det.open = running || openLogs.has(it.id);
+      det.ontoggle = () => det.open ? openLogs.add(it.id) : openLogs.delete(it.id);
+      const sum = document.createElement('summary');
+      sum.textContent = running ? 'Working on it…' : it.job.error ? 'Failed: ' + it.job.error : 'Done';
+      const pre = document.createElement('pre');
+      pre.textContent = it.job.log.join('\n');
+      if (it.job.error) { const f = document.createElement('span'); f.className = 'fail'; f.textContent = (it.job.log.length ? '\n' : '') + it.job.error; pre.append(f); }
+      det.append(sum, pre);
+      row.append(det);
+      requestAnimationFrame(() => { pre.scrollTop = pre.scrollHeight; });
+    }
+    main.append(row);
+  }
+  main.scrollTop = keepScroll;
+}
+
+function render() { renderGroups(); renderMain(); }
+
+async function refresh() {
+  clearTimeout(timer);
+  try { data = await api('integrations'); render(); } catch (e) { $('main').textContent = e.message; }
+  const busy = data.items.some(i => i.job && !i.job.done);
+  if (document.visibilityState === 'visible') timer = setTimeout(refresh, busy ? 1000 : 5000);
+}
+function onShow() { refresh(); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && window.chrome && window.chrome.webview) window.chrome.webview.postMessage('close'); });
+refresh();
+</script>
+</body>
+</html>

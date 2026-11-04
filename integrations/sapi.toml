@@ -1,0 +1,6 @@
+id = "sapi"
+group = "speech"
+order = 90
+title = "Windows voices"
+about = "The voices Windows has (the system preset): no download, the fallback when no model is there."
+uses = "builtin"

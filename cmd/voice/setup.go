@@ -198,7 +198,10 @@ func setupClients() error {
 // through its own CLI: the mod lets dictation start a turn in a session that
 // is not on screen. Without the claude command, or the mod's folder in this
 // install, there is nothing to do; a failure is reported, not fatal.
-func claudeMod(install bool) {
+func claudeMod(install bool) { claudeModTo(install, func(s string) { fmt.Println(s) }) }
+
+// claudeModTo is claudeMod, reporting to say (the Integrations window logs it).
+func claudeModTo(install bool, say func(string)) {
 	claude, err := exec.LookPath("claude")
 	if err != nil {
 		return
@@ -221,7 +224,7 @@ func claudeMod(install bool) {
 	if !install {
 		run("uninstall", "voice-dictation@voice", "-s", "user")
 		if run("uninstall", "voice@voice", "-s", "user") == nil {
-			fmt.Println("voice: removed the Claude Code dictation mod")
+			say("voice: removed the Claude Code dictation mod")
 		}
 		run("marketplace", "remove", "voice")
 		return
@@ -232,9 +235,9 @@ func claudeMod(install bool) {
 	}
 	run("uninstall", "voice-dictation@voice", "-s", "user") // its name before 0.2.0
 	if err := run("install", "voice@voice", "-s", "user"); err != nil {
-		fmt.Printf("voice: the Claude Code dictation mod was not installed: %v\n", err)
+		say(fmt.Sprintf("voice: the Claude Code dictation mod was not installed: %v", err))
 		return
 	}
 	run("update", "voice@voice", "-s", "user")
-	fmt.Println("voice: Claude Code dictation mod installed (new sessions load it)")
+	say("voice: Claude Code dictation mod installed (new sessions load it)")
 }

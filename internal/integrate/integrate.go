@@ -658,3 +658,40 @@ func RemoveSkill(home string, content []byte) (bool, error) {
 	os.Remove(filepath.Dir(path))
 	return true, nil
 }
+
+// HasHooks reports whether a Claude Code settings.json or Codex hooks.json
+// runs voice's hooks. The file is JSON, so the command's quotes are escaped.
+func HasHooks(path string) bool {
+	b, err := readOptional(path)
+	return err == nil && voiceHookInJSON.Match(b)
+}
+
+var voiceHookInJSON = regexp.MustCompile(`voice(\.exe)?(\\")?\s+hook\s+(claude|codex-hooks)\b`)
+
+// HasCodexNotify reports whether Codex's config.toml runs voice as its
+// notify command.
+func HasCodexNotify(configPath string) bool {
+	b, err := readOptional(configPath)
+	if err != nil || b == nil {
+		return false
+	}
+	lines, _ := splitLines(string(b))
+	for _, l := range lines {
+		if _, ok := header(l); ok {
+			return false // notify is a top-level key
+		}
+		if notifyKey.MatchString(l) {
+			var v struct{ Notify []string }
+			if _, err := toml.Decode(l, &v); err == nil && isVoiceNotify(v.Notify) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// HasCodexSkill reports whether the $character skill is voice's.
+func HasCodexSkill(codexHome string) bool {
+	b, err := readOptional(codexSkill(codexHome))
+	return err == nil && string(b) == codexCharacterSkill
+}

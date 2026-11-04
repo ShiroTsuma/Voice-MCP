@@ -1,0 +1,7 @@
+id = "vad"
+group = "listening"
+order = 10
+title = "Voice activity detection"
+about = "Silero VAD: hears when you start and stop talking. Dictation needs it."
+uses = "model"
+model = "vad"

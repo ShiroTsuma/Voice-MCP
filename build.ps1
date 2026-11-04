@@ -31,6 +31,8 @@ try {
     $sidecar = Join-Path (Split-Path $Output -Parent) 'sidecar'
     New-Item -ItemType Directory -Force $sidecar | Out-Null
     Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'sidecar\voice_sidecar'), (Join-Path $PSScriptRoot 'sidecar\setup.ps1') $sidecar
+    # The Integrations window's entries live next to voice.exe.
+    Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'integrations') (Split-Path $Output -Parent)
     Write-Host "built $Output ($version)"
 }
 finally {

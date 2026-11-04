@@ -1,0 +1,6 @@
+id = "codex"
+group = "agents"
+order = 30
+title = "Codex"
+about = "Announcements through notify, dictation through its hooks and its own queue, and the $character skill."
+uses = "codex"

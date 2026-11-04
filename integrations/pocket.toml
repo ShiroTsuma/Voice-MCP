@@ -1,0 +1,7 @@
+id = "pocket"
+group = "cloning"
+order = 10
+title = "Pocket"
+about = "Clones a voice from a short clip on the CPU, English; non-commercial license. The default cloning engine."
+uses = "model"
+model = "pocket"

@@ -587,6 +587,11 @@
           </div>
         </div></div>
       </section>
+
+      <!-- Not a folded group: it opens the Integrations window. -->
+      <section class="g win">
+        <button class="head" type="button" id="openIntegrations"><span class="t"><span class="name">Integrations</span><span class="sum">Claude Code, Codex, other agents, voices, models and GPU backends</span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5h2.5V5M9.5 2.5L5.5 6.5M8.5 7v2.5h-6v-6H5"/></svg></button>
+      </section>
     </div>
   </main>
 
@@ -1222,6 +1227,7 @@ function characterList() {
 }
 const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
 function openCharacters() { if (host) host.postMessage('characters'); }
+document.getElementById('openIntegrations').addEventListener('click', () => { if (host) host.postMessage('integrations'); });
 $('charManage').addEventListener('click', openCharacters);
 $('personas').addEventListener('change', () => {
   if (state) state.serve.personas = $('personas').checked;
@@ -1280,7 +1286,7 @@ function renderLog() {
 }
 
 // ── Folded groups: one open at a time ─────────────────────────
-document.querySelectorAll('.g').forEach(g => {
+document.querySelectorAll('.g:not(.win)').forEach(g => {
   const head = g.querySelector('.head'), inner = g.querySelector('.body > div');
   inner.inert = true;
   head.addEventListener('click', () => {

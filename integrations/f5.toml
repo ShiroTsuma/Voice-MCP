@@ -1,0 +1,8 @@
+id = "f5"
+group = "gpu"
+order = 30
+title = "F5-TTS"
+about = "Cloning that needs the clip's transcript; NVIDIA only, non-commercial weights."
+size = "5-10 GB"
+uses = "sidecar"
+backend = "f5"
