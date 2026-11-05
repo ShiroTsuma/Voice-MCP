@@ -74,6 +74,7 @@ Usage:
   voice uninstall            undo install (keeps the folder)
   voice setup [flags]        installer hooks: -stop dir, -config f -data-root dir, -clients
   voice autostart on|off|status   start the background process at login (off by default)
+  voice theme install|remove|list|path   the reading window's themes
   voice version
 
 Common flags:
@@ -127,6 +128,8 @@ func main() {
 		err = runUninstall(args)
 	case "autostart":
 		err = runAutostart(args)
+	case "theme":
+		err = runTheme(args)
 	case "--runtime-info":
 		// Distribution checks: where persistent state goes.
 		b, _ := json.Marshal(map[string]string{"root": toolDir(), "output": filepath.Join(toolDir(), "output")})

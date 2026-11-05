@@ -187,7 +187,7 @@ The corner popup is small for a scene. Like a game overlay, **Reading window key
 
 ### Reading window themes
 
-A theme is a folder in `themes` in voice's data folder with a `theme.css`, plus any pictures or fonts it uses (relative `url()`s work). Pick it under **Reading window theme**; it loads after the built-in look and overrides it, and an edit shows the next time the window opens. A theme can be as small as this, which hides each scene's message header so its lines stand alone:
+A theme is a folder with a `theme.css`, plus any pictures or fonts it uses (relative `url()`s work). `voice theme install <folder>` copies one into voice (a package's installer can call it without knowing where voice keeps its data); `voice theme list`, `voice theme remove <name>` and `voice theme path` do the rest. Pick it under **Reading window theme**; it loads after the built-in look and overrides it, and an edit shows the next time the window opens. A theme can be as small as this, which hides each scene's message header so its lines stand alone:
 
 ```css
 .msg.scene { grid-template-columns: 1fr; }
