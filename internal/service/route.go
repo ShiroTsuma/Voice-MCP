@@ -9,14 +9,15 @@ import (
 // AgentInfo names an agent for routing and for the list of recipients.
 type AgentInfo struct {
 	PID      uint32    `json:"pid"`
-	Name     string    `json:"name"`      // what the user calls it: Annie, Rebekka, ...
-	Client   string    `json:"client"`    // claude, codex (from hooks or the MCP client's name)
-	Project  string    `json:"project"`   // working directory name
-	Busy     bool      `json:"busy"`      // in the middle of a turn
-	Waiting  int       `json:"waiting"`   // dictated messages it has not taken yet
-	Active   time.Time `json:"active"`    // last activity
-	NoInput  bool      `json:"no_input"`  // excluded from dictation by the user
-	NoSpeech bool      `json:"no_speech"` // muted by the user
+	Name     string    `json:"name"`            // what the user calls it: Annie, Rebekka, ...
+	Client   string    `json:"client"`          // claude, codex (from hooks or the MCP client's name)
+	Project  string    `json:"project"`         // working directory name
+	Busy     bool      `json:"busy"`            // in the middle of a turn
+	Waiting  int       `json:"waiting"`         // dictated messages it has not taken yet
+	Active   time.Time `json:"active"`          // last activity
+	NoInput  bool      `json:"no_input"`        // excluded from dictation by the user
+	NoSpeech bool      `json:"no_speech"`       // muted by the user
+	Style    string    `json:"style,omitempty"` // narrative while it tells a story (set_style)
 }
 
 // How a recognizer writes the clients' names, in English and Polish.

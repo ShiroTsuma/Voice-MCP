@@ -698,6 +698,10 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <label class="lab" for="readerTheme">Reading window theme<span class="help" id="themeHelp">A folder with a theme.css in the themes folder</span></label>
             <select id="readerTheme"></select>
           </div>
+          <div class="more row col">
+            <label class="lab" for="readerStoryTheme">Story theme<span class="help">When the reading window shows one session that tells a story; same as above when not set</span></label>
+            <select id="readerStoryTheme"></select>
+          </div>
         </div></div>
       </section>
 
@@ -2174,13 +2178,19 @@ onSeg('goalWait', v => save({ hooks: { codex_goal_wait: +v } }));
 onSeg('popupLinger', v => save({ serve: { popup_linger: +v } }));
 onSeg('readerAppear', v => save({ serve: { reader_appear: v } }));
 on('readerTheme', 'change', () => { save({ serve: { reader_theme: $('readerTheme').value } }); summaries(); });
+on('readerStoryTheme', 'change', () => save({ serve: { reader_story_theme: $('readerStoryTheme').value } }));
 // The themes found in the themes folder, asked each time the settings show.
 async function fillThemes(current) {
+  const story = (state && state.serve && state.serve.reader_story_theme) || '';
   try {
     const t = await api('themes');
     fill($('readerTheme'), t.themes.map(n => ({ value: n, label: n })), current, [{ value: '', label: 'Built-in' }]);
+    fill($('readerStoryTheme'), t.themes.map(n => ({ value: n, label: n })), story, [{ value: '', label: 'Same as the reading window' }]);
     $('themeHelp').textContent = 'A folder with a theme.css in ' + t.dir;
-  } catch (e) { fill($('readerTheme'), [], current, [{ value: '', label: 'Built-in' }]); }
+  } catch (e) {
+    fill($('readerTheme'), [], current, [{ value: '', label: 'Built-in' }]);
+    fill($('readerStoryTheme'), [], story, [{ value: '', label: 'Same as the reading window' }]);
+  }
 }
 on('popupDictation', 'change', () => save({ serve: { popup_dictation: $('popupDictation').checked } }));
 onSeg('summaryPart', v => { const [from, n] = v.split(':'); save({ hooks: { summary_from: from, summary_sentences: +n } }); });

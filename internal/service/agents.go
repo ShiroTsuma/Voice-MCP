@@ -245,7 +245,7 @@ func (a *Agents) Info() []AgentInfo {
 		if s := a.seen[pid]; s != nil {
 			out = append(out, AgentInfo{PID: pid, Name: s.name, Client: s.client, Project: s.project,
 				Busy: !s.busyAt.IsZero() && time.Since(s.busyAt) < busyFor, Waiting: len(s.queue), Active: s.at,
-				NoInput: s.noInput, NoSpeech: s.noSpeech})
+				NoInput: s.noInput, NoSpeech: s.noSpeech, Style: s.style})
 		}
 		a.mu.Unlock()
 	}

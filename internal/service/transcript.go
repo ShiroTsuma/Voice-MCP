@@ -22,6 +22,7 @@ type Line struct {
 	Outcome string    `json:"outcome,omitempty"` // dictated, message: where it went
 	From    string    `json:"from,omitempty"`    // message: the session that sent it
 	Scene   bool      `json:"scene,omitempty"`   // said: a script of lines ("Name: text ...")
+	Style   string    `json:"style,omitempty"`   // said: the session's style then (narrative while telling a story)
 	// Lines: a scene's lines one by one, for the reading window and its themes.
 	Lines []SceneLine `json:"lines,omitempty"`
 	// Setting: where and when the scene takes place, as the call gave it.

@@ -125,6 +125,9 @@ type Serve struct {
 	// ReaderTheme is a folder under themes in the data folder whose theme.css
 	// restyles the reading window; empty keeps the built-in look.
 	ReaderTheme *string `toml:"reader_theme"`
+	// ReaderStoryTheme is the theme when the window shows one session that
+	// tells a story (narrative style); empty uses ReaderTheme.
+	ReaderStoryTheme *string `toml:"reader_story_theme"`
 	// VoiceReplies has an agent say its answer aloud when the user dictated the
 	// message, and read its questions aloud (off by default).
 	VoiceReplies *bool `toml:"voice_replies"`
@@ -354,6 +357,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if sv.ReaderTheme != nil {
 		c.Serve.ReaderTheme = sv.ReaderTheme
+	}
+	if sv.ReaderStoryTheme != nil {
+		c.Serve.ReaderStoryTheme = sv.ReaderStoryTheme
 	}
 	if sv.VoiceReplies != nil {
 		c.Serve.VoiceReplies = sv.VoiceReplies

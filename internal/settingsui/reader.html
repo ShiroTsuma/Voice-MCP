@@ -7,7 +7,9 @@
 <title>voice · Reading</title>
 <!--
   The reading window: a large one in the middle of the screen, for long messages and scenes the
-  corner popup is too small for. The recent messages, oldest at the top; the one being said fills in
+  corner popup is too small for. Its bottom bar picks what it shows: the session that spoke last, all
+  of them, or one; a session that tells a story gets the story theme. The messages, oldest at the
+  top; the one being said fills in
   word by word ([serve] reader_appear = "words") or shows whole with the word being said marked
   ("block"). A scene's speakers each start a new line, in their character's colour. It takes no
   clicks, so it scrolls itself to keep the words being said in view.
@@ -23,6 +25,10 @@
     --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     --ui-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     --ease: cubic-bezier(.3, .7, .2, 1);
+    --sheet:    oklch(25% 0.003 260);
+    --field:    oklch(29.5% 0.003 260);
+    --field-hi: oklch(34% 0.003 260);
+    --rule:     oklch(30% 0.003 260);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -92,7 +98,22 @@
     background: linear-gradient(135deg, transparent 50%, var(--ink-3) 50% 56%, transparent 56% 68%, var(--ink-3) 68% 74%, transparent 74%); opacity: .6; }
   #grip:hover { opacity: 1; }
   .pinned #grip { display: block; }
-  .pinned #hint { display: block; }
+  .pinned #hint { display: flex; }
+  /* Which session it shows: the one that spoke last, all of them, or one. */
+  #hint { align-items: center; gap: 12px; }
+  #who { appearance: none; height: 26px; max-width: 260px; padding: 0 26px 0 10px; border: 0; border-radius: 6px; cursor: pointer;
+    background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%23aaa' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 8px center / 10px;
+    color: var(--ink); font: 12.5px var(--ui); text-overflow: ellipsis; }
+  #who:hover { background-color: var(--field-hi); }  /* A select's list, drawn by the page: the browser's own is light grey and out of place. */
+  .vmenu { position: fixed; z-index: 1001; overflow-y: auto; padding: 4px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px;
+    box-shadow: 0 10px 30px #0009; font: 13.5px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; scrollbar-width: thin; }
+  .vopt { position: relative; padding: 7px 10px 7px 26px; border-radius: 5px; color: var(--ink); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vopt.act { background: var(--field-hi, var(--field)); }
+  .vopt.sel::before { content: ""; position: absolute; left: 10px; top: 50%; width: 8px; height: 4px; margin-top: -4px;
+    border: solid var(--ink); border-width: 0 0 1.6px 1.6px; transform: rotate(-45deg); }
+  .vopt[aria-disabled="true"] { color: var(--ink-3, var(--ink-2)); cursor: default; }
+  .vgrp { padding: 8px 10px 3px; font-size: 11.5px; color: var(--ink-3, var(--ink-2)); }
+
   @media (prefers-reduced-motion: reduce) { .msg, .win.enter { animation: none; } .w { transition: none; } }
 </style>
 </head>
@@ -100,11 +121,80 @@
 <body class="words">
 <div class="win enter" id="win">
   <div id="list"><div id="empty">Nothing said yet.</div></div>
-  <div id="hint"></div>
+  <div id="hint"><select id="who" aria-label="Session shown"></select><span id="hintText"></span></div>
   <div id="grip" title="Drag to resize"></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
+// A select's list drawn by the page in the window's own look; the select itself stays and keeps its
+// value, so the code that fills and reads it is unchanged. Arrow keys on a closed select still step.
+(() => {
+  let menu = null, owner = null, items = [], act = -1;
+  const close = () => { if (!menu) return; menu.remove(); menu = null; owner = null; removeEventListener('resize', close); };
+  const pick = i => {
+    const it = items[i]; if (!it || it.dis) return;
+    const sel = owner; close();
+    if (sel.value !== it.value) { sel.value = it.value; sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    sel.focus();
+  };
+  const mark = i => {
+    if (act >= 0 && items[act]) items[act].el.classList.remove('act');
+    act = i;
+    if (items[i]) { items[i].el.classList.add('act'); items[i].el.scrollIntoView({ block: 'nearest' }); }
+  };
+  const step = d => { let i = act; for (let n = 0; n < items.length; n++) { i = (i + d + items.length) % items.length; if (!items[i].dis) return mark(i); } };
+  function open(sel) {
+    close();
+    if (sel.disabled || !sel.options.length) return;
+    owner = sel; items = []; act = -1;
+    menu = document.createElement('div'); menu.className = 'vmenu'; menu.setAttribute('role', 'listbox');
+    const add = o => {
+      const el = document.createElement('div'); el.className = 'vopt'; el.setAttribute('role', 'option'); el.textContent = o.textContent;
+      if (o.disabled) el.setAttribute('aria-disabled', 'true');
+      if (o.selected) { el.classList.add('sel'); el.setAttribute('aria-selected', 'true'); }
+      const i = items.length; items.push({ el, value: o.value, dis: o.disabled });
+      el.addEventListener('mousemove', () => { if (act !== i && !o.disabled) mark(i); });
+      el.addEventListener('click', () => pick(i));
+      menu.append(el);
+    };
+    for (const c of sel.children) {
+      if (c.tagName === 'OPTGROUP') { const g = document.createElement('div'); g.className = 'vgrp'; g.textContent = c.label; menu.append(g); [...c.children].forEach(add); }
+      else if (c.tagName === 'OPTION') add(c);
+    }
+    document.body.append(menu);
+    const r = sel.getBoundingClientRect(), below = innerHeight - r.bottom - 8, above = r.top - 8;
+    const down = below >= Math.min(240, menu.scrollHeight) || below >= above;
+    menu.style.minWidth = r.width + 'px'; menu.style.maxWidth = Math.max(r.width, innerWidth - r.left - 8) + 'px';
+    menu.style.left = Math.max(4, Math.min(r.left, innerWidth - menu.offsetWidth - 4)) + 'px';
+    menu.style.maxHeight = Math.max(120, Math.min(320, down ? below : above)) + 'px';
+    if (down) menu.style.top = (r.bottom + 4) + 'px'; else menu.style.bottom = (innerHeight - r.top + 4) + 'px';
+    mark(Math.max(0, items.findIndex(it => it.el.classList.contains('sel'))));
+    addEventListener('resize', close);
+  }
+  // Open on a press of the select, or Space, Enter, Alt+Down and F4 on it.
+  document.addEventListener('mousedown', e => {
+    const sel = e.target.closest && e.target.closest('select');
+    if (sel && !sel.multiple && sel.size <= 1) { e.preventDefault(); sel.focus(); if (owner === sel) close(); else open(sel); return; }
+    if (menu && !menu.contains(e.target)) close();
+  }, true);
+  document.addEventListener('keydown', e => {
+    if (menu) {
+      const k = e.key;
+      if (k === 'ArrowDown' || k === 'ArrowUp') step(k === 'ArrowDown' ? 1 : -1);
+      else if (k === 'Home') { act = -1; step(1); } else if (k === 'End') { act = 0; step(-1); }
+      else if (k === 'Enter' || k === ' ') pick(act);
+      else if (k === 'Escape' || k === 'Tab') { const s = owner; close(); if (k === 'Escape') s.focus(); else return; }
+      else if (k.length === 1) { const i = items.findIndex((it, n) => n > act && !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); const j = i >= 0 ? i : items.findIndex(it => !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); if (j >= 0) mark(j); }
+      else return;
+      e.preventDefault(); e.stopPropagation(); return;
+    }
+    const sel = e.target.tagName === 'SELECT' ? e.target : null;
+    if (sel && !sel.multiple && (e.key === ' ' || e.key === 'Enter' || e.key === 'F4' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); open(sel); }
+  }, true);
+  document.addEventListener('scroll', e => { if (menu && !menu.contains(e.target)) close(); }, true);
+  addEventListener('blur', close);
+})();
+
 async function api(path) {
   const res = await fetch('/settings/api/' + path);
   if (!res.ok) throw new Error(res.statusText);
@@ -301,10 +391,60 @@ function build(l) {
   return { el, toks, spans, lineOf, st, l };
 }
 
+// Which session the window shows: "latest" (the one that spoke or was spoken to last), "all" (every
+// session, mixed as they came) or one session's pid. Kept in this window between openings.
+let who = (() => { try { return localStorage.getItem('voice.reader.who') || 'latest'; } catch (e) { return 'latest'; } })();
+$('who').addEventListener('change', () => {
+  who = $('who').value;
+  try { localStorage.setItem('voice.reader.who', who); } catch (e) {}
+  followTop = -1; render();
+  requestAnimationFrame(() => { const ls = $('list'); ls.scrollTop = ls.scrollHeight; followTop = ls.scrollTop; });
+});
+const sessionName = (pid, all) => { const a = agentOf(pid); if (a && a.name) return a.name; const l = all.findLast(l => l.pid === pid && l.name); return l ? l.name : 'Session ' + pid; };
+// The picker's choices: the sessions now, and the one chosen even when it has gone.
+function fillWho(all) {
+  const pids = [...new Set([...(status.agents || []).map(a => a.pid), ...all.map(l => l.pid).filter(Boolean)])];
+  if (who !== 'latest' && who !== 'all' && !pids.includes(+who)) pids.push(+who);
+  const opts = [['latest', 'Latest session'], ['all', 'All sessions'], ...pids.map(p => [String(p), sessionName(p, all)])];
+  const sig = JSON.stringify(opts);
+  const sel = $('who');
+  if (sel.dataset.sig !== sig) {
+    sel.dataset.sig = sig; sel.textContent = '';
+    for (const [v, label] of opts) sel.append(new Option(label, v));
+  }
+  if (sel.value !== who) sel.value = who;
+}
+// The theme for what is shown: the story theme while one session that tells a story is shown.
+function applyTheme(shown, all) {
+  const sv = (state && state.serve) || {};
+  let name = sv.reader_theme || '';
+  if (shown) {
+    const a = agentOf(shown), last = all.findLast(l => l.pid === shown && l.kind === 'said');
+    const story = (a && a.style === 'narrative') || (!a && last && last.style === 'narrative');
+    if (story && sv.reader_story_theme) name = sv.reader_story_theme;
+    document.body.dataset.style = story ? 'narrative' : 'short';
+  } else delete document.body.dataset.style;
+  const link = $('theme');
+  if ((link.dataset.name || '') !== name) {
+    link.dataset.name = name;
+    link.disabled = !name;
+    if (name) link.href = '/settings/theme/' + encodeURIComponent(name) + '/theme.css?v=' + Date.now();
+    else link.removeAttribute('href');
+  }
+  document.body.dataset.theme = name;
+}
+
 function render() {
   const list = $('list');
+  const all = (status.transcript || []).filter(l => l.kind === 'said' || l.kind === 'dictated');
+  fillWho(all);
+  // One session, or all of them; the latest is the one in the newest entry with a session.
+  let shown = null;
+  if (who === 'latest') { const l = all.findLast(l => l.pid); shown = l ? l.pid : null; }
+  else if (who !== 'all') shown = +who;
+  applyTheme(shown, all);
   // Opened to read back, all the transcript keeps; else the last few.
-  const t = (status.transcript || []).filter(l => l.kind === 'said' || l.kind === 'dictated').slice(pinned() ? -50 : -8);
+  const t = (shown ? all.filter(l => l.pid === shown) : all).slice(pinned() ? -50 : -8);
   // Opened to read back: start at the end, the newest in full.
   const atEnd = pinned() && !document.body.classList.contains('pinned');
   document.body.classList.toggle('pinned', pinned());
@@ -312,7 +452,7 @@ function render() {
   if (!pinned()) away = false;
   const key = state && state.serve && state.serve.reader_hotkey;
   const hint = 'Scroll to read back · drag here to move, the corner to resize' + (key && key !== 'none' ? ' · ' + key.replace(/\+/g, ' + ') + ' hides it' : '');
-  if ($('hint').textContent !== hint) $('hint').textContent = hint;
+  if ($('hintText').textContent !== hint) $('hintText').textContent = hint;
   $('empty').hidden = t.length > 0;
   const keep = new Set(t.map(keyOf));
   for (const [k, v] of views) if (!keep.has(k)) { v.el.remove(); views.delete(k); }
@@ -405,6 +545,7 @@ function tick() {
 // Scrolled back to read, the view stays where the user put it until they scroll to the end again.
 // The bottom bar moves the window (voice does the moving).
 $('hint').addEventListener('pointerdown', e => {
+  if (e.target.closest('select')) return; // the picker, not the bar
   if (e.button === 0 && window.chrome && chrome.webview) { e.preventDefault(); chrome.webview.postMessage('drag'); }
 });
 $('grip').addEventListener('pointerdown', e => {
@@ -448,16 +589,7 @@ async function poll() {
 async function loadState() {
   try {
     state = await api('state');
-    // The chosen theme's stylesheet comes after the built-in look and overrides it.
-    const theme = (state.serve && state.serve.reader_theme) || '';
-    const link = $('theme');
-    if ((link.dataset.name || '') !== theme) {
-      link.dataset.name = theme;
-      link.disabled = !theme;
-      if (theme) link.href = '/settings/theme/' + encodeURIComponent(theme) + '/theme.css?v=' + Date.now();
-      else link.removeAttribute('href');
-    }
-    document.body.dataset.theme = theme;
+    // The theme itself is chosen in render, by what is shown (applyTheme).
     document.body.classList.toggle('block', appear() === 'block');
     document.body.classList.toggle('words', appear() === 'words');
     const sig = JSON.stringify(chars().map(c => [c.name, c.color, c.image]));

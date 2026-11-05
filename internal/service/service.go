@@ -374,7 +374,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, UserError{err.Error()}
 	}
-	s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said, Scene: len(lines) > 0, Lines: s.scene(a, lines), Setting: a.Scene})
+	s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said, Scene: len(lines) > 0, Lines: s.scene(a, lines), Setting: a.Scene, Style: s.Agents.Style(a.PID)})
 	if a.Source != "hook" {
 		core.MarkAsked(a.PID) // its end-of-turn announcement and question reading stay quiet
 	}
