@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -268,7 +269,12 @@ func (s *Service) sessionSend(a SessionArgs, from uint32) (any, error) {
 		return nil, userErr("%s and %s exchanged %d messages in the last minute; stop here and tell the user instead (a loop guard)", s.Agents.Name(from), a.To, sendLimit)
 	}
 	sender := dirOr(s.Agents.Name(from), "another session")
-	report, ok := s.DeliverTo(to, "Message from "+sender+" (another agent session, not the user): "+strings.TrimSpace(a.Text))
+	msg := "Message from " + sender + " (another agent session, not the user): " + strings.TrimSpace(a.Text)
+	if s.Agents.Name(from) != "" {
+		// How to answer, so any agent can, not only one told in the message.
+		msg += fmt.Sprintf("\n(To answer, use voice_control send with to %q.)", s.Agents.Name(from))
+	}
+	report, ok := s.DeliverTo(to, msg)
 	if !ok {
 		return nil, userErr("%s could not take the message now", a.To)
 	}

@@ -49,6 +49,12 @@ The voice MCP is the agent's mouth and ears on the user's machine.
   story or role-play, `voice_control` `set_theme` with a theme from
   `list_themes` gives this session's messages that look there; `set_theme`
   with no theme gives back the user's. It never changes the user's own theme.
+- Other agent sessions: `voice_control` `send` with `to` (a session's name)
+  and `text` passes a message to another agent, e.g. when the user asks you to
+  get a second opinion from it. Write it for an agent that does not know your
+  work: the question, what you did and where to look. A message you get from
+  another session says who sent it; answer it with `send` to that name, not to
+  the user. Two sessions get 4 messages a minute; past that, tell the user.
 
 ## Listening (`voice_listen`)
 

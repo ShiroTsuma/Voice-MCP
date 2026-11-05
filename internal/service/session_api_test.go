@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,5 +112,25 @@ func TestSendLoopGuard(t *testing.T) {
 	}
 	if !ag.allowSend(1, 3) {
 		t.Fatal("another pair counts on its own")
+	}
+}
+
+// voice_control send reaches another session by name and tells it how to answer.
+func TestControlSend(t *testing.T) {
+	ctx := context.Background()
+	s := &Service{Config: &preset.Config{}, Agents: &Agents{}}
+	var got string
+	var gotPID uint32
+	s.DeliverTo = func(pid uint32, text string) (string, bool) { gotPID, got = pid, text; return "Delivered", true }
+	s.Control(ctx, ControlArgs{Action: "register", PID: 1, Name: "Mira"})
+	s.Control(ctx, ControlArgs{Action: "register", PID: 2, Name: "Tobias"})
+	if _, err := s.Control(ctx, ControlArgs{Action: "send", PID: 1, To: "tobias", Text: "Which recipe?"}); err != nil {
+		t.Fatal(err)
+	}
+	if gotPID != 2 || !strings.Contains(got, "Message from Mira") || !strings.Contains(got, "Which recipe?") || !strings.Contains(got, `voice_control send with to "Mira"`) {
+		t.Fatalf("delivered to %d: %q", gotPID, got)
+	}
+	if _, err := s.Control(ctx, ControlArgs{Action: "send", PID: 1, To: "Nobody", Text: "hi"}); err == nil || !strings.Contains(err.Error(), "Tobias") {
+		t.Fatalf("an unknown name: %v", err)
 	}
 }

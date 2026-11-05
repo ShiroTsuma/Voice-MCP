@@ -137,7 +137,7 @@ Answer: `{"said": "notes. The dark theme is in."}`, or `{"said": "", "quiet": "�
 {"session": "notes-3f2a", "to": "Tobias", "text": "Which recipe did the user pick?"}
 ```
 
-Passes a message to another session by its name (one of `others`). It reaches that agent the way the user's dictation does (into its running turn, its poll, Claude Code's mod or Codex's queue) and starts with "Message from Mira (another agent session, not the user):". The transcript shows it as Mira to Tobias, not as the user's words. Answer: `{"to": "Tobias", "delivered": "…"}`; an unknown name is refused with the list of sessions. Two sessions can exchange at most 4 messages a minute, either way; more is refused as a loop (two agents answering each other's answers), and the agent should tell the user instead.
+Passes a message to another session by its name (one of `others`). It reaches that agent the way the user's dictation does (into its running turn, its poll, Claude Code's mod or Codex's queue) and starts with "Message from Mira (another agent session, not the user):", and ends by saying how to answer (`voice_control send` to Mira; over this API, `send` with `"to": "Mira"`). The transcript shows it as Mira to Tobias, not as the user's words. Answer: `{"to": "Tobias", "delivered": "…"}`; an unknown name is refused with the list of sessions. Two sessions can exchange at most 4 messages a minute, either way; more is refused as a loop (two agents answering each other's answers), and the agent should tell the user instead.
 
 ### transcript
 

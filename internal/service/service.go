@@ -79,6 +79,9 @@ type ControlArgs struct {
 	ID string `json:"id,omitempty"`
 	// Theme: set_theme's choice from list_themes; "" goes back to the user's.
 	Theme string `json:"theme,omitempty"`
+	// To and Text: send's message to another session, by its name.
+	To   string `json:"to,omitempty"`
+	Text string `json:"text,omitempty"`
 }
 
 // installedThemes are the reading window's themes: folders in the data
@@ -506,6 +509,8 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 			return "narrative style: speech is the content now. Say each reply aloud in full as spoken prose (a story, a scene); when characters speak, pass the whole scene in one voice_scene call with lines, each in its voice. Code, lists and links still stay on screen. set_style short ends it.", nil
 		}
 		return nil, userErr("style must be short or narrative")
+	case "send":
+		return s.sessionSend(SessionArgs{To: a.To, Text: a.Text}, a.PID)
 	case "list_themes":
 		return map[string]any{"themes": installedThemes(), "note": "set_theme with one gives this session's messages that look in the user's reading window; the user's own theme stays theirs"}, nil
 	case "set_theme":
