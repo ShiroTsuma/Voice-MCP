@@ -52,7 +52,7 @@ Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recogni
 | Stay in control | Hotkeys to stop and mute, ducking of other apps, Esc or "cancel" to drop a dictation |
 
 <details>
-<summary><strong>More screenshots</strong>: speaking popup, transcript, settings, characters</summary>
+<summary><strong>More screenshots</strong>: speaking popup, transcript, settings, reading window, characters, integrations</summary>
 
 <br>
 
@@ -63,13 +63,19 @@ Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recogni
   </tr>
   <tr>
     <td align="center" valign="top"><img src="docs/images/settings-speaking.png" width="380" alt="The Speaking settings group"><br><em>Every setting applies at once. Hotkeys are set by pressing them.</em></td>
-    <td></td>
+    <td align="center" valign="top"><img src="docs/images/reader.png" width="380" alt="The reading window showing a scene in the story theme: a narrated setting, then lines by Clara, Diana and Fiona with their moods and a stage direction"><br><em>The reading window (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>): a scene in the story theme a session chose, with moods, stage directions and whom a line is said to.</em></td>
   </tr>
 </table>
 
 <img src="docs/images/characters.png" alt="The characters window: a list of characters and the editor for Clara with personality traits, description, voice and colour">
 
 *The characters window: personality traits, a description in your own words, a voice, a colour and an optional picture.*
+
+<img src="docs/images/integrations.png" alt="The Integrations window on GPU voices, with the Info and settings popup of Chatterbox Turbo: its languages, sound tags, moods, the graphics cards it runs on and its size">
+
+*Integrations: what voice is wired into and the voices it can install. Each entry has one button, its other actions on the arrow, and Info and settings with the sounds and moods it makes.*
+
+*All screenshots show sample sessions, characters and lines.*
 
 </details>
 
