@@ -231,16 +231,22 @@ func (w *Window) Drag() error {
 	if w.dragging.Swap(true) {
 		return nil
 	}
-	var start point
-	procGetCursorPos.Call(uintptr(unsafe.Pointer(&start)))
 	if !w.Visible() {
 		w.dragging.Store(false)
 		return nil
 	}
-	var from rect // any thread may read where a window is
-	procGetWindowRect.Call(w.hwnd, uintptr(unsafe.Pointer(&from)))
 	go func() {
 		defer w.dragging.Store(false)
+		// The cursor and the window in real pixels, as the window's thread
+		// places it: a thread without this sees them scaled down by the
+		// display scale, and the window would jump up and left.
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		procSetThreadDpiCtx.Call(dpiPerMonitorV2)
+		var start point
+		procGetCursorPos.Call(uintptr(unsafe.Pointer(&start)))
+		var from rect
+		procGetWindowRect.Call(w.hwnd, uintptr(unsafe.Pointer(&from)))
 		const vkLButton = 0x01
 		for {
 			if s, _, _ := procGetAsyncKeyState.Call(vkLButton); s&0x8000 == 0 {
