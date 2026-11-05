@@ -251,7 +251,7 @@ func (s *Service) sessionSend(a SessionArgs, from uint32) (any, error) {
 		return nil, userErr("send needs to (a session's name) and text")
 	}
 	if s.DeliverTo == nil {
-		return nil, userErr("messages between sessions need voice's background process")
+		return nil, userErr("could not send to %s: messages between sessions need voice's background process, which is not running; ask the user to start voice (its tray icon, or voice serve)", a.To)
 	}
 	want := normalize(a.To)
 	var to uint32
@@ -263,10 +263,10 @@ func (s *Service) sessionSend(a SessionArgs, from uint32) (any, error) {
 		}
 	}
 	if to == 0 {
-		return nil, userErr("no other session is called %q; sessions: %s", a.To, strings.Join(names, ", "))
+		return nil, userErr("could not send to %q: no other session has that name; sessions now: %s. Use one of these names; a session that ended is gone, so tell the user", a.To, strings.Join(names, ", "))
 	}
 	if !s.Agents.allowSend(from, to) {
-		return nil, userErr("%s and %s exchanged %d messages in the last minute; stop here and tell the user instead (a loop guard)", s.Agents.Name(from), a.To, sendLimit)
+		return nil, userErr("could not send to %s: %s and %s exchanged %d messages in the last minute; stop here and tell the user instead (a loop guard)", a.To, s.Agents.Name(from), a.To, sendLimit)
 	}
 	sender := dirOr(s.Agents.Name(from), "another session")
 	msg := "Message from " + sender + " (another agent session, not the user): " + strings.TrimSpace(a.Text)
@@ -276,7 +276,7 @@ func (s *Service) sessionSend(a SessionArgs, from uint32) (any, error) {
 	}
 	report, ok := s.DeliverTo(to, msg)
 	if !ok {
-		return nil, userErr("%s could not take the message now", a.To)
+		return nil, userErr("could not send to %s: %s. Its session may have just closed or be between steps; send again in a moment, or tell the user", s.Agents.Name(to), report)
 	}
 	s.Agents.Record(Line{Kind: "message", PID: to, From: sender, Text: strings.TrimSpace(a.Text), Outcome: report})
 	return map[string]any{"to": s.Agents.Name(to), "delivered": report}, nil

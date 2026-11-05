@@ -134,3 +134,15 @@ func TestControlSend(t *testing.T) {
 		t.Fatalf("an unknown name: %v", err)
 	}
 }
+
+// A message that cannot go out says to whom and what to do.
+func TestSendErrorsNameTheRecipient(t *testing.T) {
+	s := &Service{Config: &preset.Config{}, Agents: &Agents{}}
+	s.DeliverTo = func(uint32, string) (string, bool) { return "its window is gone", false }
+	s.Control(context.Background(), ControlArgs{Action: "register", PID: 1, Name: "Mira"})
+	s.Control(context.Background(), ControlArgs{Action: "register", PID: 2, Name: "Tobias"})
+	_, err := s.Control(context.Background(), ControlArgs{Action: "send", PID: 1, To: "Tobias", Text: "hi"})
+	if err == nil || !strings.Contains(err.Error(), "could not send to Tobias: its window is gone") || !strings.Contains(err.Error(), "send again") {
+		t.Fatalf("%v", err)
+	}
+}

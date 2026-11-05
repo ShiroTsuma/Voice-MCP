@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -267,7 +270,8 @@ func decode(req *mcp.CallToolRequest, v any, schema map[string]any) error {
 	}
 	for k := range raw {
 		if _, ok := props[k]; !ok {
-			return fmt.Errorf("invalid arguments: unknown field %q", k)
+			names := slices.Sorted(maps.Keys(props))
+			return fmt.Errorf("invalid arguments: unknown field %q; this voice takes %s. If your tool description lists %q, voice was updated after your tools loaded: restarting this session refreshes them", k, strings.Join(names, ", "), k)
 		}
 	}
 	if err := json.Unmarshal(args, v); err != nil {
