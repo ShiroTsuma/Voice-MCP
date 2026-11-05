@@ -130,3 +130,15 @@ func TestRemoveSharedEnvironment(t *testing.T) {
 		t.Fatalf("turbo after: %+v", st)
 	}
 }
+
+// Start and stop run on this PC, so only a server on it gets them.
+func TestLocalAddress(t *testing.T) {
+	for addr, want := range map[string]bool{
+		"http://127.0.0.1:8000": true, "http://localhost:8000": true, "http://[::1]:8000": true,
+		"http://192.168.1.20:8000": false, "https://gpu.example.com": false, "not a url": false,
+	} {
+		if got := localAddress(addr); got != want {
+			t.Errorf("%s: %v", addr, got)
+		}
+	}
+}

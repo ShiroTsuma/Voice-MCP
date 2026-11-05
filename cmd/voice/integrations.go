@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -254,6 +256,8 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			if url == "" {
 				return integrations.Status{State: integrations.Missing, Detail: "Set its server's address", Field: field}
 			}
+			// Start and stop are commands on this PC: offered only for a server on it.
+			local := localAddress(url)
 			var acts []integrations.Action
 			add := func(id, label string, primary bool) {
 				acts = append(acts, integrations.Action{ID: id, Label: label, Primary: primary})
@@ -261,7 +265,7 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 			defer cancel()
 			if err := openaispeech.Probe(ctx, url); err == nil {
-				if len(f.Stop) > 0 {
+				if len(f.Stop) > 0 && local {
 					add("stop", "Stop server", false)
 				}
 				if f.Guide != "" {
@@ -270,16 +274,16 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 				return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url + "; it keeps the graphics card's memory until stopped", Actions: acts, Field: field}
 			}
 			if since, ok := serverStarting(f.ID); ok {
-				if len(f.Stop) > 0 {
+				if len(f.Stop) > 0 && local {
 					add("stop", "Stop server", false)
 				}
 				return integrations.Status{State: integrations.Partly, Label: "Starting…", Detail: fmt.Sprintf("Starting for %s; the first start tunes the graphics card for over 10 minutes, later ones take a few", since.Round(time.Second)), Actions: acts, Field: field}
 			}
-			if len(f.Start) > 0 {
+			if len(f.Start) > 0 && local {
 				add("start", "Start server", true)
 			}
 			if f.Guide != "" {
-				add("guide", "Setup guide", len(f.Start) == 0)
+				add("guide", "Setup guide", len(f.Start) == 0 || !local)
 			}
 			return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + ". Set one up (Setup guide) on this PC, another machine or a server, and put its address here; until then another voice speaks", Actions: acts, Field: field}
 		},
@@ -671,6 +675,23 @@ func sidecarStatus(name string) integrations.Status {
 		}
 	}
 	return integrations.Status{State: integrations.Missing, Actions: install}
+}
+
+// localAddress reports whether a server's address is on this PC: only then
+// can an integration's start and stop commands reach it. (The window offers
+// actions from its status alone, so a server elsewhere gets none.)
+func localAddress(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	switch h := strings.ToLower(u.Hostname()); {
+	case h == "localhost", strings.HasSuffix(h, ".localhost"):
+		return true
+	default:
+		ip := net.ParseIP(h)
+		return ip != nil && ip.IsLoopback()
+	}
 }
 
 // setupKey is where a backend's install is recorded in its environment's
