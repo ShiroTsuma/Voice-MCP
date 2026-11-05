@@ -413,7 +413,7 @@ Server instructions tell agents to speak rarely and briefly, in English.
 
 ### Registering by hand
 
-`mcp-install` does this for you. Run the server behind `shared-mcp` so all sessions share one backend (one model in memory, one speech queue). `mute` and `set_preset` are then global; register with `-preset` per client for different voices (that starts separate backends; a cross-process lock still keeps them from talking over each other).
+`mcp-install` does this for you. Run the server behind `shared-mcp` so all sessions share one voice process (each model loaded once, one speech queue); GPU voices load on first use and free the card after the idle time. `mute` and `set_preset` are then global; register with `-preset` per client for different voices (that starts separate backends; a cross-process lock still keeps them from talking over each other).
 
 Claude Code:
 
