@@ -106,6 +106,20 @@
   .split.primary .btn:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
   .split.primary .btn.more { box-shadow: inset 1px 0 0 color-mix(in oklab, var(--ground) 35%, transparent); margin-left: 0; }
   .actmenu .vopt { padding-left: 12px; }
+  .actmenu .vopt.info { border-top: 1px solid var(--rule); border-radius: 0 0 5px 5px; margin-top: 3px; }
+  .actmenu .vopt.info:first-child { border-top: 0; margin-top: 0; }
+  /* Info and settings: one integration in full. */
+  .infobox { max-width: min(560px, calc(100vw - 32px)); width: 560px; max-height: calc(100vh - 48px); overflow-y: auto; user-select: text; }
+  .infobox h3 { margin: 0 0 6px; display: flex; align-items: baseline; gap: 10px; font: 600 16px/1.3 var(--ui-display); }
+  .infobox .about { margin: 0 0 12px; }
+  .irow { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 7px 0; border-top: 1px solid var(--rule); font: 13px/1.45 var(--ui-small); }
+  .ilab { color: var(--ink-3); }
+  .ival { color: var(--ink-2); min-width: 0; }
+  .ival a { color: var(--ink-2); word-break: break-all; }
+  .ival .pick { margin: 0; }
+  .toks { display: flex; flex-wrap: wrap; gap: 4px; }
+  .toks .tok { font: 11.5px/1.5 ui-monospace, Consolas, monospace; color: var(--ink); background: var(--field); border-radius: 4px; padding: 1px 6px; }
+  .infobox .vdlg-row { margin-top: 12px; }
   .actmenu .vopt.danger { color: var(--err); }
   /* The page's own dialogs: the browser's would show voice's address and port. */
   .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
@@ -247,17 +261,7 @@ const inGroup = (i, g) => i.group === g || (i.also || []).includes(g);
 // Language names from the browser, and what speaks the user's languages.
 const langName = code => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
 const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
-const emotionText = { none: 'no moods', intensity: 'moods as intensity', labels: 'moods', instruct: 'any mood, by instruction' };
-function expressiveLine(x) {
-  const p = document.createElement('p'); p.className = 'expr';
-  const sounds = x.sounds || [];
-  const lab = document.createElement('span'); lab.textContent = sounds.length ? 'Sounds ' : 'No sound tags';
-  p.append(lab);
-  sounds.forEach(s => { const t = document.createElement('code'); t.className = 'tok'; t.textContent = '{' + s + '}'; p.append(t, ' '); });
-  const moods = (x.moods || []).filter(m => m !== 'any');
-  p.append(' · ' + (emotionText[x.emotion] || x.emotion) + (moods.length ? ': ' + moods.join(', ') : ''));
-  return p;
-}
+const emotionText = { none: 'None', intensity: 'As intensity', labels: 'As labels', instruct: 'Any mood, by instruction' };
 function languagesLine(it) {
   const langs = it.languages || [], mine = data.languages || [];
   if (!langs.length) return '';
@@ -319,16 +323,12 @@ function renderMain() {
       if (mine.length && !(it.languages || []).includes('*') && !mine.some(m => it.languages.includes(m))) l.classList.add('miss');
       left.append(l);
     }
-    // What it does with voice's sound tags ({laugh}) and moods, the same form for every voice engine.
-    if (it.expressive) left.append(expressiveLine(it.expressive));
-    const bits = [it.status.detail, it.size].filter(Boolean);
-    if (bits.length || it.link) {
-      const d = document.createElement('p'); d.className = 'detail'; d.textContent = bits.join(' · ');
-      if (it.link) { const l = document.createElement('a'); l.href = it.link; l.textContent = 'More'; l.target = '_blank'; d.append(bits.length ? ' · ' : '', l); }
+    // What it does, its size and settings are in Info and settings (the
+    // button's menu); the row keeps what needs attention.
+    if (it.status.detail && it.status.state !== 'on' && it.status.state !== 'off') {
+      const d = document.createElement('p'); d.className = 'detail'; d.textContent = it.status.detail;
       left.append(d);
     }
-    if (it.status.choice) left.append(picker(it));
-    if (it.status.field) left.append(fieldRow(it));
     row.append(left, actionButton(it));
     if (it.job && (it.job.log.length || it.job.error)) {
       const det = document.createElement('details'); det.className = 'log';
@@ -387,12 +387,15 @@ function closeActMenu() { if (actMenu) { actMenu.remove(); actMenu = null; } }
 function actionButton(it) {
   const acts = it.status.actions || [];
   const wrap = document.createElement('div'); wrap.className = 'acts';
-  if (!acts.length) return wrap;
-  const main = acts.find(a => a.primary) || acts[0];
+  const info = { id: 'info', label: 'Info and settings' };
+  // Without an action of its own, the button is its info.
+  // Remove is never the main button: one click too close to Load now.
+  const main = acts.find(a => a.primary) || acts.find(a => a.id !== 'remove') || info;
   const rest = acts.filter(a => a !== main);
+  if (main !== info) rest.push(info);
   const split = document.createElement('div'); split.className = 'split' + (main.primary ? ' primary' : '');
-  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn main'; b.textContent = main.label;
-  b.onclick = () => runAction(it, main, b);
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn main'; b.textContent = main === info ? 'Info' : main.label;
+  b.onclick = () => main === info ? openInfo(it.id) : runAction(it, main, b);
   split.append(b);
   if (rest.length) {
     const more = document.createElement('button'); more.type = 'button'; more.className = 'btn more';
@@ -408,7 +411,8 @@ function actionButton(it) {
         o.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.click(); } };
         o.textContent = a.label;
         o.onmouseenter = () => o.classList.add('act'); o.onmouseleave = () => o.classList.remove('act');
-        o.onclick = () => { closeActMenu(); runAction(it, a, null); };
+        if (a.id === 'info') o.classList.add('info');
+        o.onclick = () => { closeActMenu(); a.id === 'info' ? openInfo(it.id) : runAction(it, a, null); };
         m.append(o);
       }
       m.onmouseenter = () => clearTimeout(timer);
@@ -433,6 +437,65 @@ function actionButton(it) {
 document.addEventListener('mousedown', e => { if (actMenu && !actMenu.contains(e.target) && !actMenu.owner.contains(e.target)) closeActMenu(); }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && actMenu) { closeActMenu(); e.stopPropagation(); } }, true);
 document.addEventListener('scroll', closeActMenu, true);
+
+// openInfo shows one integration in full: what it is, the languages it
+// speaks, the sounds and moods it makes, its size and its settings (a model
+// size, a server's address). It stays open across the window's refreshes and
+// shows the new state.
+let infoId = null;
+function openInfo(id) {
+  infoId = id;
+  let dlg = $('info');
+  if (!dlg) {
+    dlg = document.createElement('div'); dlg.id = 'info'; dlg.className = 'vdlg';
+    dlg.addEventListener('mousedown', e => { if (e.target === dlg) closeInfo(); });
+    document.body.append(dlg);
+  }
+  renderInfo();
+}
+function closeInfo() { infoId = null; const d = $('info'); if (d) d.remove(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && infoId && !actMenu) { closeInfo(); e.stopPropagation(); } }, true);
+function renderInfo() {
+  const dlg = $('info'), it = data.items.find(i => i.id === infoId);
+  if (!dlg || !it) return closeInfo();
+  const box = document.createElement('div'); box.className = 'vdlg-box infobox'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', it.title);
+  const h = document.createElement('h3');
+  const st = document.createElement('span'); st.className = 'state ' + it.status.state; st.textContent = stateText[it.status.state] || it.status.state;
+  h.append(it.title, st);
+  box.append(h);
+  const row = (label, content) => {
+    if (!content) return;
+    const r = document.createElement('div'); r.className = 'irow';
+    const l = document.createElement('span'); l.className = 'ilab'; l.textContent = label;
+    const v = document.createElement('div'); v.className = 'ival'; v.append(content);
+    r.append(l, v); box.append(r);
+  };
+  const text = s => { const p = document.createElement('span'); p.textContent = s; return p; };
+  if (it.about) { const p = document.createElement('p'); p.className = 'about'; p.textContent = it.about; box.append(p); }
+  row('State', it.status.detail ? text(it.status.detail) : null);
+  const langs = it.languages || [];
+  if (langs.length) row('Languages', text(langs.includes('*') ? 'Nearly every language' : languagesLine(it) + (langs.length <= 30 ? ' — ' + langs.map(langName).join(', ') : '')));
+  if (it.expressive) {
+    const x = it.expressive, sounds = x.sounds || [];
+    if (sounds.length) {
+      const s = document.createElement('div'); s.className = 'toks';
+      sounds.forEach(n => { const t = document.createElement('code'); t.className = 'tok'; t.textContent = '{' + n + '}'; s.append(t); });
+      row('Sounds', s);
+    } else row('Sounds', text('None: sound tags are left out'));
+    const moods = (x.moods || []).filter(m => m !== 'any');
+    row('Moods', text((emotionText[x.emotion] || x.emotion) + (moods.length ? ': ' + moods.join(', ') : '')));
+  }
+  row('Size', it.size ? text(it.size) : null);
+  // The row names the setting, so the controls go without their own label.
+  const bare = el => { el.firstChild.remove(); return el; };
+  if (it.status.choice) row(it.status.choice.label, bare(picker(it)));
+  if (it.status.field) row(it.status.field.label, bare(fieldRow(it)));
+  if (it.link) { const a = document.createElement('a'); a.href = it.link; a.target = '_blank'; a.textContent = it.link.replace(/^https?:\/\//, ''); row('More', a); }
+  const foot = document.createElement('div'); foot.className = 'vdlg-row';
+  const close = document.createElement('button'); close.type = 'button'; close.className = 'vdlg-btn'; close.textContent = 'Close'; close.onclick = closeInfo;
+  foot.append(close); box.append(foot);
+  dlg.textContent = ''; dlg.append(box);
+}
 
 // fieldRow shows an integration's text setting (a server's address), saved
 // with Save or Enter; what is being typed survives the window's refresh.
@@ -465,7 +528,10 @@ async function refresh() {
   clearTimeout(timer);
   // Not while an address is being typed: the redraw would take the cursor away.
   const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.field');
-  try { data = await api('integrations'); if (!typing && !actMenu) render(); } catch (e) { $('main').textContent = e.message; }
+  try {
+    data = await api('integrations');
+    if (!typing && !actMenu) { render(); if (infoId) renderInfo(); }
+  } catch (e) { $('main').textContent = e.message; }
   const busy = data.items.some(i => i.job && !i.job.done);
   if (document.visibilityState === 'visible') timer = setTimeout(refresh, busy ? 1000 : 5000);
 }

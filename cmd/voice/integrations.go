@@ -528,7 +528,7 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 				}
 				if action == "remove" {
 					if b, ok := sidecar.Find(f.Backend); ok && b.EnvName() != f.Backend {
-						return fmt.Errorf("%s shares the %s environment; remove that instead", f.Title, b.EnvName())
+						return removeShared(b, log)
 					}
 					dir := filepath.Join(httpengine.SidecarDir, "envs", f.Backend)
 					log("Removing " + dir)
@@ -624,10 +624,7 @@ func sidecarStatus(name string) integrations.Status {
 		if on, _ := st[key].(bool); on {
 			// Loaded or not: voice loads it on first use and frees the graphics
 			// card after the idle time; Load now and Unload do it by hand.
-			acts := []integrations.Action{{ID: "load", Label: "Load now", Long: true}, {ID: "install", Label: "Reinstall", Long: true}}
-			if !shared {
-				acts = append(acts, remove)
-			}
+			acts := []integrations.Action{{ID: "load", Label: "Load now", Long: true}, {ID: "install", Label: "Reinstall", Long: true}, remove}
 			detail := "Installed for " + gpu + "; it loads when a voice uses it and frees the graphics card when idle (General, Free idle models)"
 			if e, ok := gpuEngine(name); ok {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -653,6 +650,44 @@ func sidecarStatus(name string) integrations.Status {
 		}
 	}
 	return integrations.Status{State: integrations.Missing, Actions: install}
+}
+
+// removeShared removes a backend that runs in another's environment
+// (chatterbox_turbo in chatterbox's): its own model weights and its record
+// there. The environment and its packages stay for the backend that owns it.
+func removeShared(b sidecar.Backend, log func(string)) error {
+	if e, ok := gpuEngine(b.Name); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		e.Unload(ctx)
+		cancel()
+	}
+	for _, repo := range b.Prefetch {
+		dir := filepath.Join(httpengine.SidecarDir, "models", "hub", "models--"+strings.ReplaceAll(repo, "/", "--"))
+		if _, err := os.Stat(dir); err != nil {
+			continue
+		}
+		log("Removing " + dir)
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	}
+	file := filepath.Join(httpengine.SidecarDir, "envs", b.EnvName(), ".voice-setup.json")
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return nil // nothing recorded
+	}
+	var st map[string]any
+	if err := json.Unmarshal(bytes.TrimPrefix(raw, []byte("\xEF\xBB\xBF")), &st); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
+	delete(st, "backend:"+b.Name)
+	delete(st, "prefetch:"+b.Name)
+	out, _ := json.MarshalIndent(st, "", "    ")
+	if err := os.WriteFile(file, out, 0o644); err != nil {
+		return err
+	}
+	log("Removed. The " + b.EnvName() + " environment stays: " + b.EnvName() + " uses it")
+	return nil
 }
 
 // runLogged runs cmd with a hidden console and sends each line of its output
