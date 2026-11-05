@@ -34,7 +34,7 @@ Engines: pocket (default, CPU), zipvoice (CPU, needs -text), and on the GPU
 sidecar once set up: ` + sidecar.Summary() + `. Those needing the transcript
 (-text, or ` + "`voice clone text`" + `): zipvoice, ` + strings.Join(transcriptEngines(), ", ") + `.
 
-Each cloned voice also becomes a preset named clone-<name>.
+Each cloned voice also becomes a preset of the same name.
 Only clone voices you have the right to use.`
 
 func transcriptEngines() []string {

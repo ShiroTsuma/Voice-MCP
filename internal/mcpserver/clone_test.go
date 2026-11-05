@@ -27,10 +27,10 @@ func TestCloneFlow(t *testing.T) {
 		t.Fatalf("clone without consent: %s", out)
 	}
 	out, isErr = call(t, cs, "voice_clone", map[string]any{"action": "add", "name": "me", "clip_path": clip, "rights_confirmed": true})
-	if isErr || !strings.Contains(out, `"preset":"clone-me"`) {
+	if isErr || !strings.Contains(out, `"preset":"me"`) {
 		t.Fatalf("add: %s", out)
 	}
-	if out, _ = call(t, cs, "voice_control", map[string]any{"action": "list_presets"}); !strings.Contains(out, "clone-me") {
+	if out, _ = call(t, cs, "voice_control", map[string]any{"action": "list_presets"}); !strings.Contains(out, `"me"`) {
 		t.Errorf("preset missing: %s", out)
 	}
 	if out, isErr = call(t, cs, "voice_control", map[string]any{"action": "set_preset", "preset": "clone-me"}); isErr {
@@ -42,7 +42,7 @@ func TestCloneFlow(t *testing.T) {
 	if out, isErr = call(t, cs, "voice_clone", map[string]any{"action": "remove", "name": "me"}); isErr {
 		t.Fatalf("remove: %s", out)
 	}
-	if out, _ = call(t, cs, "voice_control", map[string]any{"action": "status"}); strings.Contains(out, "clone-me") {
+	if out, _ = call(t, cs, "voice_control", map[string]any{"action": "status"}); strings.Contains(out, `"preset":"clone-me"`) || strings.Contains(out, `"preset":"me"`) {
 		t.Errorf("active preset still points at removed clone: %s", out)
 	}
 }

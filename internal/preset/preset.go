@@ -464,6 +464,18 @@ func (c *Config) SetPreset(name string, p Preset) {
 	c.Presets[name] = p
 }
 
+// LegacyClonePrefix began a cloned voice's preset name in earlier versions
+// (clone-<name>); the preset is now the voice's own name.
+const LegacyClonePrefix = "clone-"
+
+// PresetDef returns a preset's own definition, before extends.
+func (c *Config) PresetDef(name string) (Preset, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	p, ok := c.Presets[name]
+	return p, ok
+}
+
 // HasPreset reports whether a preset exists.
 func (c *Config) HasPreset(name string) bool {
 	c.mu.RLock()
@@ -491,6 +503,15 @@ func (c *Config) resolveLocked(name string) (Resolved, error) {
 		}
 		seen[cur] = true
 		p, ok := c.Presets[cur]
+		if !ok {
+			// A cloned voice's preset was once called clone-<name>; settings
+			// and agents may still use that.
+			if bare, legacy := strings.CutPrefix(cur, LegacyClonePrefix); legacy {
+				if p, ok = c.Presets[bare]; ok {
+					cur = bare
+				}
+			}
+		}
 		if !ok {
 			if cur == name {
 				return Resolved{}, fmt.Errorf("unknown preset %q (available: %s)", name, strings.Join(c.presetNamesLocked(), ", "))

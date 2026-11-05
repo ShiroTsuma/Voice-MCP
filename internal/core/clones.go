@@ -13,8 +13,19 @@ import (
 
 const clonePrefix = "clone:"
 
-// ClonePresetName is the preset every cloned voice gets automatically.
-func ClonePresetName(name string) string { return "clone-" + name }
+// ClonePresetName is the preset every cloned voice gets automatically: the
+// voice's own name (earlier versions called it clone-<name>).
+func ClonePresetName(name string) string { return name }
+
+// IsClonePreset reports whether p is the preset of cloned voice name.
+func IsClonePreset(p preset.Preset, name string) bool { return p.Voice.Name == clonePrefix+name }
+
+// ClonePresetTaken reports whether name is already a preset that is not that
+// cloned voice's own, so a new voice must be called otherwise.
+func ClonePresetTaken(cfg *preset.Config, name string) bool {
+	p, ok := cfg.PresetDef(name)
+	return ok && !IsClonePreset(p, name)
+}
 
 // ClonePreset speaks with a cloned voice; when its engine is unavailable the
 // neutral English voice takes over rather than going silent.
@@ -31,10 +42,34 @@ func ClonePreset(p clones.Profile) preset.Preset {
 
 // RegisterClones adds a preset for every stored clone that the user config
 // does not already define.
+// Settings that still name a voice by its old preset (clone-<name>) are
+// read as its new one.
 func RegisterClones(cfg *preset.Config) {
+	stored := map[string]bool{}
 	for _, p := range clones.List() {
+		stored[p.Name] = true
 		if name := ClonePresetName(p.Name); !cfg.HasPreset(name) {
 			cfg.SetPreset(name, ClonePreset(p))
+		}
+	}
+	bare := func(n string) string {
+		if b, ok := strings.CutPrefix(n, preset.LegacyClonePrefix); ok && stored[b] && !cfg.HasPreset(n) {
+			return b
+		}
+		return n
+	}
+	cfg.DefaultPreset = bare(cfg.DefaultPreset)
+	cfg.Hooks.Preset = bare(cfg.Hooks.Preset)
+	for i := range cfg.Characters {
+		cfg.Characters[i].Preset = bare(cfg.Characters[i].Preset)
+	}
+	for k, v := range cfg.Clients {
+		cfg.Clients[k] = bare(v)
+	}
+	for k, p := range cfg.Presets {
+		if b := bare(p.Extends); b != p.Extends {
+			p.Extends = b
+			cfg.Presets[k] = p
 		}
 	}
 }

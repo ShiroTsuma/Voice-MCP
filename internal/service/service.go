@@ -590,6 +590,9 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		if err := clones.ValidName(a.Name); err != nil {
 			return nil, UserError{err.Error()}
 		}
+		if core.ClonePresetTaken(s.Config, a.Name) {
+			return nil, userErr("%q is already a voice preset; pick another name for the cloned voice", a.Name)
+		}
 		// Before the user speaks for half a minute, not after.
 		if _, err := clones.Get(a.Name); err == nil && !a.Replace {
 			return nil, userErr("a clone called %q exists; pick another name or pass replace=true", a.Name)
@@ -641,6 +644,9 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 	case "add":
 		if err := need("name", "clip_path"); err != nil {
 			return nil, err
+		}
+		if core.ClonePresetTaken(s.Config, a.Name) {
+			return nil, userErr("%q is already a voice preset; pick another name for the cloned voice", a.Name)
 		}
 		if _, ok := s.Config.Engines[a.Engine]; a.Engine != "" && !ok {
 			return nil, userErr("unknown engine %q", a.Engine)
@@ -701,6 +707,9 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		}
 		if _, err := clones.Get(a.Name); err == nil && !a.Replace {
 			return nil, userErr("a voice called %q exists; pick another name or pass replace=true", a.Name)
+		}
+		if core.ClonePresetTaken(s.Config, a.Name) {
+			return nil, userErr("%q is already a voice preset; pick another name for the designed voice", a.Name)
 		}
 		target := a.Engine
 		if target == "" {
@@ -795,7 +804,7 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 			return nil, UserError{err.Error()}
 		}
 		name := core.ClonePresetName(a.Name)
-		if s.Speaker.Status().Preset == name {
+		if p := s.Speaker.Status().Preset; p == name || p == preset.LegacyClonePrefix+name {
 			s.Speaker.SetPreset(s.Config.DefaultPreset)
 		}
 		s.Config.DeletePreset(name)

@@ -145,7 +145,7 @@
 # The chain: an engine makes the sound (kokoro, piper, chatterbox, …), a preset
 # picks an engine and tunes it (calm-mature is Kokoro's af_nicole, slower and
 # lower), and a character picks a preset. A character's preset can be any of
-# the above, a built-in one or a cloned voice (clone-<name>); the Characters
+# the above, a built-in one or a cloned voice (by its name); the Characters
 # window sets it too.
 # [[characters]]
 # name = "Rebekka"

@@ -51,12 +51,12 @@ user asks for. `status` reports the active preset and the last error.
   any `quality` warnings, to the user.
 - `add` takes an absolute `clip_path` (5-15 s of one clear speaker; WAV, or
   other formats when ffmpeg is installed) and creates the preset
-  `clone-<name>`. The transcript is recognized automatically when possible.
+  of the same name. The transcript is recognized automatically when possible.
 - Engine: `pocket` (default, CPU, English); `chatterbox` or `xtts` for
   Polish or higher quality, `qwen3` for the closest clone in English and
   nine other languages (not Polish; it needs the transcript), if the GPU
   sidecar is set up (`voice.exe sidecar setup chatterbox`, or `qwen3`).
-- `preview` before switching with `voice_control set_preset clone-<name>`.
+- `preview` before switching with `voice_control set_preset <name>`.
 - `design` makes a new voice from a `description` in words (age, gender,
   timbre, pace, mood, accent; English works best), with no recording and no
   rights question. It needs Qwen3-TTS set up. The design model reads a

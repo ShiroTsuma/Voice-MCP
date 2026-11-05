@@ -250,7 +250,7 @@ traits = ["calm", "formal"]
 preset = "clara-voice"
 ```
 
-`voice presets` lists the presets with their engines, and **Hear it** in the settings window plays one. Cloning makes a preset for you: `voice clone add me clip.wav -engine chatterbox` creates `clone-me`. More engine and preset fields are in [config.example.toml](config.example.toml).
+`voice presets` lists the presets with their engines, and **Hear it** in the settings window plays one. Cloning makes a preset for you: `voice clone add me clip.wav -engine chatterbox` creates the preset `me`. More engine and preset fields are in [config.example.toml](config.example.toml).
 
 **Show it in the Integrations window.** When your engine has something to install, a TOML file in the data folder's `integrations` folder (`voice paths` shows where) puts it in the window, with its state and the commands behind its buttons:
 
@@ -422,7 +422,7 @@ Presets combine an engine, voice, speed, pitch, effects and per-language overrid
 | `narrator` | Kokoro British `bm_george` |
 | `brisk` | neutral, faster, no chime |
 | `system` | Windows SAPI, no downloads |
-| `clone-<name>` | one per cloned voice |
+| `<name>` | one per cloned voice, by its name (earlier versions called it `clone-<name>`, which still works) |
 
 English is the default language (`default_lang`); the Polish Piper voices are used only when a request asks for `pl`.
 
@@ -435,7 +435,7 @@ In the settings window: Voice clone → pick the engine (the installed ones firs
 ```powershell
 voice clone record me -rights "my own voice"      # or: voice clone add me D:\clips\me.wav ...
 voice clone preview me
-voice say -preset clone-me "Hello."
+voice say -preset me "Hello."
 ```
 
 `record` counts down with three ticks, opens the microphone with a chime for 12 s (`-seconds 6..30`) and closes it with another; read a few natural sentences aloud. The recording is checked before it is used: almost silent or heavily clipped audio is refused with what to fix; quiet, slightly clipped or noisy audio is added with a warning. The clip is converted to mono 24 kHz, trimmed, capped at 15 s and normalized; 5-15 s of one clear speaker works best. Non-WAV input needs `ffmpeg` on PATH. When a recognition model is installed the clip is transcribed automatically (ZipVoice, F5 and Qwen3-TTS need the transcript). The default engine is Pocket (CPU, English); pass `-engine chatterbox` or `xtts` for Polish once the sidecar is set up.

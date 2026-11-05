@@ -194,7 +194,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 	})
 	s.AddTool(&mcp.Tool{
 		Name:        "voice_clone",
-		Description: "Create and manage cloned voices: record one from the microphone, import a clip, or design one from a description. Only clone a recorded voice the user has the right to use. Afterwards, switch to it with voice_control set_preset clone-<name>.",
+		Description: "Create and manage cloned voices: record one from the microphone, import a clip, or design one from a description. Only clone a recorded voice the user has the right to use. Afterwards, switch to it with voice_control set_preset <name>.",
 		InputSchema: cloneSchema,
 		Annotations: &mcp.ToolAnnotations{Title: "Clone voice", DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
