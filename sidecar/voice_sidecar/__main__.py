@@ -53,6 +53,19 @@ def load_backend(name, options):
     return module.Backend(options)
 
 
+def gpu_mb():
+    """The graphics memory this server has taken at most, in MB: what PyTorch
+    reserved at its peak plus the CUDA context (about 400 MB, which PyTorch
+    does not count). 0 when it runs without a GPU or before it used one."""
+    torch = sys.modules.get("torch")
+    try:
+        if torch is None or not torch.cuda.is_available() or not torch.cuda.is_initialized():
+            return 0
+        return int(torch.cuda.max_memory_reserved() / 2**20) + 400
+    except Exception:
+        return 0
+
+
 def to_wav(samples, rate):
     try:
         import numpy as np
@@ -94,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.reply(200, {"backend": self.name, "ready": True, "clones": bool(getattr(self.backend, "clones", False)), "options": self.options, "idle": Handler.idle})
+            self.reply(200, {"backend": self.name, "ready": True, "clones": bool(getattr(self.backend, "clones", False)), "options": self.options, "idle": Handler.idle, "gpu_mb": gpu_mb()})
         elif self.path == "/voices":
             self.reply(200, list(getattr(self.backend, "voices", lambda: [])()))
         else:

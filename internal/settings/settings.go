@@ -85,6 +85,7 @@ type Serve struct {
 	VoiceReplies        *bool    `toml:"voice_replies,omitempty" json:"voice_replies,omitempty"`
 	UnloadAfter         *string  `toml:"unload_after,omitempty" json:"unload_after,omitempty"`
 	PreloadVoices       *bool    `toml:"preload_voices,omitempty" json:"preload_voices,omitempty"`
+	GPUBudget           *string  `toml:"gpu_budget,omitempty" json:"gpu_budget,omitempty"`
 }
 
 type Listen struct {

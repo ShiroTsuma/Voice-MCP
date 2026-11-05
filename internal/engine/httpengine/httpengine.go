@@ -53,8 +53,9 @@ type Engine struct {
 	batch   bool              // the server renders several sentences in one call
 	client  *http.Client
 
-	mu      sync.Mutex
-	running chan struct{} // open while a server this engine started is alive
+	mu       sync.Mutex
+	running  chan struct{} // open while a server this engine started is alive
+	measured time.Time     // when its graphics memory was last asked for
 }
 
 func New(name string, cfg engine.Config) (engine.Engine, error) {
@@ -245,6 +246,53 @@ func (e *Engine) shutdown(ctx context.Context) {
 	}
 }
 
+// BeforeStart, when set, runs before a server voice starts loads its model:
+// voice frees GPU voices there to keep them within a budget. OnUse learns
+// each request an engine serves, and OnMeasure the graphics memory its server
+// has taken (MB, measured now and then), with the options it runs with.
+var (
+	BeforeStart func(ctx context.Context, engine string)
+	OnUse       func(engine string)
+	OnMeasure   func(engine string, options map[string]string, mb int)
+)
+
+// used reports a request served: who was used last, and now and then how
+// much graphics memory the server holds, which only shows once it has spoken.
+func (e *Engine) used() {
+	if fn := OnUse; fn != nil {
+		fn(e.name)
+	}
+	fn := OnMeasure
+	if fn == nil || len(e.start) == 0 {
+		return
+	}
+	e.mu.Lock()
+	due := time.Since(e.measured) > 30*time.Second
+	if due {
+		e.measured = time.Now()
+	}
+	e.mu.Unlock()
+	if !due {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, e.url+"/health", nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		var h struct {
+			GPU int `json:"gpu_mb"`
+		}
+		if json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&h) == nil && h.GPU > 0 {
+			fn(e.name, e.want(), h.GPU)
+		}
+	}()
+}
+
 // OnStarting, when set, learns that voice waits for an engine's server to
 // start and load its model (on true) and that the wait is over (false), so the
 // settings window can say why the first sentence takes a while.
@@ -255,6 +303,11 @@ var OnStarting func(engine string, starting bool)
 func (e *Engine) ensure(ctx context.Context) error {
 	if e.healthy(ctx) {
 		return nil
+	}
+	// Room for its model first (a budget for GPU voices), before this
+	// engine's lock: making room unloads other engines, which take theirs.
+	if fn := BeforeStart; fn != nil && len(e.start) > 0 {
+		fn(ctx, e.name)
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -345,6 +398,7 @@ func (e *Engine) SynthesizeBatch(ctx context.Context, reqs []engine.Request) ([]
 	if err := e.ensure(ctx); err != nil {
 		return nil, err
 	}
+	defer e.used()
 	payload := e.payload(reqs[0])
 	delete(payload, "text")
 	texts := make([]string, len(reqs))
@@ -465,6 +519,7 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 	if err := e.ensure(ctx); err != nil {
 		return err
 	}
+	defer e.used()
 	body, _ := json.Marshal(e.payload(req))
 	hr, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/synthesize", bytes.NewReader(body))
 	hr.Header.Set("Content-Type", "application/json")

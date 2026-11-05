@@ -17,9 +17,10 @@ var raw []byte
 
 // Choice is one value of a backend's option, such as a model size.
 type Choice struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
-	Note  string `json:"note"`
+	Value string  `json:"value"`
+	Label string  `json:"label"`
+	Note  string  `json:"note"`
+	VRAM  float64 `json:"vram"` // graphics memory it takes, GB (an estimate); 0: the backend's
 }
 
 // Option is a setting of a backend the windows offer as a choice; the server
@@ -61,6 +62,24 @@ type Backend struct {
 	// GPUs are the graphics cards it runs on (nvidia, amd); empty is any.
 	// The Integrations window greys out Install on a PC with none of them.
 	GPUs []string `json:"gpus"`
+	// VRAM is about how much graphics memory it takes loaded, in GB: the
+	// starting estimate voice keeps GPU voices within a budget by, until it
+	// has measured the real use.
+	VRAM float64 `json:"vram"`
+}
+
+// Memory is the backend's estimated graphics memory in GB with the option
+// value it runs with (a model size).
+func (b Backend) Memory(set map[string]string) float64 {
+	if b.Option != nil {
+		v := b.Value(set)
+		for _, c := range b.Option.Choices {
+			if c.Value == v && c.VRAM > 0 {
+				return c.VRAM
+			}
+		}
+	}
+	return b.VRAM
 }
 
 // GPUNames says which cards it needs, for people: "an NVIDIA graphics card",

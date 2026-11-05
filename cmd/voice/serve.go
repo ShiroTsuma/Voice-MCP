@@ -146,6 +146,9 @@ func runServe(args []string) error {
 	// The Integrations window picks a GPU backend's model size here.
 	sidecarOptions = func(name string) map[string]string { return b.cfg.Sidecar[name] }
 	engineConfig = func(name string) engine.Config { return b.cfg.Engines[name] }
+	// GPU voices within their memory budget, and what each took when measured.
+	gpus.load(filepath.Join(core.DataDir(), "gpu-memory.json"), func() *preset.Config { return b.cfg })
+	httpengine.BeforeStart, httpengine.OnUse, httpengine.OnMeasure = gpus.makeRoom, gpus.use, gpus.measure
 	voiceEngine = b.sp.Engine
 	saveSidecarOption = func(backend, key, value string) error {
 		err := settings.Update(settingsPath(b.cfgPath), func(s *settings.Settings) {
@@ -415,7 +418,7 @@ func (b *backend) state() map[string]any {
 		"device":         cfg.Device,
 		"serve": map[string]any{
 			"duck": duck, "stop_hotkey": orNone(cfg.Serve.StopHotkey), "mute_hotkey": orNone(cfg.Serve.MuteHotkey),
-			"barge_in": boolOr(cfg.Serve.BargeIn, false), "unload_after": unload, "preload_voices": boolOr(cfg.Serve.PreloadVoices, false), "corner_speaking": boolOr(cfg.Serve.CornerSpeaking, true),
+			"barge_in": boolOr(cfg.Serve.BargeIn, false), "unload_after": unload, "preload_voices": boolOr(cfg.Serve.PreloadVoices, false), "gpu_budget": budgetSetting(cfg), "corner_speaking": boolOr(cfg.Serve.CornerSpeaking, true),
 			"dictate_hotkey": orNone(cfg.Serve.DictateHotkey), "dictate_submit": boolOr(cfg.Serve.DictateSubmit, false),
 			"dictate_target": cfg.Serve.DictateTarget, "dictate_feedback": cfg.Serve.DictateFeedback, "dictate_routing": boolOr(cfg.Serve.DictateRouting, false), "dictate_theme": cfg.Serve.DictateTheme, "dictate_overlay_scale": floatOr(cfg.Serve.DictateOverlayScale, 1.5), "personas": boolOr(cfg.Serve.Personas, false), "speaking_popup": boolOr(cfg.Serve.SpeakingPopup, false), "popup_linger": floatOr(cfg.Serve.PopupLinger, 8), "reader_appear": cfg.Serve.Appear(), "reader_hotkey": orNone(cfg.Serve.ReaderHotkey), "reader_theme": derefOr(cfg.Serve.ReaderTheme, ""), "reader_story_theme": derefOr(cfg.Serve.ReaderStoryTheme, ""), "popup_dictation": boolOr(cfg.Serve.PopupDictation, false), "voice_replies": boolOr(cfg.Serve.VoiceReplies, false),
 		},
@@ -432,6 +435,8 @@ func (b *backend) state() map[string]any {
 		},
 		"options": map[string]any{"presets": presets, "outputs": outputs, "inputs": inputs, "models": asrModels(), "themes": overlayThemes(), "traits": cfg.TraitChoices(), "clone_engines": cloneEngines()},
 		"notes":   b.ctl.hotkeyErrors(),
+		// The GPU voices' memory: the card, the budget, what the voices in use take.
+		"gpu": gpuOverview(cfg),
 		// The sessions dictation can reach: name, client, project, busy, waiting messages.
 		"agents": b.ctl.liveAgents(),
 	}

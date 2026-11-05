@@ -3,6 +3,7 @@
   "backends": [
     {
       "name": "chatterbox",
+      "vram": 4,
       "gpus": ["nvidia", "amd"],
       "label": "Chatterbox",
       "note": "expressive speech and cloning, on the GPU",
@@ -32,6 +33,7 @@
     },
     {
       "name": "f5",
+      "vram": 3,
       "gpus": ["nvidia"],
       "label": "F5-TTS",
       "note": "cloning on the GPU; non-commercial",
@@ -44,6 +46,7 @@
     },
     {
       "name": "xtts",
+      "vram": 3,
       "gpus": ["nvidia", "amd"],
       "label": "XTTS v2",
       "note": "cloning on the GPU; non-commercial",
@@ -56,6 +59,7 @@
     },
     {
       "name": "qwen3",
+      "vram": 5.5,
       "gpus": ["nvidia"],
       "label": "Qwen3-TTS",
       "note": "the closest cloning, from the clip and its transcript, on the GPU; also designs new voices from a description (that model downloads on first use, about 4.5 GB)",
@@ -74,13 +78,14 @@
         "label": "Model size",
         "default": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
         "choices": [
-          { "value": "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "label": "1.7B", "note": "closest to the voice; about 4.5 GB download, 6-8 GB of graphics memory" },
-          { "value": "Qwen/Qwen3-TTS-12Hz-0.6B-Base", "label": "0.6B", "note": "faster and lighter; about 2 GB download, 3-4 GB of graphics memory" }
+          { "value": "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "label": "1.7B", "vram": 5.5, "note": "closest to the voice; about 4.5 GB download, 6-8 GB of graphics memory" },
+          { "value": "Qwen/Qwen3-TTS-12Hz-0.6B-Base", "label": "0.6B", "vram": 3.5, "note": "faster and lighter; about 2 GB download, 3-4 GB of graphics memory" }
         ]
       }
     },
     {
       "name": "qwen3_design",
+      "vram": 5.5,
       "gpus": ["nvidia"],
       "label": "Qwen3-TTS voice design",
       "note": "makes a new voice from a description, for voice_clone design; runs in the Qwen3-TTS environment",
@@ -96,6 +101,7 @@
     },
     {
       "name": "chatterbox_turbo",
+      "vram": 4,
       "gpus": ["nvidia", "amd"],
       "label": "Chatterbox Turbo",
       "note": "English speech with laughs, sighs, coughs and a few emotions, and cloning from a clip over 5 seconds; lighter and faster than Chatterbox; runs in the Chatterbox environment",
@@ -121,6 +127,7 @@
     },
     {
       "name": "omnivoice",
+      "vram": 4,
       "gpus": ["nvidia"],
       "label": "OmniVoice",
       "note": "cloning in 600+ languages including Polish, from the clip and its transcript, with laughs and sighs; light (about 3 GB); research and non-commercial use",

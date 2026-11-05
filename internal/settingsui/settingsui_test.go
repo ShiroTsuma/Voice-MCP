@@ -1,6 +1,7 @@
 package settingsui
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,16 +26,26 @@ func TestPageAndSave(t *testing.T) {
 	defer srv.Close()
 	client := srv.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	// Each response is read to its end: an unread page keeps the server writing,
+	// and Close would wait for it forever.
+	done := func(r *http.Response) {
+		if r != nil {
+			io.Copy(io.Discard, r.Body)
+			r.Body.Close()
+		}
+	}
 
 	res, err := client.Get(srv.URL + "/settings")
 	if err != nil || res.StatusCode != http.StatusForbidden {
 		t.Fatalf("without token: %v %v", res.StatusCode, err)
 	}
+	done(res)
 	res, err = client.Get(srv.URL + "/settings?t=tok")
 	if err != nil || res.StatusCode != http.StatusSeeOther || len(res.Cookies()) != 1 {
 		t.Fatalf("token login: %v %v", res.StatusCode, err)
 	}
 	cookie := res.Cookies()[0]
+	done(res)
 
 	req, _ := http.NewRequest("GET", srv.URL+"/settings", nil)
 	req.AddCookie(cookie)
@@ -42,6 +53,7 @@ func TestPageAndSave(t *testing.T) {
 	if err != nil || res.StatusCode != http.StatusOK {
 		t.Fatalf("page: %v %v", res.StatusCode, err)
 	}
+	done(res)
 
 	body := `{"volume":0.5,"serve":{"dictate_feedback":"both","stop_hotkey":"Ctrl+Shift+K"}}`
 	req, _ = http.NewRequest("POST", srv.URL+"/settings/api/save", strings.NewReader(body))
@@ -50,6 +62,7 @@ func TestPageAndSave(t *testing.T) {
 	if res, err = client.Do(req); err != nil || res.StatusCode != http.StatusOK {
 		t.Fatalf("save: %v %v", res.StatusCode, err)
 	}
+	done(res)
 	b, _ := os.ReadFile(path)
 	for _, want := range []string{"volume = 0.5", `dictate_feedback = "both"`, `stop_hotkey = "Ctrl+Shift+K"`} {
 		if !strings.Contains(string(b), want) {

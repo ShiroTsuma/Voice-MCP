@@ -134,7 +134,7 @@
   .vmenu { position: fixed; z-index: 1001; overflow-y: auto; padding: 4px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px;
     box-shadow: 0 10px 30px #0009; font: 13.5px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; scrollbar-width: thin; }
   .vopt { position: relative; padding: 7px 10px 7px 26px; border-radius: 5px; color: var(--ink); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vopt.act { background: var(--field-hi, var(--field)); }
+  .vopt.hl { background: var(--field-hi, var(--field)); }
   .vopt.sel::before { content: ""; position: absolute; left: 10px; top: 50%; width: 8px; height: 4px; margin-top: -4px;
     border: solid var(--ink); border-width: 0 0 1.6px 1.6px; transform: rotate(-45deg); }
   .vopt[aria-disabled="true"] { color: var(--ink-3, var(--ink-2)); cursor: default; }
@@ -187,9 +187,9 @@ const tell = text => dialog(text, 'OK');
     sel.focus();
   };
   const mark = i => {
-    if (act >= 0 && items[act]) items[act].el.classList.remove('act');
+    if (act >= 0 && items[act]) items[act].el.classList.remove('hl');
     act = i;
-    if (items[i]) { items[i].el.classList.add('act'); items[i].el.scrollIntoView({ block: 'nearest' }); }
+    if (items[i]) { items[i].el.classList.add('hl'); items[i].el.scrollIntoView({ block: 'nearest' }); }
   };
   const step = d => { let i = act; for (let n = 0; n < items.length; n++) { i = (i + d + items.length) % items.length; if (!items[i].dis) return mark(i); } };
   function open(sel) {
@@ -412,7 +412,7 @@ function actionButton(it) {
         const o = document.createElement('div'); o.className = 'vopt' + (a.id === 'remove' ? ' danger' : ''); o.setAttribute('role', 'menuitem'); o.tabIndex = 0;
         o.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.click(); } };
         o.textContent = a.label;
-        o.onmouseenter = () => o.classList.add('act'); o.onmouseleave = () => o.classList.remove('act');
+        o.onmouseenter = () => o.classList.add('hl'); o.onmouseleave = () => o.classList.remove('hl');
         if (a.id === 'info') o.classList.add('info');
         if (a.disabled) { o.setAttribute('aria-disabled', 'true'); o.title = a.why || ''; }
         o.onclick = () => { if (a.disabled) return; closeActMenu(); a.id === 'info' ? openInfo(it.id) : runAction(it, a, null); };

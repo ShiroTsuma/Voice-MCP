@@ -383,6 +383,7 @@ func merge(s *settings.Settings, in settings.Settings) {
 	setB(&s.Serve.VoiceReplies, in.Serve.VoiceReplies)
 	set(&s.Serve.UnloadAfter, in.Serve.UnloadAfter)
 	setB(&s.Serve.PreloadVoices, in.Serve.PreloadVoices)
+	set(&s.Serve.GPUBudget, in.Serve.GPUBudget)
 	setB(&s.Serve.CornerSpeaking, in.Serve.CornerSpeaking)
 	set(&s.Listen.Model, in.Listen.Model)
 	set(&s.Listen.InputDevice, in.Listen.InputDevice)
