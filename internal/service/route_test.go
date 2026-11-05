@@ -55,6 +55,12 @@ func TestRoute(t *testing.T) {
 		{"Do you think Annie, that Rebekka was right?", "Do you think Annie, that Rebekka was right?", []uint32{1}, false},
 		{"What do you think Annie, should Rebekka, do it?", "What do you think Annie, should Rebekka, do it?", nil, false}, // two names called
 		{"So what do you think Rebecca? Should we ship it today?", "So what do you think Rebecca? Should we ship it today?", []uint32{3}, false},
+		// After a short reply.
+		{"Sure, Rebekka. Remove them.", "Sure, Rebekka. Remove them.", []uint32{3}, false},
+		{"Okay Annie do it", "Okay Annie do it", []uint32{1}, false},
+		{"Dobra Rebeko, wdrażaj", "Dobra Rebeko, wdrażaj", []uint32{3}, false},
+		{"Yes, Rebekka said so", "Yes, Rebekka said so", nil, false}, // about her
+		{"Sure, tell Rebekka", "Sure, tell", []uint32{3}, false}, // the name last still addresses
 
 		// Found by speaking test sentences to the recognizers.
 		{"Rebekko, zrób deploy", "Zrób deploy", []uint32{3}, false}, // the vocative first

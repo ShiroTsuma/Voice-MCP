@@ -185,6 +185,15 @@ func calledMidway(words, norm []string, agents []AgentInfo) (uint32, bool) {
 					spoken = spoken || youWords[norm[j]]
 				}
 				called = comma || (spoken && !aboutAfter[norm[i+1]])
+				// After a short reply ("Sure, Clara. Remove them.", "Okay
+				// Rebekka do it", "Dobra Anno, ...") the name speaks to her too.
+				if !called && i <= 2 && !aboutAfter[norm[i+1]] {
+					lead := true
+					for _, p := range norm[:i] {
+						lead = lead && openers[p]
+					}
+					called = lead
+				}
 			}
 			if called {
 				if hits == 0 || found != a.PID {
@@ -196,6 +205,15 @@ func calledMidway(words, norm []string, agents []AgentInfo) (uint32, bool) {
 		}
 	}
 	return found, hits == 1
+}
+
+// Short replies a message may start with before the name it is for.
+var openers = map[string]bool{
+	"sure": true, "ok": true, "okay": true, "yes": true, "yeah": true, "yep": true, "no": true, "nope": true,
+	"thanks": true, "thank": true, "well": true, "right": true, "alright": true, "good": true, "great": true,
+	"fine": true, "cool": true, "perfect": true, "nice": true, "so": true, "and": true, "oh": true, "hey": true, "hi": true,
+	"tak": true, "nie": true, "dobra": true, "dobrze": true, "okej": true, "spoko": true, "jasne": true,
+	"dzieki": true, "super": true, "swietnie": true, "wiec": true, "czesc": true, "hej": true, "a": true, "to": true,
 }
 
 // Verbs right after a name at the start that make the sentence about it.
