@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"voice/internal/audio"
 	"voice/internal/core"
@@ -545,6 +546,12 @@ func newPhraser(vad *sherpa.VAD, rec *sherpa.Recognizer, langs []string, report 
 	go func() {
 		defer close(p.done)
 		var said []string
+		// The phrase in progress is transcribed again and again from its
+		// start, and a recognizer that does not stream may decide its words
+		// anew each time: a word already shown would change as the user goes
+		// on. A word two passes in a row agree on stays as shown; the passes
+		// after it only add words behind it (local agreement).
+		var held, prev []string
 		for job := range p.jobs {
 			if p.stopped.Load() {
 				continue // recording ended: the final transcription takes over
@@ -562,11 +569,19 @@ func newPhraser(vad *sherpa.VAD, rec *sherpa.Recognizer, langs []string, report 
 			shown := said
 			if job.final {
 				if text != "" {
-					said = append(said, text)
+					said = append(said, keepHeld(held, text))
 				}
+				held, prev = nil, nil
 				shown = said
 			} else if text != "" {
-				shown = append(append([]string(nil), said...), text)
+				words := strings.Fields(text)
+				var ok bool
+				held, ok = agreed(held, prev, words)
+				prev = words
+				if !ok {
+					continue // it heard the start otherwise: what is shown stays
+				}
+				shown = append(append([]string(nil), said...), strings.Join(words, " "))
 			}
 			if len(shown) > 0 {
 				report(strings.Join(shown, " "))
@@ -574,6 +589,46 @@ func newPhraser(vad *sherpa.VAD, rec *sherpa.Recognizer, langs []string, report 
 		}
 	}()
 	return p
+}
+
+// sameWord compares two recognized words without case or punctuation.
+func sameWord(a, b string) bool {
+	clean := func(w string) string {
+		return strings.ToLower(strings.TrimFunc(w, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }))
+	}
+	return clean(a) == clean(b)
+}
+
+// agreed extends the held words with those the last two passes agree on
+// right after them. ok is false when this pass decided the held words
+// otherwise: it is not shown, and the held words stay.
+func agreed(held, prev, words []string) (out []string, ok bool) {
+	for i, w := range held {
+		if i >= len(words) || !sameWord(w, words[i]) {
+			return held, false
+		}
+	}
+	n := len(held)
+	for n < len(prev) && n < len(words) && sameWord(prev[n], words[n]) {
+		n++
+	}
+	return append(held, words[len(held):n]...), true
+}
+
+// keepHeld is a finished phrase as shown: its held words, then the final
+// pass's words after them when it begins with them; a final pass that
+// decided the start otherwise wins, as it heard the whole phrase.
+func keepHeld(held []string, final string) string {
+	words := strings.Fields(final)
+	if len(held) == 0 || len(words) < len(held) {
+		return final
+	}
+	for i, w := range held {
+		if !sameWord(w, words[i]) {
+			return final
+		}
+	}
+	return strings.Join(append(append([]string(nil), held...), words[len(held):]...), " ")
 }
 
 func (p *phraser) accept(window []float32) {
