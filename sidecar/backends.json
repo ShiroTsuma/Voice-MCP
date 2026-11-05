@@ -38,7 +38,7 @@
     {
       "name": "qwen3",
       "label": "Qwen3-TTS",
-      "note": "the closest cloning, from the clip and its transcript, on the GPU",
+      "note": "the closest cloning, from the clip and its transcript, on the GPU; also designs new voices from a description (that model downloads on first use, about 4.5 GB)",
       "pip": ["qwen-tts"],
       "module": "qwen_tts",
       "port": 8768,
