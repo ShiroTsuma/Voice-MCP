@@ -32,7 +32,7 @@
   <img src="docs/images/settings.png" width="380" alt="The voice settings window: Anna is speaking a line that fills in word by word, your last dictated reply below it, and three sessions with their projects and states">
 </p>
 
-<p align="center"><em>The settings window, opened from the tray icon. Sessions and lines here are sample data.</em></p>
+<p align="center"><em>The settings window, opened from the tray icon. Sessions, characters and lines in all screenshots are sample data.</em></p>
 
 You run several agent sessions and none of them is on screen. voice gives each one a name and a voice: when a turn ends or an agent needs a decision, you hear it ("shop-api. Two tests fail. Should I fix them now?"). Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>, say "Anna, yes, fix them", and the message reaches that session, whether it is busy, idle or in a window you cannot see.
 
@@ -51,33 +51,6 @@ Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recogni
 | Use another agent | Any agent, including one on a local model, can register over a small HTTP API, take dictation, speak, announce its turns and message other sessions: [docs/http-api.md](docs/http-api.md) |
 | Stay in control | Hotkeys to stop and mute, ducking of other apps, Esc or "cancel" to drop a dictation |
 
-<details>
-<summary><strong>More screenshots</strong>: speaking popup, transcript, settings, reading window, characters, integrations</summary>
-
-<br>
-
-<table>
-  <tr>
-    <td align="center" valign="top"><img src="docs/images/speaking-popup.png" width="380" alt="The speaking popup in the screen corner"><br><em>The corner popup while an agent speaks. It takes no clicks or focus and stays while you dictate.</em></td>
-    <td align="center" valign="top"><img src="docs/images/settings-transcript.png" width="380" alt="The transcript, newest first"><br><em>The transcript, newest first: what each agent said and what you dictated, with where it went.</em></td>
-  </tr>
-  <tr>
-    <td align="center" valign="top"><img src="docs/images/settings-speaking.png" width="380" alt="The Speaking settings group"><br><em>Every setting applies at once. Hotkeys are set by pressing them.</em></td>
-    <td align="center" valign="top"><img src="docs/images/reader.png" width="380" alt="The reading window showing a scene in the story theme: a narrated setting, then lines by Clara, Diana and Fiona with their moods and a stage direction"><br><em>The reading window (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>): a scene in the story theme a session chose, with moods, stage directions and whom a line is said to.</em></td>
-  </tr>
-</table>
-
-<img src="docs/images/characters.png" alt="The characters window: a list of characters and the editor for Clara with personality traits, description, voice and colour">
-
-*The characters window: personality traits, a description in your own words, a voice, a colour and an optional picture.*
-
-<img src="docs/images/integrations.png" alt="The Integrations window on GPU voices, with the Info and settings popup of Chatterbox Turbo: its languages, sound tags, moods, the graphics cards it runs on and its size">
-
-*Integrations: what voice is wired into and the voices it can install. Each entry has one button, its other actions on the arrow, and Info and settings with the sounds and moods it makes.*
-
-*All screenshots show sample sessions, characters and lines.*
-
-</details>
 
 ## Quick start
 
@@ -105,6 +78,10 @@ Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recogni
 4. Start Codex and Claude Code again. In Codex, run `/hooks` once and trust voice's hooks.
 
 5. Click the tray icon to open the settings. Turn on **Start at login** in the tray menu if you want the hotkeys ready right after you sign in.
+
+   <img src="docs/images/settings-speaking.png" width="320" alt="The settings window with the Speaking group open: default voice, volume and Answer by voice">
+
+   *Each group opens in place, and every setting applies at once. Hotkeys are set by pressing them.*
 
 **Windows Defender** sometimes quarantines unsigned Go programs such as `voice.exe` (for example as Wacatac). Compare the archive with `SHA256SUMS` before trusting it, then restore the file and add an exclusion for the folder you extracted it to.
 
@@ -144,6 +121,13 @@ The agent installs and tests voice. Trusting the Codex hooks, restarting session
 ## Talk to your agents
 
 **Hearing them.** voice speaks when an agent finishes a turn, asks for permission or asks you a question. The agent can also speak for itself through the `voice_speak` tool, which its skill tells it to use rarely and briefly. With **Answer by voice** on (Speaking), an agent that you dictated to says the key point of its answer aloud too.
+
+<table>
+  <tr>
+    <td align="center" valign="top"><img src="docs/images/speaking-popup.png" width="380" alt="The speaking popup in the screen corner"><br><em>The corner popup while an agent speaks: the words fill in as they are heard. It takes no clicks or focus and stays while you dictate.</em></td>
+    <td align="center" valign="top"><img src="docs/images/settings-transcript.png" width="380" alt="The transcript, newest first"><br><em>The transcript: what each agent said and what you dictated, with where it went.</em></td>
+  </tr>
+</table>
 
 **Answering them.** Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>, speak, then pause for two seconds or press the hotkey again. Your words appear in the settings window as you say them; at the end the whole recording is transcribed offline once more and delivered:
 
@@ -193,6 +177,10 @@ Then say "Mira, hello": it answers aloud, and its turns show in the transcript b
 
 Sessions take their names from a list of characters (settings window → Characters). Each has a name, personality traits, an optional description in your own words, a voice, a colour for its light and an optional picture. A new session takes the first character no other session uses; the first one (★) is the default.
 
+<img src="docs/images/characters.png" alt="The characters window: a list of characters and the editor for Clara with personality traits, description, voice and colour">
+
+*The characters window: personality traits, a description in your own words, a voice, a colour and an optional picture.*
+
 Change a session's character by right-clicking it in the settings window, with `/character` in Claude Code (`/character Rebekka` switches at once; without a name it asks), or with `$character` in Codex.
 
 With **Give sessions characters** on, the agent plays its character in every reply, written and spoken, and speaks with its voice. The character changes only the tone: the agent still works correctly and keeps helping. Off, the names still route dictation, and agents keep their usual tone and the default voice.
@@ -220,6 +208,10 @@ A line can also carry what is shown and never spoken: `kind` (`dialogue`, `narra
 Kokoro's 54 voices suit a crowd of side characters (they run on the CPU at once); keep the GPU voices for one or two leads.
 
 The corner popup is small for a scene. Like a game overlay, **Reading window key** in the settings shows a large window with the transcript as a log, and hides it again; nothing else opens it. Each speaker of a scene gets their own line in their colour, the message being said fills in as it is heard, and your dictation shows as it is heard. Scroll back with the mouse wheel, move it by its bottom bar and resize it from its corner. The bar also picks what it shows: the session that spoke last (the default), all sessions mixed as they came, or one session, so a story is not interrupted by a coding session's announcements. While it shows one session that tells a story (narrative style), it uses the **Story theme** from the settings, unless the session chose a theme of its own: an agent can give its session a theme with `voice_control` `set_theme` (`list_themes` lists them), for example a role-play skill's, without changing yours. **Words appear** shows each word as it is said, or the whole message at once with the word being said marked.
+
+<p align="center"><img src="docs/images/reader.png" width="480" alt="The reading window showing a scene in the story theme: a narrated setting, then lines by Clara, Diana and Fiona with their moods and a stage direction"></p>
+
+<p align="center"><em>The reading window with a scene in a story theme: the setting, narration, each speaker in their colour with their mood, a stage direction and whom a line is said to.</em></p>
 
 ### Reading window themes
 
@@ -251,6 +243,12 @@ A voice comes in three layers, each in `config.toml` next to `voice.exe` (create
 1. An **engine** makes the sound. Kokoro, Piper, Windows SAPI and the GPU backends (Chatterbox, Chatterbox Turbo, XTTS, F5, Qwen3-TTS, OmniVoice) are built in. Any program that writes a WAV file can be another one (`type = "exec"`), and so can any server that speaks voice's HTTP protocol (`type = "http"`).
 2. A **preset** picks an engine and tunes it: voice, speed, pitch, effects, another engine or voice for another language. The built-in `calm-mature` is Kokoro's `af_nicole`, slower and lower.
 3. A **character** speaks with a preset. Pick it in the Characters window (Voice), or set `preset` in its `[[characters]]` entry.
+
+The GPU engines and the models install from **Integrations** (settings window or tray menu), one button each:
+
+<img src="docs/images/integrations.png" alt="The Integrations window on GPU voices, with the Info and settings popup of Chatterbox Turbo: its languages, sound tags, moods, the graphics cards it runs on and its size">
+
+*Each entry's other actions are on its arrow; Info and settings shows the languages it speaks, the sounds and moods it makes, the graphics cards it runs on, and settings such as a model size or a server's address.*
 
 For example, Chatterbox's own voice for one character, and a program of your own for another:
 
