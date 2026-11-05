@@ -406,7 +406,7 @@ function sessionName(pid, all) {
   const a = agentOf(pid), l = all.findLast(l => l.pid === pid);
   const name = (a && a.name) || (l && l.name) || 'Session ' + pid;
   const where = [clientName((a && a.client) || (l && l.client)), (a && a.project) || (l && l.project)].filter(Boolean).join(', ');
-  return name + (where ? ' · ' + where : '') + (a ? '' : ' (ended)');
+  return name + (where ? ' · ' + where : '') + (a ? '' : ' (ended' + (l ? ', ' + clock(l.at) : '') + ')');
 }
 // The picker's choices: the sessions now, and the one chosen even when it has gone.
 function fillWho(all) {
