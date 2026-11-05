@@ -87,6 +87,11 @@
   #hint { flex: none; padding: 8px 32px 12px; font-size: 12px; color: var(--ink-3); display: none; cursor: move;
     border-top: 1px solid oklch(27% 0.003 260); }
   #hint:hover { color: var(--ink-2); background: oklch(24% 0.003 260); }
+  /* The corner that resizes it, opened with the key. */
+  #grip { position: fixed; right: 0; bottom: 0; width: 22px; height: 22px; cursor: nwse-resize; display: none; z-index: 2;
+    background: linear-gradient(135deg, transparent 50%, var(--ink-3) 50% 56%, transparent 56% 68%, var(--ink-3) 68% 74%, transparent 74%); opacity: .6; }
+  #grip:hover { opacity: 1; }
+  .pinned #grip { display: block; }
   .pinned #hint { display: block; }
   @media (prefers-reduced-motion: reduce) { .msg, .win.enter { animation: none; } .w { transition: none; } }
 </style>
@@ -96,6 +101,7 @@
 <div class="win enter" id="win">
   <div id="list"><div id="empty">Nothing said yet.</div></div>
   <div id="hint"></div>
+  <div id="grip" title="Drag to resize"></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -305,7 +311,7 @@ function render() {
   if (atEnd) requestAnimationFrame(() => { const ls = $('list'); ls.scrollTop = ls.scrollHeight; followTop = ls.scrollTop; });
   if (!pinned()) away = false;
   const key = state && state.serve && state.serve.reader_hotkey;
-  const hint = 'Scroll to read back · drag here to move' + (key && key !== 'none' ? ' · ' + key.replace(/\+/g, ' + ') + ' hides it' : '');
+  const hint = 'Scroll to read back · drag here to move, the corner to resize' + (key && key !== 'none' ? ' · ' + key.replace(/\+/g, ' + ') + ' hides it' : '');
   if ($('hint').textContent !== hint) $('hint').textContent = hint;
   $('empty').hidden = t.length > 0;
   const keep = new Set(t.map(keyOf));
@@ -400,6 +406,9 @@ function tick() {
 // The bottom bar moves the window (voice does the moving).
 $('hint').addEventListener('pointerdown', e => {
   if (e.button === 0 && window.chrome && chrome.webview) { e.preventDefault(); chrome.webview.postMessage('drag'); }
+});
+$('grip').addEventListener('pointerdown', e => {
+  if (e.button === 0 && window.chrome && chrome.webview) { e.preventDefault(); chrome.webview.postMessage('resize'); }
 });
 // Only the user's own scrolling counts (the wheel or the scroll bar), not the window following along.
 let away = false, touchedAt = 0;

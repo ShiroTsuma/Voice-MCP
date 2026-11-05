@@ -80,6 +80,7 @@ const (
 	swpShowWindow = 0x0040
 	swpNoZOrder   = 0x0004
 	swpNoSize     = 0x0001
+	swpNoMove     = 0x0002
 	swRestore     = 9
 
 	wsOverlappedWindow = 0x00CF0000
@@ -149,6 +150,8 @@ type Window struct {
 
 	lastHide atomic.Int64 // unix nanos of the last hide on focus loss
 	moved    bool         // a Centre window the user dragged: it stays at at; UI thread only
+	sized    bool         // and resized: it keeps size (real pixels); UI thread only
+	size     point
 	dragging atomic.Bool
 	at       point
 	placed   bool // a normal window was positioned once; the user moves it after
@@ -227,7 +230,16 @@ func (w *Window) SetClickThrough(on bool) error {
 //
 // The page's WebView holds the mouse, so the window follows the cursor while
 // the left button stays down rather than through Windows' own move loop.
-func (w *Window) Drag() error {
+func (w *Window) Drag() error { return w.follow(false) }
+
+// Resize sizes the window with the mouse the same way, from a grip on the
+// page; a Centre window keeps the size after.
+func (w *Window) Resize() error { return w.follow(true) }
+
+// minSize is the smallest a window can be resized to, in real pixels.
+var minSize = point{420, 280}
+
+func (w *Window) follow(resize bool) error {
 	if w.dragging.Swap(true) {
 		return nil
 	}
@@ -254,11 +266,24 @@ func (w *Window) Drag() error {
 			}
 			var pt point
 			procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
-			x, y := from.Left+pt.X-start.X, from.Top+pt.Y-start.Y
-			w.do(func() {
-				procSetWindowPos.Call(w.hwnd, 0, uintptr(x), uintptr(y), 0, 0, swpNoActivate|swpNoZOrder|swpNoSize)
-				w.moved, w.at = true, point{x, y}
-			})
+			dx, dy := pt.X-start.X, pt.Y-start.Y
+			if resize {
+				cx := max(minSize.X, from.Right-from.Left+dx)
+				cy := max(minSize.Y, from.Bottom-from.Top+dy)
+				w.do(func() {
+					procSetWindowPos.Call(w.hwnd, 0, 0, 0, uintptr(cx), uintptr(cy), swpNoActivate|swpNoZOrder|swpNoMove)
+					w.sized, w.size = true, point{cx, cy}
+					if !w.moved {
+						w.moved, w.at = true, point{from.Left, from.Top}
+					}
+				})
+			} else {
+				x, y := from.Left+dx, from.Top+dy
+				w.do(func() {
+					procSetWindowPos.Call(w.hwnd, 0, uintptr(x), uintptr(y), 0, 0, swpNoActivate|swpNoZOrder|swpNoSize)
+					w.moved, w.at = true, point{x, y}
+				})
+			}
 			time.Sleep(10 * time.Millisecond)
 		}
 	}()
@@ -486,6 +511,9 @@ func (w *Window) place(flags uintptr) {
 	}
 	if work.Top > full.Top {
 		y = work.Top + margin
+	}
+	if w.opt.Centre && w.sized {
+		width, height = w.size.X, w.size.Y
 	}
 	if w.opt.Centre && w.moved {
 		// Where the user put it, at its size.

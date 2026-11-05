@@ -187,7 +187,12 @@ The corner popup is small for a scene. Under **Reading window** in the settings,
 
 ### Reading window themes
 
-A theme is a folder in `themes` in voice's data folder with a `theme.css`, plus any pictures or fonts it uses (relative `url()`s work). Pick it under **Reading window theme**; it loads after the built-in look and overrides it, and an edit shows the next time the window opens. [`examples/reader-themes/storybook`](examples/reader-themes/storybook/theme.css) is one to start from.
+A theme is a folder in `themes` in voice's data folder with a `theme.css`, plus any pictures or fonts it uses (relative `url()`s work). Pick it under **Reading window theme**; it loads after the built-in look and overrides it, and an edit shows the next time the window opens. A theme can be as small as this, which hides each scene's message header so its lines stand alone:
+
+```css
+.msg.scene { grid-template-columns: 1fr; }
+.msg.scene > .pic, .msg.scene .head { display: none; }
+```
 
 What the page writes for a theme to use (the built-in look hides the parts marked hidden):
 

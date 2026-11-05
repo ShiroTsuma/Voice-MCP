@@ -359,10 +359,18 @@ func (b *backend) reader() *flyout.Window {
 			Width: 820, Height: 760, Margin: 24, Passive: true, Centre: true,
 			// Opened with its hotkey, the page's bottom bar moves the window.
 			OnMessage: func(m string) {
-				if m == "drag" && readerPinned.Load() {
-					if err := reader.Drag(); err != nil {
-						logf("reading window: drag: %v", err)
-					}
+				if !readerPinned.Load() {
+					return
+				}
+				var err error
+				switch m {
+				case "drag":
+					err = reader.Drag()
+				case "resize":
+					err = reader.Resize()
+				}
+				if err != nil {
+					logf("reading window: %s: %v", m, err)
 				}
 			},
 			URL:        func() string { return "http://" + b.info.Addr + "/settings/reader?t=" + b.info.Token },
