@@ -151,7 +151,7 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 	}
 	resp, err := e.client.Do(hr)
 	if err != nil {
-		return fmt.Errorf("%s: %w (is its speech server running at %s?)", e.name, err, e.url)
+		return fmt.Errorf("%w (is its speech server running at %s?)", err, e.url)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
@@ -163,11 +163,11 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 		if len(msg) > 300 {
 			msg = msg[:300]
 		}
-		return fmt.Errorf("%s: %s: %s", e.name, resp.Status, msg)
+		return fmt.Errorf("%s: %s", resp.Status, msg)
 	}
 	pcm, rate, err := audio.DecodeWAV(data)
 	if err != nil {
-		return fmt.Errorf("%s: the server's answer is not WAV audio: %w", e.name, err)
+		return fmt.Errorf("the server's answer is not WAV audio: %w", err)
 	}
 	if len(pcm) == 0 {
 		return errors.New("no audio")
