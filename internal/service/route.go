@@ -18,6 +18,7 @@ type AgentInfo struct {
 	NoInput  bool      `json:"no_input"`        // excluded from dictation by the user
 	NoSpeech bool      `json:"no_speech"`       // muted by the user
 	Style    string    `json:"style,omitempty"` // narrative while it tells a story (set_style)
+	Theme    string    `json:"theme,omitempty"` // the reading window's theme it chose (set_theme)
 }
 
 // How a recognizer writes the clients' names, in English and Polish.

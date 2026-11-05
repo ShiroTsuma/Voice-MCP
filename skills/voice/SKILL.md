@@ -38,6 +38,11 @@ The voice MCP is the agent's mouth and ears on the user's machine.
   the status of a message says which sounds were made or dropped and
   whether the mood was applied.
 
+- The user's reading window (a hotkey opens it) shows the transcript. For a
+  story or role-play, `voice_control` `set_theme` with a theme from
+  `list_themes` gives this session's messages that look there; `set_theme`
+  with no theme gives back the user's. It never changes the user's own theme.
+
 ## Listening (`voice_listen`)
 
 Use only when the user wants to talk by voice (they asked, or they answer

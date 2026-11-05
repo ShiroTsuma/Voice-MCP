@@ -61,6 +61,7 @@ type agentSeen struct {
 	noInput  bool      // the user excluded it from dictation
 	noSpeech bool      // the user muted it
 	style    string    // how it speaks: "" (short) or "narrative"
+	theme    string    // the reading window's theme for this session (set_theme); empty uses the user's
 	told     string    // the character whose persona the agent last received
 	custom   bool      // the name is the user's own, not one from the character list
 	session  string    // Claude Code's session id, from its hooks
@@ -245,7 +246,7 @@ func (a *Agents) Info() []AgentInfo {
 		if s := a.seen[pid]; s != nil {
 			out = append(out, AgentInfo{PID: pid, Name: s.name, Client: s.client, Project: s.project,
 				Busy: !s.busyAt.IsZero() && time.Since(s.busyAt) < busyFor, Waiting: len(s.queue), Active: s.at,
-				NoInput: s.noInput, NoSpeech: s.noSpeech, Style: s.style})
+				NoInput: s.noInput, NoSpeech: s.noSpeech, Style: s.style, Theme: s.theme})
 		}
 		a.mu.Unlock()
 	}
@@ -347,6 +348,19 @@ func (a *Agents) SetStyle(pid uint32, style string) {
 			style = ""
 		}
 		st.style = style
+	}
+}
+
+// SetTheme gives a session the reading window's theme named, or the user's
+// again when name is "".
+func (a *Agents) SetTheme(pid uint32, name string) {
+	if a == nil || pid == 0 {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if st := a.seen[pid]; st != nil {
+		st.theme = name
 	}
 }
 

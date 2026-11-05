@@ -13,6 +13,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -74,6 +75,22 @@ type ControlArgs struct {
 	Style string `json:"style,omitempty"`
 	// ID: status of one utterance, a speak answer's id.
 	ID string `json:"id,omitempty"`
+	// Theme: set_theme's choice from list_themes; "" goes back to the user's.
+	Theme string `json:"theme,omitempty"`
+}
+
+// installedThemes are the reading window's themes: folders in the data
+// folder's themes with a theme.css.
+func installedThemes() []string {
+	dir := filepath.Join(core.DataDir(), "themes")
+	out := []string{}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if _, err := os.Stat(filepath.Join(dir, e.Name(), "theme.css")); e.IsDir() && err == nil {
+			out = append(out, e.Name())
+		}
+	}
+	return out
 }
 
 // narrativeChars is how long one line may be in the narrative style.
@@ -487,6 +504,18 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 			return "narrative style: speech is the content now. Say each reply aloud in full as spoken prose (a story, a scene); when characters speak, pass the whole scene in one voice_speak call with lines, each in its voice. Code, lists and links still stay on screen. set_style short ends it.", nil
 		}
 		return nil, userErr("style must be short or narrative")
+	case "list_themes":
+		return map[string]any{"themes": installedThemes(), "note": "set_theme with one gives this session's messages that look in the user's reading window; the user's own theme stays theirs"}, nil
+	case "set_theme":
+		name := strings.TrimSpace(a.Theme)
+		if name != "" && !slices.Contains(installedThemes(), name) {
+			return nil, userErr("no theme %q; installed: %s (list_themes)", name, strings.Join(installedThemes(), ", "))
+		}
+		s.Agents.SetTheme(a.PID, name)
+		if name == "" {
+			return "this session uses the user's theme again", nil
+		}
+		return "this session's messages use the " + name + " theme when the reading window shows this session", nil
 	case "mute":
 		sp.SetMuted(true)
 		return "muted", nil

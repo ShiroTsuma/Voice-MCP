@@ -423,7 +423,8 @@ function fillWho(all) {
   }
   if (sel.value !== who) sel.value = who;
 }
-// The theme for what is shown: the story theme while one session that tells a story is shown.
+// The theme for what is shown: with one session shown, the theme it chose, else the story theme while it
+// tells a story; with all of them, the user's.
 function applyTheme(shown, all) {
   const sv = (state && state.serve) || {};
   let name = sv.reader_theme || '';
@@ -431,6 +432,8 @@ function applyTheme(shown, all) {
     const a = agentOf(shown), last = all.findLast(l => l.pid === shown && l.kind === 'said');
     const story = (a && a.style === 'narrative') || (!a && last && last.style === 'narrative');
     if (story && sv.reader_story_theme) name = sv.reader_story_theme;
+    // A theme the session chose for itself (set_theme) comes first.
+    if (a && a.theme) name = a.theme;
     document.body.dataset.style = story ? 'narrative' : 'short';
   } else delete document.body.dataset.style;
   const link = $('theme');
