@@ -1,0 +1,13 @@
+{
+  "about": "How a dictated message names the session it is for, in Polish (see en.json).",
+  "everyone": ["wszyscy", "do wszystkich", "wszystkim"],
+  "openers": ["tak", "nie", "dobra", "dobrze", "okej", "spoko", "jasne", "dzięki", "super", "świetnie", "więc", "cześć", "hej"],
+  "you_words": ["ty", "cię", "ciebie", "tobie", "ci", "twoim", "twoja", "twój", "hej", "słuchaj", "proszę", "wiesz", "myślisz", "możesz", "sądzisz", "widzisz", "zrobisz", "sprawdzisz", "dasz", "powiesz"],
+  "about_before": ["powiedz", "zapytaj", "napisz", "przekaż", "daj", "z", "ze", "do", "od", "dla", "i", "oraz", "albo", "lub", "o", "niż", "jak", "przez", "u", "niech"],
+  "about_after": ["powiedziała", "powiedział", "mówi", "zrobiła", "zrobił", "napisała", "napisał", "ma", "jest", "była", "był", "będzie", "i", "oraz"],
+  "subject_verbs": ["powiedziała", "powiedział", "mówi", "mówiła", "zrobiła", "zrobił", "napisała", "napisał", "była", "był", "uważa", "twierdzi"],
+  "client_aliases": {
+    "claude": ["klaud", "klod"],
+    "codex": ["kodeks", "kodex", "codeks", "kodek"]
+  }
+}

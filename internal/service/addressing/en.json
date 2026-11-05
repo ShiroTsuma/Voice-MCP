@@ -1,0 +1,13 @@
+{
+  "about": "How a dictated message names the session it is for, in English. voice reads every file here and in <data>\\addressing (extra words or languages); words are compared without case or diacritics.",
+  "everyone": ["everyone", "everybody", "all agents", "to all"],
+  "openers": ["sure", "ok", "okay", "yes", "yeah", "yep", "no", "nope", "thanks", "thank", "well", "right", "alright", "good", "great", "fine", "cool", "perfect", "nice", "so", "oh", "hey", "hi"],
+  "you_words": ["you", "your", "ya", "hey", "hi", "please"],
+  "about_before": ["tell", "ask", "told", "asked", "with", "to", "and", "or", "from", "for", "of", "by", "about", "like", "than", "as", "let", "call", "called", "named", "the", "a", "an"],
+  "about_after": ["said", "says", "is", "was", "will", "has", "had", "did", "does", "can", "could", "should", "would", "thinks", "wrote", "made", "and", "or"],
+  "subject_verbs": ["said", "says", "wrote", "made", "thinks", "was", "did"],
+  "client_aliases": {
+    "claude": ["claude", "cloud", "clod", "clode", "klaude"],
+    "codex": ["codex", "codecs"]
+  }
+}

@@ -21,14 +21,9 @@ type AgentInfo struct {
 	Theme    string    `json:"theme,omitempty"` // the reading window's theme it chose (set_theme)
 }
 
-// How a recognizer writes the clients' names, in English and Polish.
-var clientAliases = map[string][]string{
-	"claude": {"claude", "klaud", "klod", "klaude", "cloud", "clod", "clode"},
-	"codex":  {"codex", "kodeks", "kodex", "codeks", "kodek", "codecs"},
-}
-
-// Words that address every agent.
-var everyone = [][]string{{"wszyscy"}, {"do", "wszystkich"}, {"wszystkim"}, {"everyone"}, {"everybody"}, {"all", "agents"}, {"to", "all"}}
+// The words an address is read by (clientAliases, everyone, openers,
+// youWords, aboutBefore, aboutAfter, subjectVerb) come from the files in
+// addressing\ (addressing.go).
 
 // Route reads who a dictated message is for from its first words: a client
 // ("Codex, ..."), a project ("mcp tools: ..."), both ("Claude mcp tools ..."),
@@ -37,6 +32,8 @@ var everyone = [][]string{{"wszyscy"}, {"do", "wszystkich"}, {"wszystkim"}, {"ev
 // agents are ordered most recently active first; among several that match,
 // the first wins.
 func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool) {
+	addrMu.RLock()
+	defer addrMu.RUnlock()
 	words := strings.Fields(text)
 	norm := make([]string, len(words))
 	for i, w := range words {
@@ -117,35 +114,6 @@ func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool)
 	return []uint32{best}, rest, false
 }
 
-// Words right before a name that make it the object of the sentence, not the
-// one spoken to: "tell Rebekka", "with Anna", "zapytaj Rebekę", "do Clary".
-var aboutBefore = map[string]bool{
-	"tell": true, "ask": true, "told": true, "asked": true, "with": true, "to": true, "and": true, "or": true,
-	"from": true, "for": true, "of": true, "by": true, "about": true, "like": true, "than": true, "as": true,
-	"let": true, "call": true, "called": true, "named": true, "the": true, "a": true, "an": true,
-	"powiedz": true, "zapytaj": true, "napisz": true, "przekaz": true, "daj": true, "z": true, "ze": true,
-	"do": true, "od": true, "dla": true, "i": true, "oraz": true, "albo": true, "lub": true, "o": true,
-	"niz": true, "jak": true, "przez": true, "u": true, "niech": true,
-}
-
-// Words right after a name that make it the subject: "Anna said", "Rebekka
-// zrobiła".
-var aboutAfter = map[string]bool{
-	"said": true, "says": true, "is": true, "was": true, "will": true, "has": true, "had": true, "did": true,
-	"does": true, "can": true, "could": true, "should": true, "would": true, "thinks": true, "wrote": true,
-	"made": true, "and": true, "or": true,
-	"powiedziala": true, "powiedzial": true, "mowi": true, "zrobila": true, "zrobil": true, "napisala": true,
-	"napisal": true, "ma": true, "jest": true, "byla": true, "byl": true, "bedzie": true, "i": true, "oraz": true,
-}
-
-// Words shortly before a name that speak to someone: "do you think Anna".
-var youWords = map[string]bool{
-	"you": true, "your": true, "ya": true, "hey": true, "hi": true, "please": true,
-	"ty": true, "cie": true, "ciebie": true, "tobie": true, "ci": true, "twoim": true, "twoja": true, "twoj": true,
-	"hej": true, "sluchaj": true, "prosze": true, "wiesz": true, "myslisz": true, "mozesz": true,
-	"sadzisz": true, "widzisz": true, "zrobisz": true, "sprawdzisz": true, "dasz": true, "powiesz": true,
-}
-
 // calledMidway finds a session's name said inside a sentence to the one it
 // addresses ("do you think, Anna, that ...", "a ty, Rebekko, co myślisz?").
 // A name counts when it is said in the vocative (Anno, Rebekko), followed by
@@ -205,22 +173,6 @@ func calledMidway(words, norm []string, agents []AgentInfo) (uint32, bool) {
 		}
 	}
 	return found, hits == 1
-}
-
-// Short replies a message may start with before the name it is for.
-var openers = map[string]bool{
-	"sure": true, "ok": true, "okay": true, "yes": true, "yeah": true, "yep": true, "no": true, "nope": true,
-	"thanks": true, "thank": true, "well": true, "right": true, "alright": true, "good": true, "great": true,
-	"fine": true, "cool": true, "perfect": true, "nice": true, "so": true, "and": true, "oh": true, "hey": true, "hi": true,
-	"tak": true, "nie": true, "dobra": true, "dobrze": true, "okej": true, "spoko": true, "jasne": true,
-	"dzieki": true, "super": true, "swietnie": true, "wiec": true, "czesc": true, "hej": true, "a": true, "to": true,
-}
-
-// Verbs right after a name at the start that make the sentence about it.
-var subjectVerb = map[string]bool{
-	"said": true, "says": true, "wrote": true, "made": true, "thinks": true, "was": true, "did": true,
-	"powiedziala": true, "powiedzial": true, "mowi": true, "mowila": true, "zrobila": true, "zrobil": true,
-	"napisala": true, "napisal": true, "byla": true, "byl": true, "uwaza": true, "twierdzi": true,
 }
 
 // setOff: a word followed by a comma, question or exclamation mark.

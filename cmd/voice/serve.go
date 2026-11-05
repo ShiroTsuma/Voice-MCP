@@ -134,6 +134,11 @@ func runServe(args []string) error {
 	for _, err := range service.LoadWordLists(filepath.Join(exeDir(), "wordlists"), filepath.Join(core.DataDir(), "wordlists")) {
 		logf("word lists: %v", err)
 	}
+	// The words a dictated message names its session by: voice's own, and the
+	// user's extra words or languages in the data folder.
+	for _, err := range service.LoadAddressing(filepath.Join(core.DataDir(), "addressing")) {
+		logf("addressing words: %v", err)
+	}
 	ctl := startExtras(ctx, cfg, sp, l, agents)
 	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device}
 	ctl.onSpeaking, ctl.onDictating, ctl.onReaderKey = b.speaking, b.dictating, b.toggleReader
