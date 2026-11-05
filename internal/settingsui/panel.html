@@ -351,11 +351,20 @@
   /* The GPU voices' memory: under its setting, and for a while at the bottom after a voice choice. */
   .gpuview { padding: 0 0 6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
   .gpuview p, #gpuToast p { margin: 4px 0; }
-  .gpuvoice { display: grid; grid-template-columns: auto auto 1fr; gap: 0 8px; align-items: baseline; padding: 2px 0; }
-  .gpuvoice b { color: var(--ink); font-weight: 600; }
-  .gpuvoice .gb { color: var(--ink-2); white-space: nowrap; }
+  .gpubar { position: relative; display: flex; gap: 2px; height: 10px; margin: 6px 0 3px; border-radius: 5px; background: var(--field); }
+  .gpubar .seg { height: 100%; min-width: 3px; border-radius: 3px; }
+  .gpubar .seg:first-child { border-radius: 5px 3px 3px 5px; }
+  .gpubar .seg.faint { opacity: .3; }
+  .gpubar .limit { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 1px; background: var(--ink); box-shadow: 0 0 0 2px var(--sheet); }
+  .gpubar .limit.card { background: oklch(70% 0.17 25); }
+  .gpucap { margin: 0 0 6px !important; font-size: 11.5px; color: var(--ink-3); }
+  .gpulegend { display: grid; gap: 2px; font-size: 11.5px; }
+  .gpuvoice { display: grid; grid-template-columns: 8px auto auto 1fr; gap: 0 7px; align-items: center; }
+  .gpuvoice .sw { width: 8px; height: 8px; border-radius: 2px; }
+  .gpuvoice b { color: var(--ink-2); font-weight: 600; }
+  .gpuvoice .gb { color: var(--ink-3); white-space: nowrap; }
   .gpuvoice .who { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gpuverdict { color: var(--ink); }
+  .gpuverdict { color: var(--ink); margin-top: 6px !important; }
   .gpuhint .btn.small { height: 26px; padding: 0 10px; font-size: 12.5px; margin-left: 4px; vertical-align: middle; }
   #gpuToast { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 50; padding: 10px 12px; border-radius: 8px;
     background: var(--sheet); border: 1px solid var(--rule); box-shadow: 0 8px 26px #0008; font-size: 12.5px; line-height: 1.45; color: var(--ink-2);
@@ -2239,7 +2248,7 @@ function gpuBudgetChoices(s) {
   sel.replaceChildren(new Option('No limit', 'off'), new Option('One voice at a time', 'one'), ...sizes.sort((a, b) => a - b).map(n => new Option(n + ' GB', String(n))));
   sel.value = want;
 }
-const gbText = gb => (gb >= 10 || gb === Math.round(gb) ? Math.round(gb) : gb.toFixed(1)) + ' GB';
+const gbText = gb => (gb === Math.round(gb) ? Math.round(gb) : gb.toFixed(1)) + ' GB';
 function gpuVerdict(g, peak, voices) {
   const total = g.total_gb ? ' of the card\'s ' + gbText(g.total_gb) : '';
   if (voices.length === 0) return 'None of your voices runs on the graphics card.';
@@ -2250,26 +2259,51 @@ function gpuVerdict(g, peak, voices) {
       : voices[0].label + ' takes more than your ' + gbText(g.limit_gb) + ' budget by itself: it still speaks, and any other GPU voice is freed for it.';
     let t = peak <= g.limit_gb ? 'Within your ' + gbText(g.limit_gb) + ' budget: they can all stay loaded.'
       : 'Over your ' + gbText(g.limit_gb) + ' budget: they take turns, and the one used least recently is freed when another loads.';
-    if (alone.length) t += ' ' + alone.join(' and ') + (alone.length > 1 ? ' take' : ' takes') + ' more than the budget by ' + (alone.length > 1 ? 'themselves and run' : 'itself and runs') + ' alone.';
+    if (alone.length) t += ' ' + alone.join(' and ') + (alone.length > 1 ? ' take' : ' takes') + ' more than the budget by ' + (alone.length > 1 ? 'themselves and speak' : 'itself and speaks') + ' alone.';
     return t;
   }
-  if (g.total_gb && peak > g.total_gb * 0.9) return 'No limit, and together they may not fit' + total + ': a budget would make them take turns instead.';
+  if (g.total_gb && peak > g.total_gb * 0.9) return 'No limit, and together they may not fit on the card\'s ' + gbText(g.total_gb) + ': a budget would make them take turns instead.';
   return 'No limit: they stay loaded until idle' + (g.total_gb ? ', about ' + gbText(peak) + total : '') + '.';
 }
+// gpuLines draws the GPU voices' memory as a bar: a segment per voice on the
+// card's memory, a mark at the budget, a small caption and legend under it,
+// and what it means in a sentence.
+const gpuHues = [155, 250, 70, 320, 25, 200, 110, 285];
 function gpuLines(g, voices, peak) {
-  const box = document.createElement('div');
-  const head = document.createElement('p'); head.className = 'gpuhead';
-  head.textContent = (g.total_gb ? 'Graphics card: ' + gbText(g.total_gb) + '. ' : '') + (voices.length ? 'Your GPU voices take up to about ' + gbText(peak) + ' together:' : '');
-  box.append(head);
-  for (const v of voices) {
-    const r = document.createElement('div'); r.className = 'gpuvoice';
-    const n = document.createElement('b'); n.textContent = v.label;
-    const s = document.createElement('span'); s.className = 'gb'; s.textContent = 'about ' + gbText(v.gb) + (v.measured ? '' : ', estimated'); s.title = v.measured ? 'Measured when it last spoke' : 'An estimate until it has spoken; then voice measures it';
-    const u = document.createElement('span'); u.className = 'who'; u.textContent = v.users.join(', ');
-    r.append(n, s, u); box.append(r);
-  }
-  const verdict = document.createElement('p'); verdict.className = 'gpuverdict'; verdict.textContent = gpuVerdict(g, peak, voices);
-  box.append(verdict);
+  const box = document.createElement('div'); box.className = 'gpu';
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const limit = g.mode === 'gb' ? g.limit_gb : 0;
+  const scale = Math.max(g.total_gb || 0, peak, limit, 1);
+  // One at a time: only the largest is ever loaded; the others show faint.
+  const largest = voices.reduce((m, v) => (v.gb > (m ? m.gb : 0) ? v : m), null);
+  const bar = el('div', 'gpubar'); bar.setAttribute('role', 'img');
+  voices.forEach((v, i) => {
+    const s = el('div', 'seg' + (g.mode === 'one' && v !== largest ? ' faint' : ''));
+    s.style.width = (v.gb / scale * 100) + '%';
+    s.style.background = 'oklch(72% 0.13 ' + gpuHues[i % gpuHues.length] + ')';
+    s.title = v.label + ', about ' + gbText(v.gb) + ': ' + v.users.join(', ');
+    bar.append(s);
+  });
+  if (limit) { const m = el('div', 'limit'); m.style.left = 'calc(' + (limit / scale * 100) + '% - 1px)'; m.title = 'Budget ' + gbText(limit); bar.append(m); }
+  // Together past the card's own memory: where it ends, in red.
+  const overCard = g.total_gb && peak > g.total_gb && g.mode !== 'one';
+  if (overCard) { const m = el('div', 'limit card'); m.style.left = 'calc(' + (g.total_gb / scale * 100) + '% - 1px)'; m.title = 'The card: ' + gbText(g.total_gb); bar.append(m); }
+  const shown = g.mode === 'one' && largest ? largest.gb : peak;
+  bar.setAttribute('aria-label', 'GPU voices: about ' + gbText(shown) + (g.total_gb ? ' of ' + gbText(g.total_gb) : ''));
+  const cap = el('p', 'gpucap',
+    (voices.length ? (g.mode === 'one' ? 'at most about ' : 'up to about ') + gbText(shown) : 'none in use') + (g.total_gb ? ' of ' + gbText(g.total_gb) : '') +
+    (limit ? ' · budget ' + gbText(limit) : g.mode === 'one' ? ' · one voice at a time' : '') + (overCard ? ' · more than the card holds' : ''));
+  box.append(bar, cap);
+  const legend = el('div', 'gpulegend');
+  voices.forEach((v, i) => {
+    const r = el('div', 'gpuvoice');
+    const sw = el('i', 'sw'); sw.style.background = 'oklch(72% 0.13 ' + gpuHues[i % gpuHues.length] + ')';
+    const gb = el('span', 'gb', gbText(v.gb) + (v.measured ? '' : ' est.'));
+    gb.title = v.measured ? 'Measured when it last spoke' : 'An estimate until it has spoken; then voice measures it';
+    r.append(sw, el('b', null, v.label), gb, el('span', 'who', v.users.join(', ')));
+    legend.append(r);
+  });
+  box.append(legend, el('p', 'gpuverdict', gpuVerdict(g, peak, voices)));
   return box;
 }
 function renderGPU(s) {

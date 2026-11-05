@@ -178,7 +178,7 @@ func budgetSetting(cfg *preset.Config) string {
 }
 
 func gbText(gb float64) string {
-	if gb >= 10 || gb == float64(int(gb)) {
+	if gb == float64(int(gb)) {
 		return fmt.Sprintf("%.0f GB", gb)
 	}
 	return fmt.Sprintf("%.1f GB", gb)

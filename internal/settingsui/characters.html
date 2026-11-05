@@ -205,6 +205,18 @@
   #gpuToast p { margin: 3px 0; }
   #gpuToast .gpulead, #gpuToast .gpuverdict { color: var(--ink); }
   #gpuToast .gpulead { font-weight: 600; }
+  .gpubar { position: relative; display: flex; gap: 2px; height: 10px; margin: 6px 0 3px; border-radius: 5px; background: var(--field); }
+  .gpubar .seg { height: 100%; min-width: 3px; border-radius: 3px; }
+  .gpubar .seg.faint { opacity: .3; }
+  .gpubar .limit { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 1px; background: var(--ink); box-shadow: 0 0 0 2px var(--sheet); }
+  .gpubar .limit.card { background: oklch(70% 0.17 25); }
+  #gpuToast .gpucap { margin: 0 0 6px; font-size: 11.5px; color: var(--ink-3); }
+  .gpulegend { display: grid; gap: 2px; font-size: 11.5px; }
+  .gpuvoice { display: grid; grid-template-columns: 8px auto auto 1fr; gap: 0 7px; align-items: center; }
+  .gpuvoice .sw { width: 8px; height: 8px; border-radius: 2px; }
+  .gpuvoice b { color: var(--ink-2); font-weight: 600; }
+  .gpuvoice .gb, .gpuvoice .who { color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #gpuToast .gpuverdict { margin-top: 6px; }
   /* The page's own dialogs: the browser's would show voice's address and port. */
   .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
   .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
@@ -618,7 +630,7 @@ function hint() {
 }
 
 // ── GPU voices' memory, as in the settings window: what a voice choice would do ──
-const gbText = gb => (gb >= 10 || gb === Math.round(gb) ? Math.round(gb) : gb.toFixed(1)) + ' GB';
+const gbText = gb => (gb === Math.round(gb) ? Math.round(gb) : gb.toFixed(1)) + ' GB';
 function gpuVerdict(g, peak, voices) {
   if (voices.length === 0) return 'None of your voices runs on the graphics card.';
   if (g.mode === 'one') return voices.length > 1 ? 'One at a time: when a speaker on another GPU voice talks, that voice loads first (a few seconds).' : 'One at a time: your one GPU voice stays loaded until idle.';
@@ -635,6 +647,36 @@ function gpuWhatIf(g, who, presetName) {
   const voices = [...map.values()].filter(v => v.users.length);
   return { voices, peak: voices.reduce((t, v) => t + v.gb, 0), chosen: p };
 }
+// As in the settings window: a segment per GPU voice on the card's memory, the
+// budget's mark, a small caption and legend, and a sentence.
+const gpuHues = [155, 250, 70, 320, 25, 200, 110, 285];
+function gpuLines(g, voices, peak) {
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const box = el('div', 'gpu'), limit = g.mode === 'gb' ? g.limit_gb : 0;
+  const scale = Math.max(g.total_gb || 0, peak, limit, 1);
+  const largest = voices.reduce((m, v) => (v.gb > (m ? m.gb : 0) ? v : m), null);
+  const bar = el('div', 'gpubar');
+  voices.forEach((v, i) => {
+    const s = el('div', 'seg' + (g.mode === 'one' && v !== largest ? ' faint' : ''));
+    s.style.width = (v.gb / scale * 100) + '%'; s.style.background = 'oklch(72% 0.13 ' + gpuHues[i % gpuHues.length] + ')';
+    s.title = v.label + ', about ' + gbText(v.gb) + ': ' + v.users.join(', ');
+    bar.append(s);
+  });
+  if (limit) { const m = el('div', 'limit'); m.style.left = 'calc(' + (limit / scale * 100) + '% - 1px)'; m.title = 'Budget ' + gbText(limit); bar.append(m); }
+  // Together past the card's own memory: where it ends, in red.
+  const overCard = g.total_gb && peak > g.total_gb && g.mode !== 'one';
+  if (overCard) { const m = el('div', 'limit card'); m.style.left = 'calc(' + (g.total_gb / scale * 100) + '% - 1px)'; m.title = 'The card: ' + gbText(g.total_gb); bar.append(m); }
+  const shown = g.mode === 'one' && largest ? largest.gb : peak;
+  const legend = el('div', 'gpulegend');
+  voices.forEach((v, i) => {
+    const sw = el('i', 'sw'); sw.style.background = 'oklch(72% 0.13 ' + gpuHues[i % gpuHues.length] + ')';
+    const r = el('div', 'gpuvoice'); r.append(sw, el('b', null, v.label), el('span', 'gb', gbText(v.gb) + (v.measured ? '' : ' est.')), el('span', 'who', v.users.join(', ')));
+    legend.append(r);
+  });
+  box.append(bar, el('p', 'gpucap', (voices.length ? (g.mode === 'one' ? 'at most about ' : 'up to about ') + gbText(shown) : 'none in use') + (g.total_gb ? ' of ' + gbText(g.total_gb) : '') + (limit ? ' · budget ' + gbText(limit) : g.mode === 'one' ? ' · one voice at a time' : '') + (overCard ? ' · more than the card holds' : '')),
+    legend, el('p', 'gpuverdict', gpuVerdict(g, peak, voices)));
+  return box;
+}
 let gpuToastTimer = 0;
 function gpuToast(who, presetName) {
   const g = state && state.gpu;
@@ -643,12 +685,9 @@ function gpuToast(who, presetName) {
   if (!w.chosen && !before) return;
   let t = document.getElementById('gpuToast');
   if (!t) { t = document.createElement('div'); t.id = 'gpuToast'; t.setAttribute('role', 'status'); document.body.append(t); }
-  const p = (text, cls) => { const e = document.createElement('p'); e.textContent = text; if (cls) e.className = cls; return e; };
-  const rows = w.voices.map(v => p(v.label + ' · about ' + gbText(v.gb) + ' · ' + v.users.join(', '), 'gpuvoice'));
-  t.replaceChildren(
-    p(w.chosen ? presetName + ' runs on the graphics card (' + w.chosen.label + ', about ' + gbText(w.chosen.gb) + ').' : presetName + ' frees the graphics card for ' + who + '.', 'gpulead'),
-    p((g.total_gb ? 'Graphics card: ' + gbText(g.total_gb) + '. ' : '') + (w.voices.length ? 'Your GPU voices would take up to about ' + gbText(w.peak) + ' together:' : '')),
-    ...rows, p(gpuVerdict(g, w.peak, w.voices), 'gpuverdict'));
+  const lead = document.createElement('p'); lead.className = 'gpulead';
+  lead.textContent = w.chosen ? presetName + ' runs on the graphics card (' + w.chosen.label + ', about ' + gbText(w.chosen.gb) + ').' : presetName + ' frees the graphics card for ' + who + '.';
+  t.replaceChildren(lead, gpuLines(g, w.voices, w.peak));
   t.classList.add('on');
   clearTimeout(gpuToastTimer);
   gpuToastTimer = setTimeout(() => t.classList.remove('on'), 9000);
