@@ -18,6 +18,26 @@ hf download bosonai/higgs-audio-v3-tts-4b        # about 10 GB; accept the model
 sgl-omni serve --model-path bosonai/higgs-audio-v3-tts-4b --port 8000
 ```
 
+Tried on Windows 11 with an RTX 5080 (16 GB) in WSL2 Ubuntu 24.04:
+
+- **nvcc 12.9 or newer** must come first on PATH: DeepGEMM compiles kernels at startup and stops with "NVCC version must be at least 12.9" otherwise. Ubuntu's own `/usr/bin/nvcc` is 12.0; NVIDIA's CUDA toolkit for WSL installs 12.9+ under `/usr/local/cuda-12.9`.
+- **The first start takes long** (over 10 minutes) while PyTorch tunes kernels for the card, longer than SGLang-Omni's 10-minute startup limit; raise it and keep the tuning cache so later starts take a few minutes.
+- **It takes the whole card**: about 15.6 GB in use with the server idle. Stop it before other GPU work (training, voice's own GPU voices).
+
+A start script with all of that, `~/higgs/serve.sh`:
+
+```bash
+#!/usr/bin/env bash
+export CUDA_HOME=/usr/local/cuda-12.9
+export PATH="$CUDA_HOME/bin:$PATH"
+export SGLANG_OMNI_STARTUP_TIMEOUT=3600                     # the first start tunes kernels for a long while
+export TORCHINDUCTOR_CACHE_DIR="$HOME/.cache/torchinductor" # and keeps that for later starts
+cd ~/sglang-omni && source .venv/bin/activate
+exec sgl-omni serve --model-path bosonai/higgs-audio-v3-tts-4b --port 8000
+```
+
+Start it from Windows with `wsl -d Ubuntu -- ~/higgs/serve.sh`; stop it with Ctrl+C. The first request after a start takes about 10 s, later ones about 3-4 s to the first sound.
+
 Or with Docker, from the model card: `docker pull lmsysorg/sglang-omni:dev`, run it with `--gpus all --network host`, and start the same `sgl-omni serve` command inside.
 
 WSL2 forwards `localhost`, so Windows reaches the server at `http://127.0.0.1:8000`. The model is about 4B parameters in bf16; give it the graphics card to itself (12-16 GB). Boson states no figure.
