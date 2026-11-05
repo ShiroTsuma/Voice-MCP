@@ -89,6 +89,50 @@ model = "vits-piper-pl_PL-justyna_wg_glos-medium"
 type = "sherpa"
 model = "vits-piper-pl_PL-darkman-medium"
 
+# Higgs Audio v3 (Boson AI, research and non-commercial license) on a speech
+# server voice does not start: SGLang-Omni or vLLM-Omni in WSL or Docker,
+# serving the OpenAI speech API on port 8000 (docs/higgs-audio.md). It clones
+# from a recording and its transcript, and has its own tokens for emotions and
+# sounds, which voice's tags and moods turn into.
+[engines.higgs]
+type = "openai"
+url = "http://127.0.0.1:8000"
+model = "bosonai/higgs-audio-v3-tts-4b"
+clone = "references"
+params = { temperature = 0.8, top_p = 0.8, top_k = 30 }
+
+[engines.higgs.expressive]
+emotion = "labels"
+
+[engines.higgs.expressive.sounds]
+laugh = "<|sfx:laughter|>Haha"
+chuckle = "<|sfx:laughter|>Hehe"
+giggle = "<|sfx:laughter|>Hehe"
+sigh = "<|sfx:sigh|>Ahh"
+cough = "<|sfx:cough|>Ahem"
+clear_throat = "<|sfx:cough|>Ahem"
+sniff = "<|sfx:sniff|>Sff"
+sob = "<|sfx:crying|>Sob"
+groan = "<|sfx:humming|>Mmm"
+
+[engines.higgs.expressive.moods]
+happy = "<|emotion:elation|>"
+excited = "<|emotion:enthusiasm|>"
+amused = "<|emotion:amusement|>"
+teasing = "<|emotion:amusement|><|prosody:expressive_high|>"
+sarcastic = "<|emotion:bitterness|><|prosody:expressive_low|>"
+calm = "<|emotion:contentment|>"
+tender = "<|emotion:affection|>"
+sad = "<|emotion:sadness|>"
+angry = "<|emotion:anger|>"
+afraid = "<|emotion:fear|>"
+surprised = "<|emotion:surprise|>"
+
+[presets.higgs]
+description = "Higgs Audio v3 on your own speech server (Integrations, GPU voices); Kokoro speaks while it is not running"
+engine = "higgs"
+fallback = ["kokoro", "sapi"]
+
 [presets.neutral]
 description = "Natural, clear female voice"
 engine = "kokoro"

@@ -140,6 +140,7 @@ func runServe(args []string) error {
 	sp.OnPreparing(b.preparing)
 	// The Integrations window picks a GPU backend's model size here.
 	sidecarOptions = func(name string) map[string]string { return b.cfg.Sidecar[name] }
+	engineConfig = func(name string) engine.Config { return b.cfg.Engines[name] }
 	saveSidecarOption = func(backend, key, value string) error {
 		err := settings.Update(settingsPath(b.cfgPath), func(s *settings.Settings) {
 			if s.Sidecar == nil {

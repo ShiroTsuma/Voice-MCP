@@ -3,6 +3,8 @@ package core
 import (
 	"reflect"
 	"testing"
+
+	"voice/internal/preset"
 )
 
 func TestTagsNeverReadAloud(t *testing.T) {
@@ -64,5 +66,21 @@ func TestSplitPauses(t *testing.T) {
 	pieces, pauses = splitPauses("Plain {laugh} text.")
 	if len(pieces) != 1 || pieces[0] != "Plain {laugh} text." || pauses[0] != 0 {
 		t.Fatalf("no pause: %q %v", pieces, pauses)
+	}
+}
+
+// The Higgs engine shipped in builtin.toml: its tokens, as a request has them.
+func TestHiggsTags(t *testing.T) {
+	cfg, err := preset.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := ParseExpressive(cfg.Engines["higgs"]["expressive"])
+	got, _ := forEngine(x, "Oh {laugh} you again {gasp}.", "teasing", nil)
+	if got != "<|emotion:amusement|><|prosody:expressive_high|> Oh <|sfx:laughter|>Haha you again ." {
+		t.Fatalf("higgs: %q", got)
+	}
+	if x.Emotion != "labels" || len(x.SoundNames()) != 9 || len(x.MoodNames()) != 11 {
+		t.Fatalf("higgs caps: %+v", x)
 	}
 }

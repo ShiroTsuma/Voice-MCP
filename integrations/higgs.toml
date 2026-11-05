@@ -1,0 +1,11 @@
+id = "higgs"
+group = "gpu"
+order = 50
+title = "Higgs Audio v3"
+about = "Expressive speech with emotions and sounds, and cloning, in 100+ languages; runs on your own speech server (WSL or Docker), research and non-commercial use."
+size = "about 10 GB of weights; 12-16 GB of graphics memory"
+link = "https://github.com/ShiroTsuma/Voice-MCP/blob/main/docs/higgs-audio.md"
+also = ["cloning"]
+languages = ["*"]
+uses = "speech-server"
+engine = "higgs"

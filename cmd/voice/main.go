@@ -33,6 +33,7 @@ import (
 	"voice/internal/engine/httpengine"
 
 	_ "voice/internal/engine/command"
+	_ "voice/internal/engine/openaispeech"
 	_ "voice/internal/engine/sapi"
 	_ "voice/internal/engine/sherpa"
 )

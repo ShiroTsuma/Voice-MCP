@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+	"voice/internal/engine/openaispeech"
 
 	"github.com/BurntSushi/toml"
 
@@ -48,6 +50,7 @@ type integrationFile struct {
 	Requires []string `toml:"requires"` // integrations installed first (their ids)
 	Model    string   `toml:"model"`    // uses = "model": the name in `voice models`
 	Backend  string   `toml:"backend"`  // uses = "sidecar": a name in sidecar/backends.json
+	Engine   string   `toml:"engine"`   // uses = "speech-server": the engine (an [engines.<name>] of type openai)
 	// Also: other groups it shows in. Languages: what it speaks or
 	// recognizes (en, pl, ...; "*" for nearly all); a sidecar backend's come
 	// from sidecar/backends.json when the file names none.
@@ -121,11 +124,13 @@ func makeIntegration(f integrationFile, handlers map[string]handler) integration
 	}
 	// What a voice engine does with voice's tags and moods, in one form.
 	m, _ := models.Find(f.Model)
-	voiceEngine := f.Uses == "sidecar" || f.Uses == "builtin" || (f.Uses == "model" && !m.Runtime)
+	voiceEngine := f.Uses == "sidecar" || f.Uses == "builtin" || f.Uses == "speech-server" || (f.Uses == "model" && !m.Runtime)
 	if (f.Group == "speech" || f.Group == "gpu") && voiceEngine {
 		var x core.Expressive
 		if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" {
 			x = core.ParseExpressive(b.Expressive)
+		} else if f.Uses == "speech-server" && engineConfig != nil {
+			x = core.ParseExpressive(engineConfig(f.Engine)["expressive"])
 		} else {
 			x = core.ParseExpressive(nil)
 		}
@@ -223,6 +228,24 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 	return map[string]handler{
 		"builtin": {status: func(integrationFile) integrations.Status {
 			return integrations.Status{State: integrations.On, Detail: "Built in"}
+		}},
+
+		// A speech server voice does not start (OpenAI speech API): it is set
+		// up when it answers.
+		"speech-server": {status: func(f integrationFile) integrations.Status {
+			url := ""
+			if engineConfig != nil {
+				url = engineConfig(f.Engine).String("url")
+			}
+			if url == "" {
+				return integrations.Status{State: integrations.Error, Detail: "No [engines." + f.Engine + "] with a url in the config"}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+			defer cancel()
+			if err := openaispeech.Probe(ctx, url); err != nil {
+				return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + "; start it (More has the steps). Until then another voice speaks"}
+			}
+			return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url}
 		}},
 
 		"claude-hooks": {
@@ -429,7 +452,9 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 // sidecarOptions and saveSidecarOption reach the settings of the voice that
 // runs (serve sets them): the chosen options of a GPU backend, and saving one.
 var (
-	sidecarOptions    func(backend string) map[string]string
+	sidecarOptions func(backend string) map[string]string
+	// engineConfig is an [engines.<name>] table of the running voice.
+	engineConfig      func(name string) engine.Config
 	saveSidecarOption func(backend, key, value string) error
 )
 
