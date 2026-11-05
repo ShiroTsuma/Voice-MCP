@@ -400,10 +400,19 @@ $('who').addEventListener('change', () => {
   followTop = -1; render();
   requestAnimationFrame(() => { const ls = $('list'); ls.scrollTop = ls.scrollHeight; followTop = ls.scrollTop; });
 });
-const sessionName = (pid, all) => { const a = agentOf(pid); if (a && a.name) return a.name; const l = all.findLast(l => l.pid === pid && l.name); return l ? l.name : 'Session ' + pid; };
+// A session as the picker names it: who, in which app and project; one that has ended says so, so two
+// Annas from different days are told apart.
+function sessionName(pid, all) {
+  const a = agentOf(pid), l = all.findLast(l => l.pid === pid);
+  const name = (a && a.name) || (l && l.name) || 'Session ' + pid;
+  const where = [clientName((a && a.client) || (l && l.client)), (a && a.project) || (l && l.project)].filter(Boolean).join(', ');
+  return name + (where ? ' · ' + where : '') + (a ? '' : ' (ended)');
+}
 // The picker's choices: the sessions now, and the one chosen even when it has gone.
 function fillWho(all) {
-  const pids = [...new Set([...(status.agents || []).map(a => a.pid), ...all.map(l => l.pid).filter(Boolean)])];
+  // Sessions now first, then ended ones, the newest of them first.
+  const live = (status.agents || []).map(a => a.pid), ended = [...new Set(all.map(l => l.pid).filter(p => p && !live.includes(p)))].reverse();
+  const pids = [...live, ...ended];
   if (who !== 'latest' && who !== 'all' && !pids.includes(+who)) pids.push(+who);
   const opts = [['latest', 'Latest session'], ['all', 'All sessions'], ...pids.map(p => [String(p), sessionName(p, all)])];
   const sig = JSON.stringify(opts);
