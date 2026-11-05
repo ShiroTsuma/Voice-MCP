@@ -627,6 +627,19 @@ func (s *Speaker) UnloadIdle(after time.Duration) []string {
 	return closed
 }
 
+// ReplaceEngine gives an engine a new config (a speech server's new
+// address): the one in use closes and the next use makes it again.
+func (s *Speaker) ReplaceEngine(name string, cfg engine.Config) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg.Engines[name] = cfg
+	if e := s.engines[name]; e != nil {
+		e.Close()
+		delete(s.engines, name)
+		delete(s.used, name)
+	}
+}
+
 func (s *Speaker) Close() {
 	s.Stop()
 	select {

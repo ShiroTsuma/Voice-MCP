@@ -91,6 +91,10 @@
   .seg button:hover { color: var(--ink); background: var(--field-hi); }
   .seg button.on { background: var(--ink); color: var(--ground); }
   .pick .note { flex-basis: 100%; color: var(--ink-3); }
+  .field input { flex: 1; min-width: 180px; max-width: 340px; height: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: var(--field);
+    font: 12.5px var(--mono); color: var(--ink); user-select: text; }
+  .field input:hover { background: var(--field-hi); }
+  .field .btn { height: 28px; }
   /* The page's own dialogs: the browser's would show voice's address and port. */
   .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
   .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
@@ -312,6 +316,7 @@ function renderMain() {
       left.append(d);
     }
     if (it.status.choice) left.append(picker(it));
+    if (it.status.field) left.append(fieldRow(it));
     const acts = document.createElement('div'); acts.className = 'acts';
     for (const a of it.status.actions || []) {
       const b = document.createElement('button'); b.type = 'button';
@@ -369,11 +374,38 @@ function picker(it) {
   return wrap;
 }
 
+// fieldRow shows an integration's text setting (a server's address), saved
+// with Save or Enter; what is being typed survives the window's refresh.
+const drafts = new Map();
+function fieldRow(it) {
+  const f = it.status.field;
+  const wrap = document.createElement('div'); wrap.className = 'pick field';
+  const lab = document.createElement('span'); lab.textContent = f.label;
+  const inp = document.createElement('input'); inp.type = 'text'; inp.spellcheck = false;
+  inp.placeholder = f.placeholder || ''; inp.setAttribute('aria-label', f.label);
+  inp.value = drafts.has(it.id) ? drafts.get(it.id) : f.value;
+  const save = document.createElement('button'); save.type = 'button'; save.className = 'btn'; save.textContent = 'Save';
+  const sync = () => { save.disabled = inp.value.trim() === f.value; };
+  inp.oninput = () => { drafts.set(it.id, inp.value); sync(); };
+  const commit = async () => {
+    save.disabled = true;
+    try { await api('integration', { id: it.id, action: 'set:' + inp.value.trim() }); drafts.delete(it.id); } catch (e) { tell(e.message); sync(); return; }
+    refresh();
+  };
+  save.onclick = commit;
+  inp.onkeydown = e => { if (e.key === 'Enter' && !save.disabled) commit(); };
+  sync();
+  wrap.append(lab, inp, save);
+  return wrap;
+}
+
 function render() { renderGroups(); renderMain(); }
 
 async function refresh() {
   clearTimeout(timer);
-  try { data = await api('integrations'); render(); } catch (e) { $('main').textContent = e.message; }
+  // Not while an address is being typed: the redraw would take the cursor away.
+  const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.field');
+  try { data = await api('integrations'); if (!typing) render(); } catch (e) { $('main').textContent = e.message; }
   const busy = data.items.some(i => i.job && !i.job.done);
   if (document.visibilityState === 'visible') timer = setTimeout(refresh, busy ? 1000 : 5000);
 }

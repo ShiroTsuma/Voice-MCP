@@ -243,8 +243,13 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			if engineConfig != nil {
 				url = engineConfig(f.Engine).String("url")
 			}
+			// Where the server is: this PC, another machine or a GPU server.
+			field := &integrations.Field{Label: "Server address", Value: url, Placeholder: "http://127.0.0.1:8000"}
+			if engineConfig == nil || engineConfig(f.Engine) == nil {
+				return integrations.Status{State: integrations.Error, Detail: "No [engines." + f.Engine + "] in the config"}
+			}
 			if url == "" {
-				return integrations.Status{State: integrations.Error, Detail: "No [engines." + f.Engine + "] with a url in the config"}
+				return integrations.Status{State: integrations.Missing, Detail: "Set its server's address", Field: field}
 			}
 			var acts []integrations.Action
 			add := func(id, label string, primary bool) {
@@ -259,13 +264,13 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 				if f.Guide != "" {
 					add("guide", "Setup guide", false)
 				}
-				return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url + "; it keeps the graphics card's memory until stopped", Actions: acts}
+				return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url + "; it keeps the graphics card's memory until stopped", Actions: acts, Field: field}
 			}
 			if since, ok := serverStarting(f.ID); ok {
 				if len(f.Stop) > 0 {
 					add("stop", "Stop server", false)
 				}
-				return integrations.Status{State: integrations.Partly, Detail: fmt.Sprintf("Starting for %s; the first start tunes the graphics card for over 10 minutes, later ones take a few", since.Round(time.Second)), Actions: acts}
+				return integrations.Status{State: integrations.Partly, Detail: fmt.Sprintf("Starting for %s; the first start tunes the graphics card for over 10 minutes, later ones take a few", since.Round(time.Second)), Actions: acts, Field: field}
 			}
 			if len(f.Start) > 0 {
 				add("start", "Start server", true)
@@ -273,9 +278,19 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			if f.Guide != "" {
 				add("guide", "Setup guide", len(f.Start) == 0)
 			}
-			return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + ". Set one up (Setup guide) on this PC, another machine or a server, and set its url in config.toml; until then another voice speaks", Actions: acts}
+			return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + ". Set one up (Setup guide) on this PC, another machine or a server, and put its address here; until then another voice speaks", Actions: acts, Field: field}
 		},
 			do: func(_ context.Context, f integrationFile, action string, log func(string)) error {
+				if value, ok := strings.CutPrefix(action, integrations.SetPrefix); ok {
+					value = strings.TrimRight(strings.TrimSpace(value), "/")
+					if value != "" && !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
+						return fmt.Errorf("the address starts with http:// or https://, such as http://192.168.1.20:8000")
+					}
+					if saveServerURL == nil {
+						return fmt.Errorf("this voice cannot save settings")
+					}
+					return saveServerURL(f.Engine, value)
+				}
 				switch {
 				case action == "guide" && f.Guide != "":
 					log("Opening " + f.Guide)
@@ -539,6 +554,9 @@ var (
 	// engineConfig is an [engines.<name>] table of the running voice.
 	engineConfig      func(name string) engine.Config
 	saveSidecarOption func(backend, key, value string) error
+	// saveServerURL sets a speech server engine's address ("" goes back to
+	// the config's).
+	saveServerURL func(engine, url string) error
 )
 
 // sidecarChoice is a GPU backend's option as the window's picker: qwen3's

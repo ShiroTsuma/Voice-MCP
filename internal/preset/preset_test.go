@@ -59,6 +59,20 @@ func TestUnknownKeyRejected(t *testing.T) {
 	}
 }
 
+// A server address set in the window replaces only that engine's url.
+func TestServerAddress(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.toml")
+	os.WriteFile(path, []byte("[servers]\nhiggs = \"http://10.0.0.5:8000\"\n"), 0o644)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := c.Engines["higgs"]
+	if e.String("url") != "http://10.0.0.5:8000" || e.String("type") != "openai" || e.String("model") == "" {
+		t.Fatalf("higgs %v", e)
+	}
+}
+
 func TestEmptyCharactersOverride(t *testing.T) {
 	if c, _ := Load(); len(c.Characters) == 0 {
 		t.Fatal("no builtin characters")

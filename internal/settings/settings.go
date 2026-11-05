@@ -34,6 +34,9 @@ type Settings struct {
 	// Sidecar holds the GPU backends' chosen options, such as qwen3's model
 	// size ([sidecar.qwen3] model = "...").
 	Sidecar map[string]map[string]string `toml:"sidecar,omitempty" json:"sidecar,omitempty"`
+	// Servers holds the speech servers' addresses set in the Integrations
+	// window ([servers] higgs = "http://...").
+	Servers map[string]string `toml:"servers,omitempty" json:"servers,omitempty"`
 }
 
 // Preset is a tuned voice: what it changes on the preset it extends.

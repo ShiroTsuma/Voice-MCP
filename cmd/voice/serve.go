@@ -158,8 +158,25 @@ func runServe(args []string) error {
 		_, err = b.reload()
 		return err
 	}
+	saveServerURL = func(name, url string) error {
+		err := settings.Update(settingsPath(b.cfgPath), func(s *settings.Settings) {
+			if url == "" {
+				delete(s.Servers, name)
+				return
+			}
+			if s.Servers == nil {
+				s.Servers = map[string]string{}
+			}
+			s.Servers[name] = url
+		})
+		if err != nil {
+			return err
+		}
+		_, err = b.reload()
+		return err
+	}
 
-	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents, ListenView: ctl.agentListening}
+	svc :=&service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents, ListenView: ctl.agentListening}
 	var once sync.Once
 	extra := func(mux *http.ServeMux, info daemon.Info) {
 		b.info = info
@@ -320,6 +337,13 @@ func (b *backend) reload() (bool, error) {
 		}
 	}
 	cur.Sidecar = next.Sidecar
+	// A speech server's address set in the Integrations window applies now.
+	for name, e := range next.Engines {
+		if e.String("url") != cur.Engines[name].String("url") && e.String("type") == "openai" {
+			b.sp.ReplaceEngine(name, e)
+		}
+	}
+	cur.Servers = next.Servers
 	httpengine.SetIdle(int(unloadAfter(next).Seconds()))
 	if isOn(next.Serve.PreloadVoices) && !isOn(cur.Serve.PreloadVoices) {
 		defer b.sp.WarmVoices(voicePresets(next)) // turned on: load them now

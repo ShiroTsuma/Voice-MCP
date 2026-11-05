@@ -45,7 +45,20 @@ type Status struct {
 	// Choice is a setting the window shows as a picker, such as a model
 	// size; picking one runs the action "choose:<value>".
 	Choice *Choice `json:"choice,omitempty"`
+	// Field is a text setting the window shows as an input, such as a
+	// server's address; saving it runs the action "set:<value>".
+	Field *Field `json:"field,omitempty"`
 }
+
+// Field is one text setting.
+type Field struct {
+	Label       string `json:"label"`
+	Value       string `json:"value"`
+	Placeholder string `json:"placeholder,omitempty"`
+}
+
+// SetPrefix starts the action that saves a Field value.
+const SetPrefix = "set:"
 
 // Choice is one setting with its values.
 type Choice struct {
@@ -245,6 +258,19 @@ func (r *Registry) Start(id, action string) (Job, error) {
 			return Job{}, fmt.Errorf("%s has no choice %q", i.Title, value)
 		}
 		j := Job{ID: id + "-choose", Action: action, Started: time.Now(), Done: true, Log: []string{}}
+		if err := i.Do(context.Background(), action, func(string) {}); err != nil {
+			j.Error = err.Error()
+			return j, err
+		}
+		return j, nil
+	}
+
+	// So is saving a text setting.
+	if _, ok := strings.CutPrefix(action, SetPrefix); ok {
+		if safeStatus(i).Field == nil || i.Do == nil {
+			return Job{}, fmt.Errorf("%s has no setting to save", i.Title)
+		}
+		j := Job{ID: id + "-set", Action: action, Started: time.Now(), Done: true, Log: []string{}}
 		if err := i.Do(context.Background(), action, func(string) {}); err != nil {
 			j.Error = err.Error()
 			return j, err

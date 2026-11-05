@@ -45,7 +45,11 @@ type Config struct {
 	// Sidecar holds the settings of the GPU backends (sidecar/backends.json),
 	// such as qwen3's model size: [sidecar.qwen3] model = "...".
 	Sidecar map[string]map[string]string `toml:"sidecar"`
-	Presets map[string]Preset            `toml:"presets"`
+	// Servers holds the address of each speech server engine (type openai)
+	// set in the Integrations window: [servers] higgs = "http://...". It
+	// replaces only that engine's url, keeping the rest of its table.
+	Servers map[string]string `toml:"servers"`
+	Presets map[string]Preset `toml:"presets"`
 	Hooks   Hooks                        `toml:"hooks"`
 	Listen  Listen                       `toml:"listen"`
 	Clients map[string]string            `toml:"clients"` // client name substring -> preset
@@ -255,6 +259,16 @@ func Load(paths ...string) (*Config, error) {
 			cfg.Engines[b.Name] = b.Engine(cfg.Sidecar[b.Name])
 		}
 	}
+	for name, url := range cfg.Servers {
+		if e, ok := cfg.Engines[name]; ok && strings.TrimSpace(url) != "" {
+			c := engine.Config{}
+			for k, v := range e {
+				c[k] = v
+			}
+			c["url"] = strings.TrimSpace(url)
+			cfg.Engines[name] = c
+		}
+	}
 	return cfg, nil
 }
 func (c *Config) merge(o *Config) {
@@ -436,6 +450,12 @@ func (c *Config) merge(o *Config) {
 		for k, v := range set {
 			c.Sidecar[name][k] = v
 		}
+	}
+	for k, v := range o.Servers {
+		if c.Servers == nil {
+			c.Servers = map[string]string{}
+		}
+		c.Servers[k] = v
 	}
 	for k, v := range o.Presets {
 		c.Presets[k] = v
