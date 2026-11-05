@@ -430,6 +430,14 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
   }
+  /* The page's own dialogs: the browser's would show voice's address and port. */
+  .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
+  .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 18px 14px; box-shadow: 0 12px 40px #0008; font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .vdlg-box p { margin: 0 0 14px; white-space: pre-wrap; }
+  .vdlg-row { display: flex; justify-content: flex-end; gap: 8px; }
+  .vdlg-btn { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  .vdlg-ok { background: color-mix(in oklab, var(--ink) 14%, var(--field)); }
 </style>
 </head>
 <body>
@@ -753,6 +761,27 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
 </div>
 
 <script>
+// The page's own dialogs: the browser's confirm and alert would show voice's address and port.
+// dialog resolves true for ok; Esc, a click outside or cancel resolve false.
+function dialog(text, ok, cancel) {
+  return new Promise(done => {
+    const bg = document.createElement('div'); bg.className = 'vdlg';
+    const box = document.createElement('div'); box.className = 'vdlg-box'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
+    const p = document.createElement('p'); p.textContent = text;
+    const row = document.createElement('div'); row.className = 'vdlg-row';
+    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
+    const close = v => { bg.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    const mk = (label, v, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = () => close(v); row.append(b); return b; };
+    const no = cancel ? mk(cancel, false, 'vdlg-btn') : null;
+    const yes = mk(ok, true, 'vdlg-btn vdlg-ok');
+    box.append(p, row); bg.append(box);
+    bg.addEventListener('click', e => { if (e.target === bg) close(false); });
+    document.body.append(bg); document.addEventListener('keydown', key, true);
+    (no || yes).focus(); // a question starts on Cancel, so Enter never deletes by accident
+  });
+}
+const askYes = (text, ok = 'Delete') => dialog(text, ok, 'Cancel');
+const tell = text => dialog(text, 'OK');
 if (new URLSearchParams(location.search).has('popup')) document.documentElement.classList.add('popup');
 const $ = id => document.getElementById(id);
 const host = window.chrome && window.chrome.webview;
@@ -1789,7 +1818,7 @@ function render(s) {
   seg('summaryPart', (s.hooks.summary_from || 'end') + ':' + (s.hooks.summary_sentences || 2)); summaryUI();
   seg('goalWait', String(s.hooks.codex_goal_wait ?? 3));
   $('project').checked = s.hooks.announce_project !== false;
-  fill($('hookPreset'), presets, s.hooks.preset || '', [{ value: '', label: 'Each session''s own voice' }]);
+  fill($('hookPreset'), presets, s.hooks.preset || '', [{ value: '', label: "Each session's own voice" }]);
   fill($('model'), o.models.map(m => ({ value: m.dir, label: m.label })), s.listen.model);
   $('unload').value = s.serve.unload_after || '15m';
   $('preload').checked = !!s.serve.preload_voices;
@@ -1935,7 +1964,7 @@ function renderWordLists(s) {
     if (w.imported) {
       const drop = document.createElement('button'); drop.type = 'button'; drop.className = 'btn'; drop.textContent = 'Remove';
       drop.onclick = async () => {
-        if (!confirm('Remove the list ' + w.title + '?')) return;
+        if (!(await askYes('Remove the list ' + w.title + '?', 'Remove'))) return;
         try { render((await api('wordlists', { action: 'remove', id: w.id })).state); } catch (e) { $('wlMsg').textContent = e.message; }
       };
       row.append(drop);

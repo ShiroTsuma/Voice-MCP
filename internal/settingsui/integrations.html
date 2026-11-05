@@ -89,6 +89,14 @@
   .seg button:hover { color: var(--ink); background: var(--field-hi); }
   .seg button.on { background: var(--ink); color: var(--ground); }
   .pick .note { flex-basis: 100%; color: var(--ink-3); }
+  /* The page's own dialogs: the browser's would show voice's address and port. */
+  .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
+  .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 18px 14px; box-shadow: 0 12px 40px #0008; font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .vdlg-box p { margin: 0 0 14px; white-space: pre-wrap; }
+  .vdlg-row { display: flex; justify-content: flex-end; gap: 8px; }
+  .vdlg-btn { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  .vdlg-ok { background: color-mix(in oklab, var(--ink) 14%, var(--field)); }
 </style>
 </head>
 <body>
@@ -103,6 +111,27 @@
 <main id="main" aria-live="polite"></main>
 
 <script>
+// The page's own dialogs: the browser's confirm and alert would show voice's address and port.
+// dialog resolves true for ok; Esc, a click outside or cancel resolve false.
+function dialog(text, ok, cancel) {
+  return new Promise(done => {
+    const bg = document.createElement('div'); bg.className = 'vdlg';
+    const box = document.createElement('div'); box.className = 'vdlg-box'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
+    const p = document.createElement('p'); p.textContent = text;
+    const row = document.createElement('div'); row.className = 'vdlg-row';
+    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
+    const close = v => { bg.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    const mk = (label, v, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = () => close(v); row.append(b); return b; };
+    const no = cancel ? mk(cancel, false, 'vdlg-btn') : null;
+    const yes = mk(ok, true, 'vdlg-btn vdlg-ok');
+    box.append(p, row); bg.append(box);
+    bg.addEventListener('click', e => { if (e.target === bg) close(false); });
+    document.body.append(bg); document.addEventListener('keydown', key, true);
+    (no || yes).focus(); // a question starts on Cancel, so Enter never deletes by accident
+  });
+}
+const askYes = (text, ok = 'Delete') => dialog(text, ok, 'Cancel');
+const tell = text => dialog(text, 'OK');
 const $ = id => document.getElementById(id);
 // The log's open state: what the user chose wins; untouched, it is open while the action runs.
 let data = { groups: [], items: [] }, group = 'agents', timer = 0, logOpen = new Map();
@@ -196,9 +225,9 @@ function renderMain() {
       b.className = 'btn' + (a.primary ? ' primary' : '');
       b.textContent = a.label;
       b.onclick = async () => {
-        if (a.id === 'remove' && !confirm('Remove ' + it.title + '? Its files are deleted; you can download or install it again later.')) return;
+        if (a.id === 'remove' && !(await askYes('Remove ' + it.title + '? Its files are deleted; you can download or install it again later.', 'Remove'))) return;
         b.disabled = true;
-        try { await api('integration', { id: it.id, action: a.id }); logOpen.delete(it.id); } catch (e) { alert(e.message); }
+        try { await api('integration', { id: it.id, action: a.id }); logOpen.delete(it.id); } catch (e) { tell(e.message); }
         refresh();
       };
       acts.append(b);
@@ -238,7 +267,7 @@ function picker(it) {
     if (on) note.textContent = o.note || '';
     b.onclick = async () => {
       if (on) return;
-      try { await api('integration', { id: it.id, action: 'choose:' + o.value }); } catch (e) { alert(e.message); }
+      try { await api('integration', { id: it.id, action: 'choose:' + o.value }); } catch (e) { tell(e.message); }
       refresh();
     };
     seg.append(b);

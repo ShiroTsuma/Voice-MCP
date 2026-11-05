@@ -197,6 +197,14 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
   }
+  /* The page's own dialogs: the browser's would show voice's address and port. */
+  .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
+  .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 18px 14px; box-shadow: 0 12px 40px #0008; font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .vdlg-box p { margin: 0 0 14px; white-space: pre-wrap; }
+  .vdlg-row { display: flex; justify-content: flex-end; gap: 8px; }
+  .vdlg-btn { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  .vdlg-ok { background: color-mix(in oklab, var(--ink) 14%, var(--field)); }
 </style>
 </head>
 <body>
@@ -266,6 +274,27 @@
   </form>
 </main>
 <script>
+// The page's own dialogs: the browser's confirm and alert would show voice's address and port.
+// dialog resolves true for ok; Esc, a click outside or cancel resolve false.
+function dialog(text, ok, cancel) {
+  return new Promise(done => {
+    const bg = document.createElement('div'); bg.className = 'vdlg';
+    const box = document.createElement('div'); box.className = 'vdlg-box'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
+    const p = document.createElement('p'); p.textContent = text;
+    const row = document.createElement('div'); row.className = 'vdlg-row';
+    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
+    const close = v => { bg.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    const mk = (label, v, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = () => close(v); row.append(b); return b; };
+    const no = cancel ? mk(cancel, false, 'vdlg-btn') : null;
+    const yes = mk(ok, true, 'vdlg-btn vdlg-ok');
+    box.append(p, row); bg.append(box);
+    bg.addEventListener('click', e => { if (e.target === bg) close(false); });
+    document.body.append(bg); document.addEventListener('keydown', key, true);
+    (no || yes).focus(); // a question starts on Cancel, so Enter never deletes by accident
+  });
+}
+const askYes = (text, ok = 'Delete') => dialog(text, ok, 'Cancel');
+const tell = text => dialog(text, 'OK');
 const $ = id => document.getElementById(id);
 let state = null, sel = -1, image = '', color = '';
 
@@ -570,7 +599,7 @@ $('test').addEventListener('click', async () => {
 });
 $('del').addEventListener('click', async () => {
   const chars = (state.characters || []).slice(); const gone = chars.splice(sel, 1)[0];
-  if (!confirm('Delete ' + gone.name + '?')) return;
+  if (!(await askYes('Delete ' + gone.name + '?'))) return;
   const p = presetOf(gone.preset), presets = p && p.extends ? { [gone.preset]: null } : undefined; // its tuned voice goes too
   try { await store(chars, undefined, presets); load(); } catch (e) { status(e.message, 'warn'); }
 });
