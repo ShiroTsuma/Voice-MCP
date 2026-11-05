@@ -32,6 +32,22 @@ type SessionArgs struct {
 	Limit   Count  `json:"limit,omitempty"`   // transcript: how many lines
 	Of      string `json:"of,omitempty"`      // transcript: a session's name instead of this session
 	To      string `json:"to,omitempty"`      // send: the session to reach, by name
+
+	// As the MCP's voice_speak: how a line is said, its language, whether it
+	// cuts in, and for this line only a character's or preset's voice.
+	Mood      string `json:"mood,omitempty"`
+	Lang      string `json:"lang,omitempty"`
+	Interrupt bool   `json:"interrupt,omitempty"`
+	Voice     string `json:"voice,omitempty"`
+	// scene, as the MCP's voice_scene: the lines in their voices, where and
+	// when, how it is heard, or a file to render it into.
+	Lines  SpeakLines `json:"lines,omitempty"`
+	Scene  *SceneInfo `json:"scene,omitempty"`
+	Mode   string     `json:"mode,omitempty"`
+	SaveTo string     `json:"save_to,omitempty"`
+	ID     string     `json:"id,omitempty"`    // status: a say's or a scene's id
+	Style  string     `json:"style,omitempty"` // style: short or narrative
+	Theme  string     `json:"theme,omitempty"` // theme: the reading window's theme for this session ("" the user's)
 }
 
 // SessionResult answers register and poll.
@@ -146,7 +162,22 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 		if strings.TrimSpace(a.Text) == "" {
 			return nil, userErr("say needs text")
 		}
-		return s.Speak(ctx, SpeakArgs{Text: a.Text, Intent: a.Intent, PID: pid, Client: client, Project: project})
+		return s.Speak(ctx, SpeakArgs{Text: a.Text, Intent: a.Intent, Mood: a.Mood, Lang: a.Lang, Interrupt: a.Interrupt, Voice: a.Voice, PID: pid, Client: client, Project: project})
+	case "scene":
+		if len(a.Lines) == 0 {
+			return nil, userErr("scene needs lines")
+		}
+		return s.Speak(ctx, SpeakArgs{Lines: a.Lines, Scene: a.Scene, Mode: a.Mode, SaveTo: a.SaveTo, Lang: a.Lang, PID: pid, Client: client, Project: project})
+	case "status":
+		return s.Control(ctx, ControlArgs{Action: "status", ID: a.ID, PID: pid, Client: client, Project: project})
+	case "style":
+		return s.Control(ctx, ControlArgs{Action: "set_style", Style: a.Style, PID: pid, Client: client, Project: project})
+	case "theme":
+		return s.Control(ctx, ControlArgs{Action: "set_theme", Theme: a.Theme, PID: pid, Client: client, Project: project})
+	case "themes":
+		return s.Control(ctx, ControlArgs{Action: "list_themes", PID: pid, Client: client, Project: project})
+	case "presets":
+		return s.Control(ctx, ControlArgs{Action: "list_presets", PID: pid, Client: client, Project: project})
 	case "event":
 		return s.sessionEvent(ctx, a, pid, client, project)
 	case "send":

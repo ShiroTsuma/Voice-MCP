@@ -59,6 +59,62 @@ Answer: `{"name": "Mira", "messages": ["add a dark theme"], "voice_reply": true,
 
 Speaks in the session's character's voice and returns at once while it plays: `{"id": "v12", "queue_position": 0}`. `intent` is `info` (default), `question` or `attention`. Keep it to one or two short sentences; details belong on screen.
 
+The rest is optional, as on the MCP's `voice_speak`:
+
+| Field | |
+| --- | --- |
+| `mood` | how it is said: `neutral`, `happy`, `excited`, `amused`, `teasing`, `sarcastic`, `calm`, `tender`, `sad`, `angry`, `afraid`, `surprised`. A voice whose engine can show moods uses it; the others ignore it (`presets` says which can) |
+| `lang` | the language of `text` (`en`, `pl`, ...), when it is not the default |
+| `interrupt` | `true` cuts in: stops what is playing and clears the queue first |
+| `voice` | for this line only, a character's name or a preset (`presets` lists them) instead of the session's |
+
+The text can carry voice's own tags, which are never read aloud: `{laugh}`, `{sigh}`, `{cough}` and the other sounds, `{pause}` or `{pause:1.5}`.
+
+### scene
+
+```json
+{"session": "notes-3f2a", "scene": {"title": "The last slice", "location": "Kitchen", "time": "Late evening"},
+ "lines": [
+  {"voice": "narrator", "kind": "narration", "text": "The kitchen was quiet."},
+  {"voice": "Clara", "text": "Who ate the other three?", "mood": "amused", "to": "everyone"},
+  {"pause": 1},
+  {"voice": "Diana", "text": "Don't look at me like that.", "mood": "teasing", "action": "crosses her arms"}]}
+```
+
+Says a whole scene in several voices, as the MCP's `voice_scene`, and returns at once with its `id`. Each line has `voice` (a character's name or a preset), `text`, and what the reading window shows without saying it: `kind` (`dialogue`, `narration`, `thought`), `mood`, `action`, `to`; `pause` is the silence after it in seconds, and a line with only a pause is a break. `mode` is `auto` (the default: renders it all first when its voices need GPU models that may not fit together), `play` or `render`. `save_to` (an absolute `.wav` or `.mp3` path) writes it to a file instead and answers once the file is written. `lang` as on `say`.
+
+### status
+
+```json
+{"session": "notes-3f2a", "id": "v12"}
+```
+
+What became of a `say` or a `scene`: `queued`, `rendering` (with its progress), `playing`, `done`, or why not (`error`, `stopped`, `interrupted`, `muted`), with the voices and engines that said it. Without `id`, the speaker's state: the voice, mute, the queue.
+
+### style
+
+```json
+{"session": "notes-3f2a", "style": "narrative"}
+```
+
+How this session speaks. `short` (the default) is a sentence or two, details on screen; `narrative` is for a story or a role-play: speech is the content, each reply said in full, up to 4000 characters a line. Only this session changes.
+
+### theme, themes
+
+```json
+{"session": "notes-3f2a", "theme": "storybook"}
+```
+
+This session's look in the user's reading window, for example a story's theme for a role-play; `""` goes back to the user's. Other sessions keep theirs. `themes` (with just the session) lists the installed ones.
+
+### presets
+
+```json
+{"session": "notes-3f2a"}
+```
+
+The voices: each preset with its engine, and the sounds and moods it can make.
+
 ### event
 
 ```json

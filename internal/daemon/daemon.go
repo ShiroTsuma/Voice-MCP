@@ -161,7 +161,7 @@ func Serve(ctx context.Context, api service.API, infoPath, version, exe string, 
 	})
 
 	// The session API, for any agent (docs/http-api.md).
-	for _, action := range []string{"register", "poll", "say", "event", "send", "end", "transcript"} {
+	for _, action := range []string{"register", "poll", "say", "scene", "status", "style", "theme", "themes", "presets", "event", "send", "end", "transcript"} {
 		handle("session/"+action, func(ctx context.Context, b []byte) (any, error) {
 			var a service.SessionArgs
 			if err := decodeInto(b, &a); err != nil {

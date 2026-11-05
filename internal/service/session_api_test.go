@@ -73,6 +73,24 @@ func TestSessionAPI(t *testing.T) {
 		t.Fatalf("a poll made the session most recent: %v", r)
 	}
 
+	// What the MCP offers, the session API does too: a session's style and
+	// theme, and a scene (which needs its lines).
+	if _, err := s.Session(ctx, SessionArgs{Action: "style", Session: "a1", Style: "narrative"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Agents.Style(901); got != StyleNarrative {
+		t.Fatalf("style %q", got)
+	}
+	if _, err := s.Session(ctx, SessionArgs{Action: "style", Session: "a1", Style: "loud"}); err == nil {
+		t.Fatal("unknown style accepted")
+	}
+	if _, err := s.Session(ctx, SessionArgs{Action: "theme", Session: "a1", Theme: "no-such-theme"}); err == nil {
+		t.Fatal("a theme that is not installed was accepted")
+	}
+	if _, err := s.Session(ctx, SessionArgs{Action: "scene", Session: "a1"}); err == nil {
+		t.Fatal("a scene without lines was accepted")
+	}
+
 	if _, err := s.Session(ctx, SessionArgs{Action: "end", Session: "a1"}); err != nil {
 		t.Fatal(err)
 	}
