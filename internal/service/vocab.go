@@ -154,7 +154,7 @@ func VocabularyFor(cfg *preset.Config, agents *Agents) *Vocabulary {
 	}
 	for _, a := range agents.Info() {
 		entries = append(entries, a.Name)
-		// A project named like an identifier (MCP-Tools, isaac64); a plain word
+		// A project named like an identifier (MCP-Tools, api-v2); a plain word
 		// ("recipes") would bend ordinary speech toward it.
 		if a.Project != strings.ToLower(a.Project) || strings.ContainsAny(a.Project, "-_.0123456789") {
 			entries = append(entries, a.Project)

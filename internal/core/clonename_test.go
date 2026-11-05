@@ -22,26 +22,26 @@ func TestCloneNamesWithoutPrefix(t *testing.T) {
 		pcm[i] = 0.3 * float32((i/40)%2*2-1) // a buzz loud enough to count as speech
 	}
 	os.WriteFile(clip, audio.EncodeWAV(pcm, 24000), 0o644)
-	if _, err := clones.Add("luna", clip, "hello", "kokoro", "test", false); err != nil {
+	if _, err := clones.Add("nova", clip, "hello", "kokoro", "test", false); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := preset.Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.DefaultPreset = "clone-luna"
-	cfg.Characters = []preset.Character{{Name: "Luna", Preset: "clone-luna"}, {Name: "Clara", Preset: "brisk"}}
-	cfg.Presets["tuned-luna"] = preset.Preset{Extends: "clone-luna"}
+	cfg.DefaultPreset = "clone-nova"
+	cfg.Characters = []preset.Character{{Name: "Nova", Preset: "clone-nova"}, {Name: "Clara", Preset: "brisk"}}
+	cfg.Presets["tuned-nova"] = preset.Preset{Extends: "clone-nova"}
 	RegisterClones(cfg)
-	if cfg.DefaultPreset != "luna" || cfg.Characters[0].Preset != "luna" || cfg.Characters[1].Preset != "brisk" || cfg.Presets["tuned-luna"].Extends != "luna" {
-		t.Fatalf("not migrated: %q %+v %q", cfg.DefaultPreset, cfg.Characters, cfg.Presets["tuned-luna"].Extends)
+	if cfg.DefaultPreset != "nova" || cfg.Characters[0].Preset != "nova" || cfg.Characters[1].Preset != "brisk" || cfg.Presets["tuned-nova"].Extends != "nova" {
+		t.Fatalf("not migrated: %q %+v %q", cfg.DefaultPreset, cfg.Characters, cfg.Presets["tuned-nova"].Extends)
 	}
-	for _, n := range []string{"luna", "clone-luna", "tuned-luna"} {
+	for _, n := range []string{"nova", "clone-nova", "tuned-nova"} {
 		if r, err := cfg.Resolve(n); err != nil || r.Name == "" {
 			t.Errorf("%s: %+v %v", n, r, err)
 		}
 	}
-	if !ClonePresetTaken(cfg, "brisk") || ClonePresetTaken(cfg, "luna") || ClonePresetTaken(cfg, "nobody") {
+	if !ClonePresetTaken(cfg, "brisk") || ClonePresetTaken(cfg, "nova") || ClonePresetTaken(cfg, "nobody") {
 		t.Error("taken names wrong")
 	}
 }
