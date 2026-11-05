@@ -104,8 +104,8 @@
       "expressive": {
         "emotion": "labels",
         "sounds": {
-          "laugh": "[laugh]", "chuckle": "[chuckle]", "giggle": "[chuckle]", "sigh": "[sigh]", "gasp": "[gasp]",
-          "cough": "[cough]", "clear_throat": "[clear throat]", "sniff": "[sniff]", "sob": "[crying]", "groan": "[groan]"
+          "laugh": "[laugh],", "chuckle": "[chuckle],", "giggle": "[chuckle],", "sigh": "[sigh],", "gasp": "[gasp],",
+          "cough": "[cough],", "clear_throat": "[clear throat],", "sniff": "[sniff],", "sob": "[crying],", "groan": "[groan],"
         },
         "moods": {
           "happy": "[happy]", "excited": "[happy]", "sarcastic": "[sarcastic]", "teasing": "[sarcastic]",

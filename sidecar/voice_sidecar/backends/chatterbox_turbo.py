@@ -10,9 +10,20 @@ top_p, top_k and repetition_penalty.
 A cloned voice's clip is analysed once (see VoicePrints).
 """
 
+import re
+
 from . import VoicePrints, device, to_numpy
 
 TUNABLE = ("temperature", "top_p", "top_k", "repetition_penalty")
+
+# voice puts a comma after each sound ("[laugh], okay"), which gives it room
+# before the next words; where a sentence ends right after it, the sentence's
+# own mark is enough.
+_STRAY = re.compile(r",\s*([.!?,;:])")
+
+
+def tidy(text):
+    return _STRAY.sub(r"\1", text).strip().rstrip(",")
 
 
 class Backend:
@@ -44,5 +55,5 @@ class Backend:
         self.model.conds = self.prints.get(req["ref_audio"]) if req.get("ref_audio") else self.builtin
         if self.model.conds is None:
             raise ValueError("Chatterbox Turbo has no voice of its own here; give it a clip to clone")
-        wav = self.model.generate(req["text"], **params)
+        wav = self.model.generate(tidy(req["text"]), **params)
         return to_numpy(wav), self.model.sr
