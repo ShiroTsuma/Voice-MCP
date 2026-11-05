@@ -7,6 +7,7 @@ import (
 
 	"voice/internal/engine/httpengine"
 	"voice/internal/integrations"
+	"voice/sidecar"
 )
 
 func TestIntegrationFiles(t *testing.T) {
@@ -91,5 +92,41 @@ func TestSidecarStatusReadsBOM(t *testing.T) {
 	os.WriteFile(filepath.Join(env, ".voice-setup.json"), []byte("\xEF\xBB\xBF{\"gpu\": \"nvidia\", \"backend\": true}"), 0o644)
 	if st := sidecarStatus("chatterbox"); st.State != integrations.On {
 		t.Fatalf("%+v", st)
+	}
+}
+
+// Chatterbox and Turbo share one environment: removing either keeps it for
+// the other; removing the last one removes it.
+func TestRemoveSharedEnvironment(t *testing.T) {
+	old := httpengine.SidecarDir
+	defer func() { httpengine.SidecarDir = old }()
+	httpengine.SidecarDir = t.TempDir()
+	env := filepath.Join(httpengine.SidecarDir, "envs", "chatterbox")
+	os.MkdirAll(env, 0o755)
+	os.WriteFile(filepath.Join(env, ".voice-setup.json"), []byte(`{"gpu": "nvidia", "backend": true, "backend:chatterbox_turbo": true}`), 0o644)
+	cb, _ := sidecar.Find("chatterbox")
+	turbo, _ := sidecar.Find("chatterbox_turbo")
+	quiet := func(string) {}
+
+	if err := removeShared(cb, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(env); err != nil {
+		t.Fatal("the environment went with Chatterbox while Turbo uses it")
+	}
+	if st := sidecarStatus("chatterbox"); st.State != integrations.Missing {
+		t.Fatalf("chatterbox: %+v", st)
+	}
+	if st := sidecarStatus("chatterbox_turbo"); st.State != integrations.On {
+		t.Fatalf("turbo: %+v", st)
+	}
+	if err := removeShared(turbo, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(env); !os.IsNotExist(err) {
+		t.Fatal("the environment stayed after its last backend")
+	}
+	if st := sidecarStatus("chatterbox_turbo"); st.State != integrations.Missing {
+		t.Fatalf("turbo after: %+v", st)
 	}
 }

@@ -542,7 +542,7 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					return nil
 				}
 				if action == "remove" {
-					if b, ok := sidecar.Find(f.Backend); ok && b.EnvName() != f.Backend {
+					if b, ok := sidecar.Find(f.Backend); ok && (b.EnvName() != f.Backend || len(envUsers(b)) > 0) {
 						return removeShared(b, log)
 					}
 					dir := filepath.Join(httpengine.SidecarDir, "envs", f.Backend)
@@ -655,6 +655,12 @@ func sidecarStatus(name string) integrations.Status {
 		if shared {
 			return integrations.Status{State: integrations.Missing, Detail: "Installs into the " + env + " environment, beside it", Actions: install}
 		}
+		// Removed while another backend still runs in its environment.
+		if b, ok := sidecar.Find(name); ok {
+			if users := envUsers(b); len(users) > 0 {
+				return integrations.Status{State: integrations.Missing, Detail: "Not installed; its environment stays for " + strings.Join(users, ", "), Actions: install}
+			}
+		}
 		return integrations.Status{State: integrations.Partly, Detail: "The setup stopped before it finished; run it again to resume", Actions: append(install, remove)}
 	}
 	if b, _ := sidecar.Find(name); b.Module != "" {
@@ -667,16 +673,62 @@ func sidecarStatus(name string) integrations.Status {
 	return integrations.Status{State: integrations.Missing, Actions: install}
 }
 
-// removeShared removes a backend that runs in another's environment
-// (chatterbox_turbo in chatterbox's): its own model weights and its record
-// there. The environment and its packages stay for the backend that owns it.
+// setupKey is where a backend's install is recorded in its environment's
+// .voice-setup.json: "backend" for the environment's own, "backend:<name>"
+// for one running in another's.
+func setupKey(b sidecar.Backend, stage string) string {
+	if b.EnvName() == b.Name {
+		return stage
+	}
+	return stage + ":" + b.Name
+}
+
+func readSetup(env string) map[string]any {
+	var st map[string]any
+	if raw, err := os.ReadFile(filepath.Join(httpengine.SidecarDir, "envs", env, ".voice-setup.json")); err == nil {
+		json.Unmarshal(bytes.TrimPrefix(raw, []byte("\xEF\xBB\xBF")), &st)
+	}
+	return st
+}
+
+// envUsers are the other installed backends in b's environment (Turbo in
+// Chatterbox's, or Chatterbox under Turbo): while there are any, removing b
+// keeps the environment.
+func envUsers(b sidecar.Backend) []string {
+	st := readSetup(b.EnvName())
+	var users []string
+	for _, o := range sidecar.Backends() {
+		if o.Name == b.Name || o.EnvName() != b.EnvName() {
+			continue
+		}
+		if on, _ := st[setupKey(o, "backend")].(bool); on {
+			users = append(users, o.Label)
+		}
+	}
+	return users
+}
+
+// removeShared removes a backend from an environment it shares: its record
+// there and, for one running in another's (chatterbox_turbo), its own model
+// weights. The environment goes with the last backend that uses it.
 func removeShared(b sidecar.Backend, log func(string)) error {
 	if e, ok := gpuEngine(b.Name); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		e.Unload(ctx)
 		cancel()
 	}
+	users := envUsers(b)
+	if len(users) == 0 {
+		dir := filepath.Join(httpengine.SidecarDir, "envs", b.EnvName())
+		log("Removing " + dir + " (nothing else uses it)")
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	}
 	for _, repo := range b.Prefetch {
+		if b.EnvName() == b.Name {
+			break // the environment's own keeps its weights, as a backend in its own does
+		}
 		dir := filepath.Join(httpengine.SidecarDir, "models", "hub", "models--"+strings.ReplaceAll(repo, "/", "--"))
 		if _, err := os.Stat(dir); err != nil {
 			continue
@@ -686,22 +738,26 @@ func removeShared(b sidecar.Backend, log func(string)) error {
 			return err
 		}
 	}
+	if len(users) == 0 {
+		log("Removed")
+		return nil
+	}
 	file := filepath.Join(httpengine.SidecarDir, "envs", b.EnvName(), ".voice-setup.json")
 	raw, err := os.ReadFile(file)
 	if err != nil {
-		return nil // nothing recorded
+		return err
 	}
 	var st map[string]any
 	if err := json.Unmarshal(bytes.TrimPrefix(raw, []byte("\xEF\xBB\xBF")), &st); err != nil {
 		return fmt.Errorf("%s: %w", file, err)
 	}
-	delete(st, "backend:"+b.Name)
-	delete(st, "prefetch:"+b.Name)
+	delete(st, setupKey(b, "backend"))
+	delete(st, setupKey(b, "prefetch"))
 	out, _ := json.MarshalIndent(st, "", "    ")
 	if err := os.WriteFile(file, out, 0o644); err != nil {
 		return err
 	}
-	log("Removed. The " + b.EnvName() + " environment stays: " + b.EnvName() + " uses it")
+	log("Removed. Its environment stays: " + strings.Join(users, ", ") + " runs in it")
 	return nil
 }
 
