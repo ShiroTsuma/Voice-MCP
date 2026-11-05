@@ -95,6 +95,18 @@
     font: 12.5px var(--mono); color: var(--ink); user-select: text; }
   .field input:hover { background: var(--field-hi); }
   .field .btn { height: 28px; }
+  /* One button per integration: its main action, and on the arrow the others. */
+  .split { display: inline-flex; }
+  .split .btn.main { border-radius: 6px 0 0 6px; }
+  .split .btn.main:only-child { border-radius: 6px; }
+  .split .btn.more { width: 28px; padding: 0; border-radius: 0 6px 6px 0; margin-left: 1px; position: relative; }
+  .split .btn.more::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -5px 0 0 -3px;
+    border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
+  .split.primary .btn { background: var(--ink); color: var(--ground); }
+  .split.primary .btn:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
+  .split.primary .btn.more { box-shadow: inset 1px 0 0 color-mix(in oklab, var(--ground) 35%, transparent); margin-left: 0; }
+  .actmenu .vopt { padding-left: 12px; }
+  .actmenu .vopt.danger { color: var(--err); }
   /* The page's own dialogs: the browser's would show voice's address and port. */
   .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
   .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
@@ -317,20 +329,7 @@ function renderMain() {
     }
     if (it.status.choice) left.append(picker(it));
     if (it.status.field) left.append(fieldRow(it));
-    const acts = document.createElement('div'); acts.className = 'acts';
-    for (const a of it.status.actions || []) {
-      const b = document.createElement('button'); b.type = 'button';
-      b.className = 'btn' + (a.primary ? ' primary' : '');
-      b.textContent = a.label;
-      b.onclick = async () => {
-        if (a.id === 'remove' && !(await askYes('Remove ' + it.title + '? Its files are deleted; you can download or install it again later.', 'Remove'))) return;
-        b.disabled = true;
-        try { await api('integration', { id: it.id, action: a.id }); logOpen.delete(it.id); } catch (e) { tell(e.message); }
-        refresh();
-      };
-      acts.append(b);
-    }
-    row.append(left, acts);
+    row.append(left, actionButton(it));
     if (it.job && (it.job.log.length || it.job.error)) {
       const det = document.createElement('details'); det.className = 'log';
       det.open = logOpen.has(it.id) ? logOpen.get(it.id) : running;
@@ -374,6 +373,67 @@ function picker(it) {
   return wrap;
 }
 
+// actionButton is an integration's actions as one button: the main one (the
+// primary, else the first: Install, Start server, Load now, Turn on) and, on
+// its arrow, the others in a menu, so the row's text keeps its width.
+async function runAction(it, a, b) {
+  if (a.id === 'remove' && !(await askYes('Remove ' + it.title + '? Its files are deleted; you can download or install it again later.', 'Remove'))) return;
+  if (b) b.disabled = true;
+  try { await api('integration', { id: it.id, action: a.id }); logOpen.delete(it.id); } catch (e) { tell(e.message); }
+  refresh();
+}
+let actMenu = null;
+function closeActMenu() { if (actMenu) { actMenu.remove(); actMenu = null; } }
+function actionButton(it) {
+  const acts = it.status.actions || [];
+  const wrap = document.createElement('div'); wrap.className = 'acts';
+  if (!acts.length) return wrap;
+  const main = acts.find(a => a.primary) || acts[0];
+  const rest = acts.filter(a => a !== main);
+  const split = document.createElement('div'); split.className = 'split' + (main.primary ? ' primary' : '');
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn main'; b.textContent = main.label;
+  b.onclick = () => runAction(it, main, b);
+  split.append(b);
+  if (rest.length) {
+    const more = document.createElement('button'); more.type = 'button'; more.className = 'btn more';
+    more.setAttribute('aria-label', 'More actions for ' + it.title); more.setAttribute('aria-haspopup', 'menu');
+    let timer = null;
+    const open = () => {
+      clearTimeout(timer);
+      if (actMenu && actMenu.owner === more) return;
+      closeActMenu();
+      const m = document.createElement('div'); m.className = 'vmenu actmenu'; m.setAttribute('role', 'menu'); m.owner = more;
+      for (const a of rest) {
+        const o = document.createElement('div'); o.className = 'vopt' + (a.id === 'remove' ? ' danger' : ''); o.setAttribute('role', 'menuitem'); o.tabIndex = 0;
+        o.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.click(); } };
+        o.textContent = a.label;
+        o.onmouseenter = () => o.classList.add('act'); o.onmouseleave = () => o.classList.remove('act');
+        o.onclick = () => { closeActMenu(); runAction(it, a, null); };
+        m.append(o);
+      }
+      m.onmouseenter = () => clearTimeout(timer);
+      m.onmouseleave = () => { timer = setTimeout(closeActMenu, 250); };
+      document.body.append(m);
+      const r = split.getBoundingClientRect();
+      m.style.minWidth = r.width + 'px';
+      m.style.left = Math.max(4, r.right - m.offsetWidth) + 'px';
+      const below = innerHeight - r.bottom - 8;
+      if (below >= m.offsetHeight) m.style.top = (r.bottom + 4) + 'px'; else m.style.bottom = (innerHeight - r.top + 4) + 'px';
+      actMenu = m;
+    };
+    // Hovering opens it already, so a click only makes sure it is open.
+    more.onclick = open;
+    more.onmouseenter = open;
+    more.onmouseleave = () => { timer = setTimeout(closeActMenu, 250); };
+    split.append(more);
+  }
+  wrap.append(split);
+  return wrap;
+}
+document.addEventListener('mousedown', e => { if (actMenu && !actMenu.contains(e.target) && !actMenu.owner.contains(e.target)) closeActMenu(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && actMenu) { closeActMenu(); e.stopPropagation(); } }, true);
+document.addEventListener('scroll', closeActMenu, true);
+
 // fieldRow shows an integration's text setting (a server's address), saved
 // with Save or Enter; what is being typed survives the window's refresh.
 const drafts = new Map();
@@ -405,7 +465,7 @@ async function refresh() {
   clearTimeout(timer);
   // Not while an address is being typed: the redraw would take the cursor away.
   const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.field');
-  try { data = await api('integrations'); if (!typing) render(); } catch (e) { $('main').textContent = e.message; }
+  try { data = await api('integrations'); if (!typing && !actMenu) render(); } catch (e) { $('main').textContent = e.message; }
   const busy = data.items.some(i => i.job && !i.job.done);
   if (document.visibilityState === 'visible') timer = setTimeout(refresh, busy ? 1000 : 5000);
 }

@@ -10,9 +10,20 @@ Options: model=nari-labs/Dia-1.6B-0626, device=cuda|cpu, dtype=float16.
 Per request, extra may override cfg_scale, temperature and top_p.
 """
 
-from . import device
+from . import VoicePrints, device
 
 RATE = 44100
+
+
+def read_audio(path, channels_first=True, **_):
+    """torchaudio.load without TorchCodec, which newer torchaudio needs for
+    it and which on Windows wants FFmpeg's DLLs: soundfile reads the WAV."""
+    import soundfile as sf
+    import torch
+
+    data, rate = sf.read(path, dtype="float32", always_2d=True)  # frames, channels
+    t = torch.from_numpy(data.T.copy() if channels_first else data.copy())
+    return t, rate
 TUNABLE = ("cfg_scale", "temperature", "top_p")
 
 
@@ -25,8 +36,10 @@ class Backend:
     clones = True
 
     def __init__(self, options):
+        import dia.model
         from dia.model import Dia
 
+        dia.model.torchaudio.load = read_audio
         dev = device(options)
         kw = {"compute_dtype": options.get("dtype", "float16" if dev == "cuda" else "float32")}
         try:
@@ -36,6 +49,8 @@ class Backend:
         except ImportError:
             pass
         self.model = Dia.from_pretrained(options.get("model", "nari-labs/Dia-1.6B-0626"), **kw)
+        # A clip is encoded into Dia's codes once per server, not per sentence.
+        self.prints = VoicePrints("dia", lambda path, _text: self.model.load_audio(path))
 
     def synthesize(self, req):
         # torch.compile needs Triton, which Windows lacks; the rest are Dia's defaults.
@@ -44,7 +59,7 @@ class Backend:
         text = speaker(req["text"])
         if req.get("ref_audio") and req.get("ref_text"):
             text = speaker(req["ref_text"]) + " " + text
-            params["audio_prompt"] = req["ref_audio"]
+            params["audio_prompt"] = self.prints.get(req["ref_audio"])
         out = self.model.generate(text, **params)
         if isinstance(out, list):
             out = out[0]
