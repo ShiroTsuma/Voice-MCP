@@ -120,7 +120,9 @@ func makeIntegration(f integrationFile, handlers map[string]handler) integration
 		it.Languages = b.Languages
 	}
 	// What a voice engine does with voice's tags and moods, in one form.
-	if f.Group == "speech" || f.Group == "gpu" {
+	m, _ := models.Find(f.Model)
+	voiceEngine := f.Uses == "sidecar" || f.Uses == "builtin" || (f.Uses == "model" && !m.Runtime)
+	if (f.Group == "speech" || f.Group == "gpu") && voiceEngine {
 		var x core.Expressive
 		if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" {
 			x = core.ParseExpressive(b.Expressive)
