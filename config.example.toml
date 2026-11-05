@@ -14,6 +14,7 @@
 # Background process (voice serve): owns audio, models and hotkeys.
 # [serve]
 # unload_after = "15m"       # free idle models; "0" keeps them loaded
+# gpu_budget = "off"         # GPU voices loaded at once: "off", "one", or a size in GB ("12")
 # duck = 0.35                # other apps' volume while voice speaks; 1 = off
 # stop_hotkey = "Ctrl+Alt+End"
 # mute_hotkey = "Ctrl+Alt+M"
