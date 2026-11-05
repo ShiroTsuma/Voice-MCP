@@ -494,19 +494,6 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
         </div></div>
       </section>
 
-      <section class="g more" data-g="languages">
-        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Languages</span><span class="sum" id="sumLanguages"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
-        <div class="body"><div>
-          <div class="row col">
-            <span class="lab" id="langsLab">Languages you speak<span class="help">Speech recognition keeps to these, so a short sentence is not taken for another language, and Integrations and Voice clone say which voices speak them. None: any.</span></span>
-            <div class="seg langs" id="langs" role="group" aria-labelledby="langsLab"></div>
-          </div>
-          <div class="row">
-            <label class="lab" for="lang">Speaking language<span class="help">When the agent does not say which</span></label>
-            <select id="lang"></select>
-          </div>
-        </div></div>
-      </section>
       <section class="g" data-g="speaking">
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Speaking</span><span class="sum" id="sumSpeaking"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
@@ -529,138 +516,9 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <label class="lab" for="volume">Volume</label>
             <div class="slider"><input type="range" id="volume" min="0" max="1.5" step="0.05" value="1"><span class="val" id="volumeVal"></span></div>
           </div>
-
-          <div class="more row">
-            <div class="lab">Stop speaking key</div>
-            <button class="key" id="stopKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
-          </div>
-          <div class="more row">
-            <div class="lab">Mute key<span class="help">Click, then press the keys. Esc cancels, Backspace turns it off</span></div>
-            <button class="key" id="muteKey" type="button"></button>
-          </div>
           <div class="row">
             <label class="lab" for="voiceReplies">Answer by voice<span class="help">When you dictate, the agent says its answer and its questions aloud</span></label>
             <label class="switch"><input type="checkbox" id="voiceReplies"><span></span></label>
-          </div>
-          <div class="row">
-            <label class="lab" for="speakingPopup">Show who speaks<span class="help">In the screen corner while an agent speaks</span></label>
-            <label class="switch"><input type="checkbox" id="speakingPopup"><span></span></label>
-          </div>
-          <div class="more row">
-            <label class="lab" for="popupDictation">Show it while you dictate<span class="help">Your words in the corner as they are heard</span></label>
-            <label class="switch"><input type="checkbox" id="popupDictation"><span></span></label>
-          </div>
-          <div class="more row" id="lingerRow">
-            <div class="lab">Stays after<span class="help">How long the corner keeps the last words</span></div>
-            <div class="seg" id="popupLinger" role="group" aria-label="Stays after"><button type="button" data-v="4">4 s</button><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button></div>
-          </div>
-          <div class="row">
-            <div class="lab">Words appear<span class="help">In the reading window: one by one as they are said, or the whole message at once with the word being said marked</span></div>
-            <div class="seg" id="readerAppear" role="group" aria-label="Words appear"><button type="button" data-v="words">As said</button><button type="button" data-v="block">At once</button></div>
-          </div>
-          <div class="row col" id="themeRow">
-            <label class="lab" for="readerTheme">Reading window theme<span class="help" id="themeHelp">A folder with a theme.css in the themes folder</span></label>
-            <select id="readerTheme"></select>
-          </div>
-          <div class="row">
-            <div class="lab">Reading window key<span class="help">Shows a large window with the transcript to read and scroll back, and hides it again. It opens only with this key. Click, then press the keys</span></div>
-            <button class="key" id="readerKey" type="button"></button>
-          </div>
-        </div></div>
-      </section>
-
-      <section class="g" data-g="announce">
-        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Announcements</span><span class="sum" id="sumAnnounce"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
-        <div class="body"><div>
-          <div class="row">
-            <label class="lab" for="hooks">Announce agent events<span class="help">When a session finishes a turn or needs you</span></label>
-            <label class="switch"><input type="checkbox" id="hooks"><span></span></label>
-          </div>
-          <div class="more row">
-            <label class="lab" for="summary">Say what was finished<span class="help">In the agent's own words, when it answered in the voice's language</span></label>
-            <label class="switch"><input type="checkbox" id="summary"><span></span></label>
-          </div>
-          <div class="more row col sub" id="summaryRow">
-            <div class="lab">How much</div>
-            <div class="seg" id="summaryPart" role="group" aria-label="How much" style="align-self: flex-start"><button type="button" data-v="start:1">First</button><button type="button" data-v="end:1">Last</button><button type="button" data-v="end:2">Last 2</button><button type="button" data-v="end:3">Last 3</button></div>
-          </div>
-          <div class="more row">
-            <div class="lab">Codex goals<span class="help">A thread working toward a goal goes on by itself: wait before announcing its turn</span></div>
-            <div class="seg" id="goalWait" role="group" aria-label="Codex goals"><button type="button" data-v="0">Off</button><button type="button" data-v="3">3 s</button><button type="button" data-v="10">10 s</button></div>
-          </div>
-          <div class="more row">
-            <label class="lab" for="project">Start with the project name</label>
-            <label class="switch"><input type="checkbox" id="project"><span></span></label>
-          </div>
-          <div class="more row">
-            <label class="lab" for="hookPreset">Voice<span class="help">Without characters</span></label>
-            <select id="hookPreset"></select>
-          </div>
-        </div></div>
-      </section>
-
-      <section class="g" data-g="dictation">
-        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Dictation</span><span class="sum" id="sumDictation"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
-        <div class="body"><div>
-          <div class="more row">
-            <div class="lab">Hotkey<span class="help">Press to talk, press again or pause to send. Click to change</span></div>
-            <button class="key" id="dictateKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
-          </div>
-          <div class="row">
-            <label class="lab" for="dictateRouting">Pick the agent by name<span class="help">Start with a name, Claude, Codex or the project: "Clara, …". "Everyone, …" reaches all</span></label>
-            <label class="switch"><input type="checkbox" id="dictateRouting"><span></span></label>
-          </div>
-          <div class="more row">
-            <label class="lab" for="dictateSay">Say what happened<span class="help">A short spoken line: sent, queued, or on the clipboard. The corner animation shows it too, see Corner animation</span></label>
-            <label class="switch"><input type="checkbox" id="dictateSay"><span></span></label>
-          </div>
-          <div class="more row col">
-            <label class="lab" for="dictateTarget">Type into</label>
-            <select id="dictateTarget">
-              <option value="auto">The agent's terminal or app, else the window in front</option>
-              <option value="console">Only terminals</option>
-              <option value="window">Only the window in front</option>
-            </select>
-          </div>
-          <div class="row">
-            <label class="lab" for="dictateSubmit">Press Enter after typing<span class="help">Off: you check the text and send it yourself</span></label>
-            <label class="switch"><input type="checkbox" id="dictateSubmit"><span></span></label>
-          </div>
-        </div></div>
-      </section>
-
-      <section class="g more" data-g="corner">
-        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Corner animation</span><span class="sum" id="sumCorner"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
-        <div class="body"><div>
-          <div class="row">
-            <label class="lab" for="cornerDictate">While you dictate<span class="help">The outer ring moves with your voice, then shows what happened to the message</span></label>
-            <label class="switch"><input type="checkbox" id="cornerDictate"><span></span></label>
-          </div>
-          <div class="row">
-            <label class="lab" for="cornerSpeak">While an agent speaks<span class="help">A smaller ring inside moves with its voice, in its character's colour, when no popup or settings window shows who speaks</span></label>
-            <label class="switch"><input type="checkbox" id="cornerSpeak"><span></span></label>
-          </div>
-          <div class="row" id="lookRow">
-            <label class="lab" for="dictateTheme">Look<span class="help">A change plays a demo</span></label>
-            <select id="dictateTheme"></select>
-          </div>
-          <div class="row" id="sizeRow">
-            <div class="lab">Size</div>
-            <div class="seg" id="overlayScale" role="group" aria-label="Size"><button type="button" data-v="1">100%</button><button type="button" data-v="1.5">150%</button><button type="button" data-v="2">200%</button></div>
-          </div>
-        </div></div>
-      </section>
-
-      <section class="g" data-g="sound">
-        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Sound</span><span class="sum" id="sumSound"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
-        <div class="body"><div>
-          <div class="row col">
-            <label class="lab" for="device">Speakers</label>
-            <select id="device"></select>
-          </div>
-          <div class="row col">
-            <label class="lab" for="mic">Microphone<span class="help">For dictation and spoken answers; it changes at once</span></label>
-            <select id="mic"></select>
           </div>
           <div class="more row">
             <label class="lab" for="duckOn">Lower other apps while speaking</label>
@@ -706,15 +564,65 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
           <p class="help" id="cloneMsg"></p>
         </div></div>
       </section>
-      <section class="g more" data-g="models">
-        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Listening and memory</span><span class="sum" id="sumModels"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+
+      <section class="g" data-g="announce">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Announcements</span><span class="sum" id="sumAnnounce"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
-          <div class="row col">
+          <div class="row">
+            <label class="lab" for="hooks">Announce agent events<span class="help">When a session finishes a turn or needs you</span></label>
+            <label class="switch"><input type="checkbox" id="hooks"><span></span></label>
+          </div>
+          <div class="more row">
+            <label class="lab" for="summary">Say what was finished<span class="help">In the agent's own words, when it answered in the voice's language</span></label>
+            <label class="switch"><input type="checkbox" id="summary"><span></span></label>
+          </div>
+          <div class="more row col sub" id="summaryRow">
+            <div class="lab">How much</div>
+            <div class="seg" id="summaryPart" role="group" aria-label="How much" style="align-self: flex-start"><button type="button" data-v="start:1">First</button><button type="button" data-v="end:1">Last</button><button type="button" data-v="end:2">Last 2</button><button type="button" data-v="end:3">Last 3</button></div>
+          </div>
+          <div class="more row">
+            <div class="lab">Codex goals<span class="help">A thread working toward a goal goes on by itself: wait before announcing its turn</span></div>
+            <div class="seg" id="goalWait" role="group" aria-label="Codex goals"><button type="button" data-v="0">Off</button><button type="button" data-v="3">3 s</button><button type="button" data-v="10">10 s</button></div>
+          </div>
+          <div class="more row">
+            <label class="lab" for="project">Start with the project name</label>
+            <label class="switch"><input type="checkbox" id="project"><span></span></label>
+          </div>
+          <div class="more row">
+            <label class="lab" for="hookPreset">Voice<span class="help">Without characters</span></label>
+            <select id="hookPreset"></select>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="dictation">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Dictation</span><span class="sum" id="sumDictation"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row">
+            <label class="lab" for="dictateRouting">Pick the agent by name<span class="help">Start with a name, Claude, Codex or the project: "Clara, …". "Everyone, …" reaches all</span></label>
+            <label class="switch"><input type="checkbox" id="dictateRouting"><span></span></label>
+          </div>
+          <div class="more row">
+            <label class="lab" for="dictateSay">Say what happened<span class="help">A short spoken line: sent, queued, or on the clipboard. The corner animation shows it too, see On screen</span></label>
+            <label class="switch"><input type="checkbox" id="dictateSay"><span></span></label>
+          </div>
+          <div class="more row col">
+            <label class="lab" for="dictateTarget">Type into</label>
+            <select id="dictateTarget">
+              <option value="auto">The agent's terminal or app, else the window in front</option>
+              <option value="console">Only terminals</option>
+              <option value="window">Only the window in front</option>
+            </select>
+          </div>
+          <div class="row">
+            <label class="lab" for="dictateSubmit">Press Enter after typing<span class="help">Off: you check the text and send it yourself</span></label>
+            <label class="switch"><input type="checkbox" id="dictateSubmit"><span></span></label>
+          </div>
+          <div class="more row col">
             <label class="lab" for="model">Speech recognition</label>
             <select id="model"></select>
           </div>
-
-          <div class="row col">
+          <div class="more row col">
             <div class="lab">Word lists<span class="help">Terms recognition gets wrong, put right after it hears them. Character, session and project names are known already.</span></div>
             <div class="wls" id="wordLists"></div>
             <div class="pair">
@@ -723,7 +631,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
               <span class="help" id="wlMsg"></span>
             </div>
           </div>
-          <div class="row col">
+          <div class="more row col">
             <div class="lab">Your words<span class="help">The word as it should be written, and what recognition writes instead, separated by commas. Leave that empty to match by sound: Rebecca becomes Rebekka.</span></div>
             <div class="wrows" id="myWords"></div>
             <div class="pair">
@@ -731,11 +639,98 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
               <button class="btn" id="wordsExport" type="button">Save as a list…</button>
             </div>
           </div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="screen">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">On screen</span><span class="sum" id="sumScreen"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
           <div class="row">
+            <label class="lab" for="speakingPopup">Show who speaks<span class="help">In the screen corner while an agent speaks</span></label>
+            <label class="switch"><input type="checkbox" id="speakingPopup"><span></span></label>
+          </div>
+          <div class="more row">
+            <label class="lab" for="popupDictation">Show it while you dictate<span class="help">Your words in the corner as they are heard</span></label>
+            <label class="switch"><input type="checkbox" id="popupDictation"><span></span></label>
+          </div>
+          <div class="more row" id="lingerRow">
+            <div class="lab">Stays after<span class="help">How long the corner keeps the last words</span></div>
+            <div class="seg" id="popupLinger" role="group" aria-label="Stays after"><button type="button" data-v="4">4 s</button><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button></div>
+          </div>
+          <div class="more row">
+            <label class="lab" for="cornerDictate">Corner ring while you dictate<span class="help">The outer ring moves with your voice, then shows what happened to the message</span></label>
+            <label class="switch"><input type="checkbox" id="cornerDictate"><span></span></label>
+          </div>
+          <div class="more row">
+            <label class="lab" for="cornerSpeak">Corner ring while an agent speaks<span class="help">A smaller ring inside moves with its voice, in its character's colour, when no popup or settings window shows who speaks</span></label>
+            <label class="switch"><input type="checkbox" id="cornerSpeak"><span></span></label>
+          </div>
+          <div class="more row" id="lookRow">
+            <label class="lab" for="dictateTheme">Ring look<span class="help">A change plays a demo</span></label>
+            <select id="dictateTheme"></select>
+          </div>
+          <div class="more row" id="sizeRow">
+            <div class="lab">Ring size</div>
+            <div class="seg" id="overlayScale" role="group" aria-label="Size"><button type="button" data-v="1">100%</button><button type="button" data-v="1.5">150%</button><button type="button" data-v="2">200%</button></div>
+          </div>
+          <div class="more row">
+            <div class="lab">Words appear<span class="help">In the reading window: one by one as they are said, or the whole message at once with the word being said marked</span></div>
+            <div class="seg" id="readerAppear" role="group" aria-label="Words appear"><button type="button" data-v="words">As said</button><button type="button" data-v="block">At once</button></div>
+          </div>
+          <div class="more row col" id="themeRow">
+            <label class="lab" for="readerTheme">Reading window theme<span class="help" id="themeHelp">A folder with a theme.css in the themes folder</span></label>
+            <select id="readerTheme"></select>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g more" data-g="keys">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Keys</span><span class="sum" id="sumKeys"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <p class="help">Click a key, then press the keys. Esc cancels, Backspace turns it off.</p>
+          <div class="row">
+            <div class="lab">Stop speaking key</div>
+            <button class="key" id="stopKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
+          </div>
+          <div class="row">
+            <div class="lab">Mute key</div>
+            <button class="key" id="muteKey" type="button"></button>
+          </div>
+          <div class="row">
+            <div class="lab">Dictation key<span class="help">Press to talk, press again or pause to send</span></div>
+            <button class="key" id="dictateKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
+          </div>
+          <div class="row">
+            <div class="lab">Reading window key<span class="help">Shows a large window with the transcript to read and scroll back, and hides it again. It opens only with this key</span></div>
+            <button class="key" id="readerKey" type="button"></button>
+          </div>
+        </div></div>
+      </section>
+
+      <section class="g" data-g="general">
+        <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">General</span><span class="sum" id="sumGeneral"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
+        <div class="body"><div>
+          <div class="row col">
+            <label class="lab" for="device">Speakers</label>
+            <select id="device"></select>
+          </div>
+          <div class="row col">
+            <label class="lab" for="mic">Microphone<span class="help">For dictation and spoken answers; it changes at once</span></label>
+            <select id="mic"></select>
+          </div>
+          <div class="more row col">
+            <span class="lab" id="langsLab">Languages you speak<span class="help">Speech recognition keeps to these, so a short sentence is not taken for another language, and Integrations and Voice clone say which voices speak them. None: any.</span></span>
+            <div class="seg langs" id="langs" role="group" aria-labelledby="langsLab"></div>
+          </div>
+          <div class="more row">
+            <label class="lab" for="lang">Speaking language<span class="help">When the agent does not say which</span></label>
+            <select id="lang"></select>
+          </div>
+          <div class="more row">
             <label class="lab" for="unload">Free idle models after<span class="help">GPU voices too: their server stops and frees the graphics card; the next sentence loads it again</span></label>
             <select id="unload"><option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="1h">1 hour</option><option value="0">Never</option></select>
           </div>
-          <div class="row">
+          <div class="more row">
             <label class="lab" for="preload">Load the characters' voices at start<span class="help">Their models load when voice starts, so even the first sentence is not late</span></label>
             <label class="switch"><input type="checkbox" id="preload"><span></span></label>
           </div>
@@ -744,7 +739,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
 
       <!-- Not a folded group: it opens the full settings window. -->
       <section class="g win">
-        <button class="head" type="button" id="openIntegrations"><span class="t"><span class="name">All settings</span><span class="sum">Keys, effects, dictation details, cloning, models, characters and integrations</span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5h2.5V5M9.5 2.5L5.5 6.5M8.5 7v2.5h-6v-6H5"/></svg></button>
+        <button class="head" type="button" id="openIntegrations"><span class="t"><span class="name">All settings</span><span class="sum">Keys, screen, dictation details, cloning, models, characters and integrations</span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5h2.5V5M9.5 2.5L5.5 6.5M8.5 7v2.5h-6v-6H5"/></svg></button>
       </section>
     </div>
   </main>
@@ -1429,9 +1424,11 @@ if (fullMode) {
   document.documentElement.classList.add('full');
   const sections = [...document.querySelectorAll('.g[data-g]')].filter(g => g.dataset.g !== 'transcript' && g.dataset.g !== 'characters') // the flyout's own; the full window has the Characters page
     .map(g => ({ id: g.dataset.g, title: g.querySelector('.name').textContent, el: g }));
-  // Characters right after Speaking, where the voices are; Integrations last.
-  sections.splice(sections.findIndex(s => s.id === 'speaking') + 1, 0, { id: 'characters-page', title: 'Characters', frame: 'characters' });
-  sections.push({ id: 'integrations-page', title: 'Integrations', frame: 'integrations' });
+  // The Characters page with Voice clone after it, Integrations last; General first in this window
+  // (the flyout keeps it last, after what is used every day).
+  sections.push({ id: 'characters-page', title: 'Characters', frame: 'characters' }, { id: 'integrations-page', title: 'Integrations', frame: 'integrations' });
+  const order = ['general', 'speaking', 'characters-page', 'clone', 'announce', 'dictation', 'screen', 'keys', 'integrations-page'];
+  sections.sort((a, b) => (order.indexOf(a.id) + 1 || 99) - (order.indexOf(b.id) + 1 || 99));
   const list = document.getElementById('sideList');
   const show = id => {
     for (const s of sections) {
@@ -1610,20 +1607,23 @@ function summaries() {
     : !list.length ? 'On; no characters yet'
     : 'On; ' + (free.length ? andList(free) + ' not in a session' : 'all ' + list.length + ' in sessions');
   const mine = (state && state.languages) || [];
-  $('sumLanguages').textContent = (mine.length ? andList(mine.map(langName)) : 'Any language') + '; speaks ' + langName($('lang').value || 'en') + ' when not told';
-  $('sumSpeaking').textContent = [$('preset').value, pct($('volume').value),
-    'stop ' + keyText($('stopKey').dataset.value), 'mute ' + keyText($('muteKey').dataset.value)].join(', ');
+  $('sumSpeaking').textContent = [$('preset').value, pct($('volume').value), $('voiceReplies').checked ? 'answers by voice' : '',
+    $('duckOn').checked ? 'others down to ' + pct($('duck').value) : '', $('barge').checked ? 'stops when you talk' : ''].filter(Boolean).join(', ');
   const part = { 'start:1': 'the first sentence', 'end:1': 'the last sentence', 'end:2': 'the last 2 sentences', 'end:3': 'the last 3 sentences' }[segValue('summaryPart')] || 'the last sentences';
   const goal = segValue('goalWait');
   $('sumAnnounce').textContent = !$('hooks').checked ? 'Off'
     : ($('summary').checked ? 'Says ' + part : 'Says only who finished') + ($('project').checked ? ', project first' : '') + (!goal || goal === '0' ? '' : ', Codex goals wait ' + goal + ' s');
   const fb = feedbackValue();
-  $('sumCorner').textContent = [$('cornerDictate').checked ? 'while you dictate' : '', $('cornerSpeak').checked ? 'while an agent speaks' : ''].filter(Boolean).join(' and ').replace(/^./, c => c.toUpperCase()) || 'Off';
+  const ring = [$('cornerDictate').checked ? 'you dictate' : '', $('cornerSpeak').checked ? 'an agent speaks' : ''].filter(Boolean).join(' or ');
+  $('sumScreen').textContent = [ring ? 'Corner ring when ' + ring : 'No corner ring', $('speakingPopup').checked ? 'popup shows who speaks' : '',
+    'reading window ' + ($('readerTheme').value ? 'in ' + $('readerTheme').value : 'built-in')].filter(Boolean).join(', ');
+  $('sumKeys').textContent = ['stop ' + keyText($('stopKey').dataset.value), 'mute ' + keyText($('muteKey').dataset.value),
+    'dictate ' + keyText($('dictateKey').dataset.value), 'reading window ' + keyText($('readerKey').dataset.value)].join(', ');
   const tgt = { auto: "into the agent's terminal", console: 'into terminals only', window: 'into the window in front' }[$('dictateTarget').value];
-  $('sumDictation').textContent = keyText($('dictateKey').dataset.value) + ', ' + ($('dictateRouting').checked ? 'to the agent you name' : tgt) + ', '
+  $('sumDictation').textContent = ($('dictateRouting').checked ? 'To the agent you name' : cap(tgt)) + ', ' + optText('model').split(' — ')[0] + ', '
     + ({ screen: 'shown on screen', voice: 'told by voice', both: 'shown and told' }[fb] || 'shown on screen') + ($('dictateSubmit').checked ? ', Enter pressed' : '');
-  $('sumSound').textContent = ($('device').value === 'default' ? 'System speakers' : $('device').value) + ', ' + ($('mic').value && $('mic').value !== 'default' ? 'microphone ' + $('mic').value : 'system microphone') + ($('duckOn').checked ? ', others down to ' + pct($('duck').value) : '') + ($('barge').checked ? ', stops when you talk' : '');
-  $('sumModels').textContent = optText('model').split(' — ')[0] + ($('unload').value === '0' ? ', kept loaded' : ', freed after ' + optText('unload')) + ($('preload').checked ? ', voices loaded at start' : '');
+  $('sumGeneral').textContent = ($('device').value === 'default' ? 'System speakers' : $('device').value) + ', ' + ($('mic').value && $('mic').value !== 'default' ? 'microphone ' + $('mic').value : 'system microphone')
+    + ', ' + (mine.length ? andList(mine.map(langName)) : 'any language') + ($('unload').value === '0' ? ', models kept loaded' : ', models freed after ' + optText('unload'));
   $('sumClone').textContent = !clones.length ? 'No cloned voices yet' : clones.length + (clones.length === 1 ? ' voice: ' : ' voices: ') + andList(clones.map(c => c.name));
 }
 
@@ -2066,7 +2066,7 @@ onSeg('overlayScale', v => save({ serve: { dictate_overlay_scale: +v } }));
 onSeg('goalWait', v => save({ hooks: { codex_goal_wait: +v } }));
 onSeg('popupLinger', v => save({ serve: { popup_linger: +v } }));
 onSeg('readerAppear', v => save({ serve: { reader_appear: v } }));
-on('readerTheme', 'change', () => save({ serve: { reader_theme: $('readerTheme').value } }));
+on('readerTheme', 'change', () => { save({ serve: { reader_theme: $('readerTheme').value } }); summaries(); });
 // The themes found in the themes folder, asked each time the settings show.
 async function fillThemes(current) {
   try {
