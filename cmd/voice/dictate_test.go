@@ -78,3 +78,27 @@ func TestDictationOrder(t *testing.T) {
 		t.Errorf("excluded sessions stay out: %v %v", open, order)
 	}
 }
+
+// The display keeps a firm address once heard: the routing of the words so
+// far with one more word after them, where a name said last no longer counts.
+func TestFirmAddressForTheDisplay(t *testing.T) {
+	agents := []service.AgentInfo{{PID: 1, Name: "Anna"}, {PID: 2, Name: "Fiona"}}
+	firm := func(text string) uint32 {
+		to, _, _ := service.Route(text+" …", agents)
+		if len(to) == 0 {
+			return 0
+		}
+		return to[0]
+	}
+	for text, want := range map[string]uint32{
+		"Fiona, check the logs":                    2, // first
+		"I'm trying to talk to you. Fiona? Okay":   2, // set off
+		"I'm trying to talk to you. Fiona? Okay, ": 2,
+		"now talk to Fiona":                        0, // only last: a hint, not kept
+		"Anna, then later Fiona":                   1,
+	} {
+		if got := firm(text); got != want {
+			t.Errorf("%q: %d, want %d", text, got, want)
+		}
+	}
+}

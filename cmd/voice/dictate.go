@@ -623,6 +623,10 @@ type dictation struct {
 	// while the user speaks, so a message is never sent somewhere unseen.
 	To  string `json:"to,omitempty"`
 	All bool   `json:"all,omitempty"`
+	// The firm address heard so far, which the display keeps (not sent).
+	firmTo  string
+	firmAll bool
+	firm    bool
 }
 
 // setDictation records dictation's state for the settings window; "" ends it.
@@ -651,18 +655,49 @@ func (c *controller) setDictation(state string, level float64) {
 	c.dict.State, c.dict.Level = state, level
 	if state == "" {
 		c.dict.Text, c.dict.To, c.dict.All = "", "", false
+		c.dict.firmTo, c.dict.firmAll, c.dict.firm = "", false, false
 	}
 }
 
 // setDictationText shows the words heard so far, and who they would reach:
 // a name said switches the recipient as soon as it is heard.
+//
+// Only the display, not where the message goes: the words so far are routed
+// as the whole message will be, so a name said last shows while it is last
+// and drops when the user goes on. A firm address (the name first, set off
+// by a comma or question mark, or called by its vocative) stays shown once
+// heard, unless another address follows; a firm one is what the routing
+// finds with one more word after the text, where a name merely said last no
+// longer counts.
 func (c *controller) setDictationText(text string) {
-	to, all := c.recipient(text)
+	to, all, named := c.routeSoFar(text)
+	firmTo, firmAll, firm := c.routeSoFar(text + " …")
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.dict.State != "" {
-		c.dict.Text, c.dict.To, c.dict.All = text, to, all
+	if c.dict.State == "" {
+		return
 	}
+	if firm {
+		c.dict.firmTo, c.dict.firmAll, c.dict.firm = firmTo, firmAll, true
+	}
+	if !named && c.dict.firm {
+		to, all = c.dict.firmTo, c.dict.firmAll
+	}
+	c.dict.Text, c.dict.To, c.dict.All = text, to, all
+}
+
+// routeSoFar is who text would reach (recipient) and whether its words name
+// someone (or everyone), rather than falling to the default session.
+func (c *controller) routeSoFar(text string) (string, bool, bool) {
+	open, _ := c.dictationOrder()
+	if sv := c.cfg.Serve; strings.TrimSpace(text) != "" && sv.DictateRouting != nil && *sv.DictateRouting {
+		if to, _, _ := service.Route(text, open); len(to) > 0 {
+			name, all := c.recipient(text)
+			return name, all, true
+		}
+	}
+	name, all := c.recipient(text)
+	return name, all, false
 }
 
 // Dictation is the dictation in progress, nil when there is none.
