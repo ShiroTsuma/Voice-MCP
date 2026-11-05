@@ -3,6 +3,7 @@
   "backends": [
     {
       "name": "chatterbox",
+      "gpus": ["nvidia", "amd"],
       "label": "Chatterbox",
       "note": "expressive speech and cloning, on the GPU",
       "pip": ["chatterbox-tts"],
@@ -31,8 +32,9 @@
     },
     {
       "name": "f5",
+      "gpus": ["nvidia"],
       "label": "F5-TTS",
-      "note": "cloning on an NVIDIA GPU; non-commercial",
+      "note": "cloning on the GPU; non-commercial",
       "pip": ["f5-tts"],
       "module": "f5_tts",
       "port": 8766,
@@ -42,6 +44,7 @@
     },
     {
       "name": "xtts",
+      "gpus": ["nvidia", "amd"],
       "label": "XTTS v2",
       "note": "cloning on the GPU; non-commercial",
       "pip": ["coqui-tts"],
@@ -53,6 +56,7 @@
     },
     {
       "name": "qwen3",
+      "gpus": ["nvidia"],
       "label": "Qwen3-TTS",
       "note": "the closest cloning, from the clip and its transcript, on the GPU; also designs new voices from a description (that model downloads on first use, about 4.5 GB)",
       "pip": ["qwen-tts"],
@@ -77,6 +81,7 @@
     },
     {
       "name": "qwen3_design",
+      "gpus": ["nvidia"],
       "label": "Qwen3-TTS voice design",
       "note": "makes a new voice from a description, for voice_clone design; runs in the Qwen3-TTS environment",
       "env": "qwen3",
@@ -91,6 +96,7 @@
     },
     {
       "name": "chatterbox_turbo",
+      "gpus": ["nvidia", "amd"],
       "label": "Chatterbox Turbo",
       "note": "English speech with laughs, sighs, coughs and a few emotions, and cloning from a clip over 5 seconds; lighter and faster than Chatterbox; runs in the Chatterbox environment",
       "env": "chatterbox",
@@ -115,6 +121,7 @@
     },
     {
       "name": "omnivoice",
+      "gpus": ["nvidia"],
       "label": "OmniVoice",
       "note": "cloning in 600+ languages including Polish, from the clip and its transcript, with laughs and sighs; light (about 3 GB); research and non-commercial use",
       "pip": ["omnivoice"],

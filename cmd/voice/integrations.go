@@ -125,8 +125,11 @@ func readIntegrationFile(path string) integrationFile {
 
 func makeIntegration(f integrationFile, handlers map[string]handler) integrations.Integration {
 	it := integrations.Integration{ID: f.ID, Group: f.Group, Title: f.Title, About: f.About, Size: f.Size, Link: f.Link, Requires: f.Requires, Also: f.Also, Languages: f.Languages}
-	if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" && len(it.Languages) == 0 {
-		it.Languages = b.Languages
+	if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" {
+		if len(it.Languages) == 0 {
+			it.Languages = b.Languages
+		}
+		it.RunsOn = b.GPUNames()
 	}
 	// What a voice engine does with voice's tags and moods, in one form.
 	m, _ := models.Find(f.Model)
@@ -495,6 +498,18 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			status: func(f integrationFile) integrations.Status {
 				st := sidecarStatus(f.Backend)
 				st.Choice = sidecarChoice(f.Backend)
+				// A PC without a card it runs on cannot install it.
+				if b, ok := sidecar.Find(f.Backend); ok && !b.RunsOn(gpuKinds()) {
+					why := "Needs " + b.GPUNames()
+					for i, a := range st.Actions {
+						if a.ID == "install" {
+							st.Actions[i].Disabled, st.Actions[i].Why, st.Actions[i].Primary = true, why, false
+						}
+					}
+					if st.State == integrations.Missing {
+						st.Detail = why
+					}
+				}
 				return st
 			},
 			do: func(ctx context.Context, f integrationFile, action string, log func(string)) error {

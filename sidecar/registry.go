@@ -58,6 +58,41 @@ type Backend struct {
 	// Env is the Python environment it runs in (envs\<env>): another
 	// backend's, when it needs the same packages; empty is its own.
 	Env string `json:"env"`
+	// GPUs are the graphics cards it runs on (nvidia, amd); empty is any.
+	// The Integrations window greys out Install on a PC with none of them.
+	GPUs []string `json:"gpus"`
+}
+
+// GPUNames says which cards it needs, for people: "an NVIDIA graphics card",
+// "an NVIDIA or AMD graphics card".
+func (b Backend) GPUNames() string {
+	names := map[string]string{"nvidia": "NVIDIA", "amd": "AMD", "intel": "Intel"}
+	var out []string
+	for _, g := range b.GPUs {
+		if n, ok := names[g]; ok {
+			out = append(out, n)
+		} else {
+			out = append(out, g)
+		}
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	return "an " + strings.Join(out, " or ") + " graphics card" // an NVIDIA, an AMD, an Intel
+}
+
+// RunsOn reports whether one of the cards found (nvidia, amd, intel) runs
+// it; with none found (unknown), it does.
+func (b Backend) RunsOn(found map[string]bool) bool {
+	if len(b.GPUs) == 0 || len(found) == 0 {
+		return true
+	}
+	for _, g := range b.GPUs {
+		if found[g] {
+			return true
+		}
+	}
+	return false
 }
 
 // EnvName is the environment the backend runs in.

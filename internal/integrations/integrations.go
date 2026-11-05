@@ -34,6 +34,10 @@ type Action struct {
 	Long bool `json:"long,omitempty"`
 	// Primary is the one the window shows as the main button.
 	Primary bool `json:"primary,omitempty"`
+	// Disabled actions show greyed out, with Why (this PC lacks the
+	// graphics card it needs), and do not run.
+	Disabled bool   `json:"disabled,omitempty"`
+	Why      string `json:"why,omitempty"`
 }
 
 // Status is an integration's state now, with a line saying why, and what can
@@ -98,6 +102,8 @@ type Integration struct {
 	// Expressive is what a voice engine does with voice's sound tags and
 	// moods; nil when it is not a voice engine.
 	Expressive *Expressive
+	// RunsOn names the graphics cards it needs ("an NVIDIA graphics card"); empty is any.
+	RunsOn string
 	// Status reports the state; Do runs one of the actions Status offered.
 	Status func() Status
 	Do     func(ctx context.Context, action string, log func(string)) error
@@ -136,6 +142,7 @@ type View struct {
 	Languages []string `json:"languages,omitempty"`
 	// Expressive: a voice engine's sounds and moods (see Expressive).
 	Expressive *Expressive `json:"expressive,omitempty"`
+	RunsOn     string      `json:"runs_on,omitempty"`
 	Title      string      `json:"title"`
 	About      string      `json:"about,omitempty"`
 	Size       string      `json:"size,omitempty"`
@@ -191,7 +198,7 @@ func (r *Registry) List() []View {
 	sort.SliceStable(items, func(a, b int) bool { return order[items[a].Group] < order[items[b].Group] })
 	out := make([]View, 0, len(items))
 	for _, i := range items {
-		v := View{ID: i.ID, Group: i.Group, Also: i.Also, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link, Languages: i.Languages, Expressive: i.Expressive}
+		v := View{ID: i.ID, Group: i.Group, Also: i.Also, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link, Languages: i.Languages, Expressive: i.Expressive, RunsOn: i.RunsOn}
 		v.Status = safeStatus(i)
 		if missing := r.missing(i, items); len(missing) > 0 && v.Status.State != On {
 			names := make([]string, len(missing))
@@ -287,6 +294,9 @@ func (r *Registry) Start(id, action string) (Job, error) {
 	}
 	if act == nil || i.Do == nil {
 		return Job{}, fmt.Errorf("%s cannot %s now", i.Title, action)
+	}
+	if act.Disabled {
+		return Job{}, fmt.Errorf("%s: %s", i.Title, act.Why)
 	}
 
 	r.mu.Lock()

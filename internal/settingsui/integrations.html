@@ -104,6 +104,7 @@
     border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
   .split.primary .btn { background: var(--ink); color: var(--ground); }
   .split.primary .btn:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
+  .split .btn:disabled { cursor: not-allowed; }
   .split.primary .btn.more { box-shadow: inset 1px 0 0 color-mix(in oklab, var(--ground) 35%, transparent); margin-left: 0; }
   .actmenu .vopt { padding-left: 12px; }
   .actmenu .vopt.info { border-top: 1px solid var(--rule); border-radius: 0 0 5px 5px; margin-top: 3px; }
@@ -325,7 +326,7 @@ function renderMain() {
     }
     // What it does, its size and settings are in Info and settings (the
     // button's menu); the row keeps what needs attention.
-    if (it.status.detail && it.status.state !== 'on' && it.status.state !== 'off') {
+    if (it.status.detail && (it.status.state === 'error' || it.status.state === 'partly')) {
       const d = document.createElement('p'); d.className = 'detail'; d.textContent = it.status.detail;
       left.append(d);
     }
@@ -396,6 +397,7 @@ function actionButton(it) {
   const split = document.createElement('div'); split.className = 'split' + (main.primary ? ' primary' : '');
   const b = document.createElement('button'); b.type = 'button'; b.className = 'btn main'; b.textContent = main === info ? 'Info' : main.label;
   b.onclick = () => main === info ? openInfo(it.id) : runAction(it, main, b);
+  if (main.disabled) { b.disabled = true; b.title = main.why || ''; }
   split.append(b);
   if (rest.length) {
     const more = document.createElement('button'); more.type = 'button'; more.className = 'btn more';
@@ -412,7 +414,8 @@ function actionButton(it) {
         o.textContent = a.label;
         o.onmouseenter = () => o.classList.add('act'); o.onmouseleave = () => o.classList.remove('act');
         if (a.id === 'info') o.classList.add('info');
-        o.onclick = () => { closeActMenu(); a.id === 'info' ? openInfo(it.id) : runAction(it, a, null); };
+        if (a.disabled) { o.setAttribute('aria-disabled', 'true'); o.title = a.why || ''; }
+        o.onclick = () => { if (a.disabled) return; closeActMenu(); a.id === 'info' ? openInfo(it.id) : runAction(it, a, null); };
         m.append(o);
       }
       m.onmouseenter = () => clearTimeout(timer);
@@ -485,6 +488,7 @@ function renderInfo() {
     const moods = (x.moods || []).filter(m => m !== 'any');
     row('Moods', text((emotionText[x.emotion] || x.emotion) + (moods.length ? ': ' + moods.join(', ') : '')));
   }
+  row('Runs on', it.runs_on ? text(it.runs_on.replace(/^an? /, '').replace(/^./, c => c.toUpperCase())) : null);
   row('Size', it.size ? text(it.size) : null);
   // The row names the setting, so the controls go without their own label.
   const bare = el => { el.firstChild.remove(); return el; };
