@@ -273,7 +273,7 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 				if len(f.Stop) > 0 {
 					add("stop", "Stop server", false)
 				}
-				return integrations.Status{State: integrations.Partly, Detail: fmt.Sprintf("Starting for %s; the first start tunes the graphics card for over 10 minutes, later ones take a few", since.Round(time.Second)), Actions: acts, Field: field}
+				return integrations.Status{State: integrations.Partly, Label: "Starting…", Detail: fmt.Sprintf("Starting for %s; the first start tunes the graphics card for over 10 minutes, later ones take a few", since.Round(time.Second)), Actions: acts, Field: field}
 			}
 			if len(f.Start) > 0 {
 				add("start", "Start server", true)

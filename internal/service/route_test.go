@@ -60,7 +60,7 @@ func TestRoute(t *testing.T) {
 		{"Okay Annie do it", "Okay Annie do it", []uint32{1}, false},
 		{"Dobra Rebeko, wdrażaj", "Dobra Rebeko, wdrażaj", []uint32{3}, false},
 		{"Yes, Rebekka said so", "Yes, Rebekka said so", nil, false}, // about her
-		{"Sure, tell Rebekka", "Sure, tell", []uint32{3}, false}, // the name last still addresses
+		{"Sure, tell Rebekka", "Sure, tell", []uint32{3}, false},     // the name last still addresses
 
 		// Found by speaking test sentences to the recognizers.
 		{"Rebekko, zrób deploy", "Zrób deploy", []uint32{3}, false}, // the vocative first

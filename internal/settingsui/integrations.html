@@ -313,7 +313,7 @@ function renderMain() {
     const name = document.createElement('span'); name.textContent = it.title;
     const st = document.createElement('span'); st.className = 'state ' + it.status.state;
     const running = it.job && !it.job.done;
-    st.textContent = running ? 'Working…' : stateText[it.status.state] || it.status.state;
+    st.textContent = running ? 'Working…' : it.status.label || stateText[it.status.state] || it.status.state;
     h3.append(name, st);
     left.append(h3);
     if (it.about) { const a = document.createElement('p'); a.className = 'about'; a.textContent = it.about; left.append(a); }
@@ -463,7 +463,7 @@ function renderInfo() {
   if (!dlg || !it) return closeInfo();
   const box = document.createElement('div'); box.className = 'vdlg-box infobox'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', it.title);
   const h = document.createElement('h3');
-  const st = document.createElement('span'); st.className = 'state ' + it.status.state; st.textContent = stateText[it.status.state] || it.status.state;
+  const st = document.createElement('span'); st.className = 'state ' + it.status.state; st.textContent = it.status.label || stateText[it.status.state] || it.status.state;
   h.append(it.title, st);
   box.append(h);
   const row = (label, content) => {

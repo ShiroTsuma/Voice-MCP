@@ -50,10 +50,10 @@ type Config struct {
 	// replaces only that engine's url, keeping the rest of its table.
 	Servers map[string]string `toml:"servers"`
 	Presets map[string]Preset `toml:"presets"`
-	Hooks   Hooks                        `toml:"hooks"`
-	Listen  Listen                       `toml:"listen"`
-	Clients map[string]string            `toml:"clients"` // client name substring -> preset
-	Serve   Serve                        `toml:"serve"`
+	Hooks   Hooks             `toml:"hooks"`
+	Listen  Listen            `toml:"listen"`
+	Clients map[string]string `toml:"clients"` // client name substring -> preset
+	Serve   Serve             `toml:"serve"`
 	// Characters are who agent sessions become, in order: a new session takes
 	// the first one no other session has. A later layer's list replaces it.
 	Characters []Character `toml:"characters"`

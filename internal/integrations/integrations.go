@@ -43,8 +43,11 @@ type Action struct {
 // Status is an integration's state now, with a line saying why, and what can
 // be done.
 type Status struct {
-	State   State    `json:"state"`
-	Detail  string   `json:"detail,omitempty"`
+	State  State  `json:"state"`
+	Detail string `json:"detail,omitempty"`
+	// Label names the state when its usual name would mislead ("Starting"
+	// for a server on its way up rather than "Needs a step").
+	Label   string   `json:"label,omitempty"`
 	Actions []Action `json:"actions,omitempty"`
 	// Choice is a setting the window shows as a picker, such as a model
 	// size; picking one runs the action "choose:<value>".
