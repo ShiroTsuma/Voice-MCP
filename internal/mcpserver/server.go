@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -180,7 +179,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Speak", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.SpeakArgs
-		if err := decode(req, &a, "text", "mood", "intent", "lang", "interrupt", "voice"); err != nil {
+		if err := decode(req, &a, speakSchema); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.Preset, a.PID, a.Project = caller(req, client), presetName, callerPID(req), callerProject(req)
@@ -193,7 +192,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Scene", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.SpeakArgs
-		if err := decode(req, &a, "lines", "scene", "mode", "lang", "save_to"); err != nil {
+		if err := decode(req, &a, sceneSchema); err != nil {
 			return fail(err), nil
 		}
 		if len(a.Lines) == 0 {
@@ -209,7 +208,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Voice control", DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.ControlArgs
-		if err := decode(req, &a, "action", "preset", "name", "character", "session", "limit", "style", "id", "theme"); err != nil {
+		if err := decode(req, &a, controlSchema); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.PID, a.Project = caller(req, client), callerPID(req), callerProject(req)
@@ -222,7 +221,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Listen", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.ListenArgs
-		if err := decode(req, &a, "prompt", "wait_seconds", "max_seconds"); err != nil {
+		if err := decode(req, &a, listenSchema); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.PID, a.Project = caller(req, client), callerPID(req), callerProject(req)
@@ -235,7 +234,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Clone voice", DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.CloneArgs
-		if err := decode(req, &a, "action", "name", "clip_path", "transcript", "engine", "rights_confirmed", "text", "seconds", "description", "lang"); err != nil {
+		if err := decode(req, &a, cloneSchema); err != nil {
 			return fail(err), nil
 		}
 		return result(api.Clone(ctx, a))
@@ -253,9 +252,11 @@ func result(v any, err error) (*mcp.CallToolResult, error) {
 	return text(compact(v)), nil
 }
 
-// decode accepts only the schema's fields: internal fields of the service
-// arguments (client, wait, cache, ...) are not for the model to set.
-func decode(req *mcp.CallToolRequest, v any, allowed ...string) error {
+// decode accepts only the fields the tool's schema lists, read from the
+// schema itself so the two cannot drift apart: internal fields of the
+// service arguments (client, wait, cache, ...) are not for the model to set.
+func decode(req *mcp.CallToolRequest, v any, schema map[string]any) error {
+	props, _ := schema["properties"].(map[string]any)
 	args := req.Params.Arguments
 	if len(args) == 0 {
 		args = []byte("{}")
@@ -265,7 +266,7 @@ func decode(req *mcp.CallToolRequest, v any, allowed ...string) error {
 		return fmt.Errorf("invalid arguments: %w", err)
 	}
 	for k := range raw {
-		if !slices.Contains(allowed, k) {
+		if _, ok := props[k]; !ok {
 			return fmt.Errorf("invalid arguments: unknown field %q", k)
 		}
 	}

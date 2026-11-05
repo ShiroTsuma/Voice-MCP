@@ -113,3 +113,18 @@ func TestSchemasDeclareDecodedFields(t *testing.T) {
 		}
 	}
 }
+
+// Every field a tool's schema offers is accepted, and nothing else: send's
+// to and text once fell through a hand-kept list.
+func TestDecodeFollowsSchema(t *testing.T) {
+	req := func(args string) *mcp.CallToolRequest {
+		return &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: json.RawMessage(args)}}
+	}
+	var a service.ControlArgs
+	if err := decode(req(`{"action":"send","to":"Anna","text":"hi"}`), &a, controlSchema); err != nil || a.To != "Anna" || a.Text != "hi" {
+		t.Fatalf("send's fields: %v %+v", err, a)
+	}
+	if err := decode(req(`{"action":"status","client":"x"}`), &a, controlSchema); err == nil {
+		t.Fatal("an internal field was accepted")
+	}
+}
