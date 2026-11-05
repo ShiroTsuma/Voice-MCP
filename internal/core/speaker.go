@@ -822,7 +822,16 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	// ready and has all of its playing time to get done; across a script's
 	// lines too, so the next voice is ready when its turn comes.
 	ch := make(chan rendered, batchSize)
+	// used names the engines that spoke, in order (one, or a scene's).
 	var used string
+	noteUsed := func(name string) {
+		if !slices.Contains(strings.Split(used, ", "), name) {
+			if used != "" {
+				used += ", "
+			}
+			used += name
+		}
+	}
 	go func() {
 		defer close(ch)
 		put := func(r rendered) bool {
@@ -851,7 +860,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				// while this one plays. A batch that fails goes sentence by sentence.
 				if m := min(batchSize, len(v.sentences)-k); m > 1 && engines[0] == v.choice.Engines[0] {
 					if pcms, err := s.renderBatch(ctx, engines[0], v.pitch, it.lang, v.choice, v.sentences[k:k+m], v.mood, tu); err == nil {
-						used = engines[0]
+						noteUsed(engines[0])
 						for _, pcm := range pcms {
 							if !send(pcm) {
 								return false
@@ -869,7 +878,8 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				}
 				// Stay on the engine that worked so the voice does not change
 				// mid-line; later fallbacks remain for failures.
-				engines, used = rest, name
+				engines = rest
+				noteUsed(name)
 				if !send(pcm) {
 					return false
 				}
