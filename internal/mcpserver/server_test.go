@@ -61,8 +61,15 @@ func TestTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 4 {
+	if len(tools.Tools) != 5 { // speak, scene, control, listen, clone
 		t.Fatalf("tools: %d", len(tools.Tools))
+	}
+	// voice_speak is for short messages: a scene goes to voice_scene.
+	if out, isErr := call(t, cs, "voice_speak", map[string]any{"text": "Hi.", "lines": []any{map[string]any{"text": "x"}}}); !isErr {
+		t.Errorf("voice_speak took lines: %s", out)
+	}
+	if out, isErr := call(t, cs, "voice_scene", map[string]any{"lines": []any{}}); !isErr {
+		t.Errorf("voice_scene took no lines: %s", out)
 	}
 
 	out, isErr := call(t, cs, "voice_control", map[string]any{"action": "list_presets"})

@@ -50,6 +50,12 @@ type Request struct {
 	MaxChars int
 	// Mood is Text's mood (Moods), shown where the engine can.
 	Mood string
+	// Mode is how a script is heard: "play" renders ahead while it plays,
+	// "render" renders all of it first (one engine at a time, so GPU models
+	// are not loaded and unloaded line by line) and then plays it, "auto"
+	// (or empty) renders first when the script uses two or more GPU engines.
+	// SaveTo always renders first.
+	Mode string
 }
 
 // ScriptLine is one line of a script and the preset that says it. Pause is
@@ -92,12 +98,14 @@ type Track struct {
 	Saved    string   `json:"saved,omitempty"` // save_to: the file
 	// Sounds were made by the engine; Dropped it could not make, so they
 	// were left out. Mood: applied, or ignored by the engine.
-	Sounds  []string   `json:"sounds,omitempty"`
-	Dropped []string   `json:"dropped,omitempty"`
-	Mood    string     `json:"mood,omitempty"`
-	Queued  time.Time  `json:"queued"`
-	Heard   *time.Time `json:"heard,omitempty"` // the first sound
-	Ended   *time.Time `json:"ended,omitempty"`
+	Sounds  []string `json:"sounds,omitempty"`
+	Dropped []string `json:"dropped,omitempty"`
+	Mood    string   `json:"mood,omitempty"`
+	// Progress says how far rendering a scene first has got (render mode).
+	Progress string     `json:"progress,omitempty"`
+	Queued   time.Time  `json:"queued"`
+	Heard    *time.Time `json:"heard,omitempty"` // the first sound
+	Ended    *time.Time `json:"ended,omitempty"`
 }
 
 const trackKeep = 100
@@ -120,6 +128,7 @@ type item struct {
 	// fallback apart.
 	primary string
 	tags    *tagUse // what became of its tags and moods (play)
+	grouped bool    // rendered first, one engine at a time (Request.Mode)
 }
 
 // part is a stretch of an utterance in one voice; pause is the silence after
@@ -298,7 +307,7 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 		parts = append(parts, part{text: l.Text, preset: p, pause: l.Pause, mood: l.Mood})
 	}
 	s.nextID++
-	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead,
+	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead, grouped: s.renderFirst(req.Mode, req.SaveTo, parts),
 		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, done: make(chan Result, 1)}
 	if req.Interrupt {
 		s.dropLocked(ErrInterrupted)
@@ -824,26 +833,15 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				return false
 			}
 		}
-		if it.lead > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, it.lead), gap: true}) {
-			return
-		}
-		for n, v := range vs {
-			// Between parts: the break the script asked for, else a short breath
-			// when the voice changes (a turn in the dialogue).
-			if n > 0 {
-				gap := vs[n-1].pause
-				if gap == 0 && vs[n-1].preset.Name != v.preset.Name {
-					gap = lineGap
-				}
-				if gap > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, gap), gap: true}) {
-					return
-				}
-			}
+		// renderPart renders one part sentence by sentence (or in batches),
+		// handing each piece to out, then its effects' tail; false when it
+		// stopped (an error went to out, or the context ended).
+		renderPart := func(v *voiced, out func(rendered) bool) bool {
 			engines := v.choice.Engines
 			send := func(pcm []float32) bool {
 				v.effects.Process(pcm)
 				audio.Gain(pcm, v.preset.Volume)
-				return put(rendered{pcm: pcm})
+				return out(rendered{pcm: pcm})
 			}
 			for k := 0; k < len(v.sentences); {
 				// An engine slower than its own speech (a GPU model) renders a few
@@ -856,7 +854,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 						used = engines[0]
 						for _, pcm := range pcms {
 							if !send(pcm) {
-								return
+								return false
 							}
 						}
 						k += m
@@ -866,21 +864,93 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				req := engine.Request{Text: v.sentences[k], Lang: it.lang, Voice: v.choice.Voice, Speed: v.choice.Speed / v.pitch}
 				pcm, name, rest, err := s.render(ctx, engines, v.choice.Engines[0], v.pitch, req, v.mood, tu)
 				if err != nil {
-					put(rendered{err: err})
-					return
+					out(rendered{err: err})
+					return false
 				}
 				// Stay on the engine that worked so the voice does not change
 				// mid-line; later fallbacks remain for failures.
 				engines, used = rest, name
 				if !send(pcm) {
-					return
+					return false
 				}
 				k++
 			}
 			// The line's effects ring out before the next voice.
 			if tail := v.effects.Tail(); len(tail) > 0 {
 				audio.Gain(tail, v.preset.Volume)
-				if !put(rendered{pcm: tail, gap: true}) {
+				if !out(rendered{pcm: tail, gap: true}) {
+					return false
+				}
+			}
+			return true
+		}
+		// Between parts: the break the script asked for, else a short breath
+		// when the voice changes (a turn in the dialogue).
+		gapBefore := func(n int) float64 {
+			if n == 0 {
+				return 0
+			}
+			gap := vs[n-1].pause
+			if gap == 0 && vs[n-1].preset.Name != vs[n].preset.Name {
+				gap = lineGap
+			}
+			return gap
+		}
+
+		if !it.grouped {
+			if it.lead > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, it.lead), gap: true}) {
+				return
+			}
+			for n := range vs {
+				if g := gapBefore(n); g > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, g), gap: true}) {
+					return
+				}
+				if !renderPart(&vs[n], put) {
+					return
+				}
+			}
+			return
+		}
+
+		// Rendered first, then heard: one engine at a time, all of its parts
+		// in one go, so a scene across GPU models does not load and unload
+		// them line by line. A GPU model the next one may not fit beside is
+		// unloaded before it. Then the scene plays in its own order.
+		results := make([][]rendered, len(vs))
+		firsts := make([]string, len(vs))
+		for n, v := range vs {
+			firsts[n] = v.choice.Engines[0]
+		}
+		groups := engineGroups(firsts)
+		for gi, g := range groups {
+			s.progress(it, fmt.Sprintf("rendering voice %d of %d (%s)", gi+1, len(groups), g.engine))
+			if gi > 0 {
+				s.makeRoom(ctx, groups[gi-1].engine, g.engine)
+			}
+			for _, n := range g.parts {
+				collect := func(r rendered) bool {
+					if r.err != nil {
+						put(r)
+						return false
+					}
+					results[n] = append(results[n], r)
+					return ctx.Err() == nil
+				}
+				if !renderPart(&vs[n], collect) {
+					return
+				}
+			}
+		}
+		s.progress(it, "")
+		if it.lead > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, it.lead), gap: true}) {
+			return
+		}
+		for n := range vs {
+			if g := gapBefore(n); g > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, g), gap: true}) {
+				return
+			}
+			for _, r := range results[n] {
+				if !put(r) {
 					return
 				}
 			}
@@ -995,6 +1065,82 @@ func (s *Speaker) PresetExpressive(name string) Expressive {
 		return s.expressive(c.Engines[0])
 	}
 	return Expressive{Emotion: "none"}
+}
+
+// heavyEngine reports whether an engine runs a model on a server (voice's
+// GPU sidecar, or a speech server of its own): one that may not fit beside
+// another.
+func (s *Speaker) heavyEngine(name string) bool {
+	t, _ := s.cfg.Engines[name]["type"].(string)
+	return t == "http" || t == "openai"
+}
+
+// renderFirst decides whether an utterance is rendered before it is heard.
+func (s *Speaker) renderFirst(mode, saveTo string, parts []part) bool {
+	switch {
+	case saveTo != "" || mode == "render":
+		return true
+	case mode == "play":
+		return false
+	}
+	heavy := map[string]bool{}
+	for _, p := range parts {
+		if c := p.preset.For(s.cfg.DefaultLang); len(c.Engines) > 0 && s.heavyEngine(c.Engines[0]) {
+			heavy[c.Engines[0]] = true
+		}
+	}
+	return len(heavy) > 1
+}
+
+// engineGroup is the parts one engine renders, in their order.
+type engineGroup struct {
+	engine string
+	parts  []int
+}
+
+// engineGroups gathers parts by the engine that renders each, engines in
+// the order they first speak.
+func engineGroups(engines []string) []engineGroup {
+	var out []engineGroup
+	at := map[string]int{}
+	for n, e := range engines {
+		i, ok := at[e]
+		if !ok {
+			i = len(out)
+			at[e] = i
+			out = append(out, engineGroup{engine: e})
+		}
+		out[i].parts = append(out[i].parts, n)
+	}
+	return out
+}
+
+// makeRoom unloads engine prev before next renders, when both run GPU
+// models and prev can be unloaded (voice's sidecar): two models may not fit
+// on the graphics card together.
+func (s *Speaker) makeRoom(ctx context.Context, prev, next string) {
+	if prev == next || !s.heavyEngine(prev) || !s.heavyEngine(next) {
+		return
+	}
+	e, err := s.Engine(prev)
+	if err != nil {
+		return
+	}
+	if u, ok := e.(interface{ Unload(context.Context) }); ok {
+		if Logf != nil {
+			Logf("speech: unloading %s to make room for %s", prev, next)
+		}
+		u.Unload(ctx)
+	}
+}
+
+// progress records how far rendering an utterance first has got.
+func (s *Speaker) progress(it *item, msg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if it.track != nil {
+		it.track.Progress = msg
+	}
 }
 
 // expressive is what engine name declares about tags and moods.

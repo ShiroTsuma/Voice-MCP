@@ -42,6 +42,8 @@ type SpeakArgs struct {
 	// character or a preset; empty: Voice or the session's), spoken as one
 	// flowing utterance.
 	Lines SpeakLines `json:"lines,omitempty"`
+	// Mode: how a script is heard, play, render or auto (core.Request.Mode).
+	Mode string `json:"mode,omitempty"`
 	// Mood: how text is said (core.Moods), where the voice's engine can show
 	// it; a script's lines carry their own.
 	Mood string `json:"mood,omitempty"`
@@ -383,7 +385,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: a.Intent, Lang: a.Lang, Interrupt: a.Interrupt,
-		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood,
+		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood, Mode: a.Mode,
 	})
 	if errors.Is(err, core.ErrMuted) {
 		return nil, userErr("muted by the user; stay silent until they unmute")
@@ -501,7 +503,7 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 			return "short style: one or two short spoken sentences per reply; details stay on screen", nil
 		case StyleNarrative:
 			s.Agents.SetStyle(a.PID, StyleNarrative)
-			return "narrative style: speech is the content now. Say each reply aloud in full as spoken prose (a story, a scene); when characters speak, pass the whole scene in one voice_speak call with lines, each in its voice. Code, lists and links still stay on screen. set_style short ends it.", nil
+			return "narrative style: speech is the content now. Say each reply aloud in full as spoken prose (a story, a scene); when characters speak, pass the whole scene in one voice_scene call with lines, each in its voice. Code, lists and links still stay on screen. set_style short ends it.", nil
 		}
 		return nil, userErr("style must be short or narrative")
 	case "list_themes":

@@ -38,6 +38,13 @@ The voice MCP is the agent's mouth and ears on the user's machine.
   the status of a message says which sounds were made or dropped and
   whether the mood was applied.
 
+- A scene, a story or a dialogue in several voices goes in one
+  `voice_scene` call with `lines` (each with its voice, pause, kind, mood,
+  action, to) and an optional `scene` (title, location, time, background),
+  not in many `voice_speak` calls. `mode` `auto` (default) renders it first
+  when it mixes GPU models that do not fit together, else plays it as it
+  renders; `save_to` writes it to a WAV or MP3 file instead of playing it.
+  Its status (`voice_control` `status` with the id) shows the progress.
 - The user's reading window (a hotkey opens it) shows the transcript. For a
   story or role-play, `voice_control` `set_theme` with a theme from
   `list_themes` gives this session's messages that look there; `set_theme`

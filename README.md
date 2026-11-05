@@ -167,7 +167,7 @@ With **Give sessions characters** on, the agent plays its character in every rep
 
 A session can speak in a **narrative style** instead of the usual sentence or two: ask your agent for a story or a role-play, and it switches with `voice_control` `set_style narrative` (`short` switches back; it is per session, so coding sessions keep their brevity). Each reply is then said in full, and the length limit rises to 4000 characters a line.
 
-When characters speak, the agent passes the whole scene in **one** `voice_speak` call with `lines`, each line in its own voice (a character's name or a preset). voice speaks it as one piece: the next lines render while earlier ones play, with a short breath between voices, and the transcript keeps who said what. One line in a different voice works without a scene too: `voice` on `voice_speak`. `save_to` writes a scene to a WAV or MP3 file instead.
+When characters speak, the agent passes the whole scene in **one** `voice_scene` call (`voice_speak` stays for short messages): `lines`, each in its own voice (a character's name or a preset), heard as one piece with a short breath between voices, and the transcript keeps who said what. Its `mode` says how: `play` is heard while it renders; `render` renders all of it first, one engine at a time, then plays it as one recording, so a scene across GPU models that do not fit on the card together (Qwen3-TTS and Higgs, say) does not swap them line by line; `auto`, the default, renders first exactly then. `save_to` writes a scene (or a single line) to a WAV or MP3 file instead. One line in another voice works on `voice_speak` too: `voice`.
 
 ```json
 { "lines": [

@@ -4,6 +4,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,19 +30,39 @@ At the start of a session call voice_control with action "register" once: it say
 
 If the user asks for quiet, call voice_control with action "mute"; to change the voice, list presets and set one.
 
+A story, a scene or a dialogue in several voices, or a recording to a file, goes in one voice_scene call, not in many voice_speak calls.
+
 voice_listen asks by voice and returns what the user said. Use it only when the user wants a spoken conversation (they asked for it or answer by voice); otherwise ask in text. If it returns no speech, ask in text instead of retrying.
 
 voice_clone makes a new voice from a recording, or designs one from a description (design). Only clone a recorded voice the user says they have the right to use; ask them, and pass rights_confirmed only after they confirm. Preview the result before switching presets; a designed voice the user does not like is removed.`
 
 var (
 	speakSchema = map[string]any{
-		"type": "object",
+		"type":     "object",
+		"required": []string{"text"},
 		"properties": map[string]any{
-			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code. Required unless lines is given. May hold voice's tags: {laugh}, {sigh}, {cough}... for a sound and {pause} or {pause:1.5} for silence; a voice makes the sounds it can (voice_control list_presets says which) and drops the rest, never reading a tag aloud."},
+			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code. May hold voice's tags: {laugh}, {sigh}, {cough}... for a sound and {pause} or {pause:1.5} for silence; a voice makes the sounds it can (voice_control list_presets says which) and drops the rest, never reading a tag aloud."},
 			"mood": map[string]any{"type": "string", "enum": []string{"neutral", "happy", "excited", "amused", "teasing", "sarcastic", "calm", "tender", "sad", "angry", "afraid", "surprised"}, "description": "How text is said, where the voice's engine can show it (list_presets says which); others ignore it."},
+			"intent": map[string]any{
+				"type": "string", "enum": []string{core.IntentInfo, core.IntentAttention, core.IntentQuestion}, "default": core.IntentInfo,
+				"description": "info: a status update; question: you are waiting for the user; attention: something needs them now. question and attention play a short chime first.",
+			},
+			"lang": map[string]any{
+				"type": "string", "enum": []string{"en", "pl", "auto"},
+				"description": "Language of text. Omit to use the configured default (English). Other languages sound much worse.",
+			},
+			"interrupt": map[string]any{"type": "boolean", "default": false, "description": "Cut off what is playing and drop the queue. Only for urgent messages."},
+			"voice":     map[string]any{"type": "string", "description": "Only when the user asks for a particular voice: a character's name (from voice_control list_characters) or a preset's name (list_presets), for this call only. Omit to speak as yourself."},
+		},
+		"additionalProperties": false,
+	}
+	sceneSchema = map[string]any{
+		"type":     "object",
+		"required": []string{"lines"},
+		"properties": map[string]any{
 			"lines": map[string]any{
 				"type":        "array",
-				"description": "Only for a scene or dialogue the user asked to hear in several voices: the lines in order, each with its own voice (a character or a preset; omitted: yours), spoken as one flowing piece instead of text. One call for the whole scene, not one per line. A line may end with a pause (seconds of silence after it, up to 10); a line with only a pause is a break between beats or scenes.",
+				"description": "The lines in order, each with its own voice (a character or a preset; omitted: yours), heard as one flowing piece. One call for the whole scene, not one per line. Text may hold voice's tags ({laugh}, {pause:1.5}) as in voice_speak. A line may end with a pause (seconds of silence after it, up to 10); a line with only a pause is a break between beats or scenes.",
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -56,25 +77,20 @@ var (
 					"additionalProperties": false,
 				},
 			},
-			"intent": map[string]any{
-				"type": "string", "enum": []string{core.IntentInfo, core.IntentAttention, core.IntentQuestion}, "default": core.IntentInfo,
-				"description": "info: a status update; question: you are waiting for the user; attention: something needs them now. question and attention play a short chime first.",
-			},
-			"lang": map[string]any{
-				"type": "string", "enum": []string{"en", "pl", "auto"},
-				"description": "Language of text. Omit to use the configured default (English). Other languages sound much worse.",
-			},
-			"interrupt": map[string]any{"type": "boolean", "default": false, "description": "Cut off what is playing and drop the queue. Only for urgent messages."},
-			"voice":     map[string]any{"type": "string", "description": "Only when the user asks for a particular voice: a character's name (from voice_control list_characters) or a preset's name (list_presets), for this call only. Omit to speak as yourself."},
 			"scene": map[string]any{
-				"type": "object", "description": "With lines, optional: where and when the scene takes place, shown in the user's reading window, never spoken.",
+				"type": "object", "description": "Optional: where and when the scene takes place, shown in the user's reading window, never spoken.",
 				"properties": map[string]any{
 					"title": map[string]any{"type": "string"}, "location": map[string]any{"type": "string"}, "time": map[string]any{"type": "string"},
 					"background": map[string]any{"type": "string", "description": "A short name for the place's picture (\"tavern\"); a reading-window theme may have one."},
 				},
 				"additionalProperties": false,
 			},
-			"save_to": map[string]any{"type": "string", "description": "Only when the user asks for a recording to keep or send: an absolute path ending in .wav (or .mp3, which needs ffmpeg). The text is rendered there in your voice instead of being said aloud; the answer gives the file. Long text is fine here."},
+			"save_to": map[string]any{"type": "string", "description": "Only when the user asks for a recording to keep or send: an absolute path ending in .wav (or .mp3, which needs ffmpeg). The scene is rendered into it instead of being heard (one line in one voice works too); the answer gives the file."},
+			"mode": map[string]any{
+				"type": "string", "enum": []string{"auto", "play", "render"}, "default": "auto",
+				"description": "play: heard while it renders (starts soonest); render: rendered first, one engine at a time, then heard as one recording (no gaps, and GPU models are not swapped line by line; it starts later); auto: render when the scene uses two or more GPU engines (voice_control list_presets), else play.",
+			},
+			"lang": map[string]any{"type": "string", "enum": []string{"en", "pl", "auto"}, "description": "Language of the lines. Omit for the configured default (English)."},
 		},
 		"additionalProperties": false,
 	}
@@ -157,13 +173,29 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "voice", Version: version}, &mcp.ServerOptions{Instructions: Instructions})
 	s.AddTool(&mcp.Tool{
 		Name:        "voice_speak",
-		Description: "Say a short sentence aloud to the user. Returns immediately with state queued, not heard yet, and the voice and character that will say it; voice_control status with its id tells whether it was heard.",
+		Description: "Say a short sentence aloud to the user (for a scene in several voices, or a recording to a file: voice_scene). Returns immediately with state queued, not heard yet, and the voice and character that will say it; voice_control status with its id tells whether it was heard.",
 		InputSchema: speakSchema,
 		Annotations: &mcp.ToolAnnotations{Title: "Speak", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.SpeakArgs
-		if err := decode(req, &a, "text", "lines", "scene", "mood", "intent", "lang", "interrupt", "voice", "save_to"); err != nil {
+		if err := decode(req, &a, "text", "mood", "intent", "lang", "interrupt", "voice"); err != nil {
 			return fail(err), nil
+		}
+		a.Client, a.Preset, a.PID, a.Project = caller(req, client), presetName, callerPID(req), callerProject(req)
+		return result(api.Speak(ctx, a))
+	})
+	s.AddTool(&mcp.Tool{
+		Name:        "voice_scene",
+		Description: "Only when the user asks for a story, a scene or a dialogue to hear, or a recording to keep: the lines in several voices (characters or presets) with pauses, moods and stage directions, heard as one piece in their reading window, or rendered to a file (save_to). Returns at once; voice_control status with its id shows progress and the outcome.",
+		InputSchema: sceneSchema,
+		Annotations: &mcp.ToolAnnotations{Title: "Scene", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
+	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var a service.SpeakArgs
+		if err := decode(req, &a, "lines", "scene", "mode", "lang", "save_to"); err != nil {
+			return fail(err), nil
+		}
+		if len(a.Lines) == 0 {
+			return fail(errors.New("voice_scene needs lines")), nil
 		}
 		a.Client, a.Preset, a.PID, a.Project = caller(req, client), presetName, callerPID(req), callerProject(req)
 		return result(api.Speak(ctx, a))
