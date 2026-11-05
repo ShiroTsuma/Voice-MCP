@@ -40,3 +40,11 @@ func TestVocabularyFor(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+// A character's "Also written as" spellings are corrected to its name.
+func TestVocabularyHeardSpellings(t *testing.T) {
+	cfg := &preset.Config{Characters: []preset.Character{{Name: "Anna", Heard: []string{"Alana"}}}}
+	if got := VocabularyFor(cfg, &Agents{}).Correct("Alana, check the logs"); got != "Anna, check the logs" {
+		t.Errorf("got %q", got)
+	}
+}

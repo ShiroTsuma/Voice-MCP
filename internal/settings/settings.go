@@ -59,6 +59,7 @@ type Character struct {
 	Preset      string   `toml:"preset" json:"preset"`
 	Image       string   `toml:"image,omitempty" json:"image,omitempty"` // picture file in the avatars folder
 	Color       string   `toml:"color,omitempty" json:"color,omitempty"`
+	Heard       []string `toml:"heard,omitempty" json:"heard,omitempty"` // spellings recognition gives the name
 }
 
 type Serve struct {

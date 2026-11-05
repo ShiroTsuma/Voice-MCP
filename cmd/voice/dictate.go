@@ -569,7 +569,11 @@ const lastSpeakerWindow = 10 * time.Minute
 // that spoke last, when it spoke in the last ten minutes, then the most
 // recently active ones.
 func (c *controller) dictationOrder() ([]service.AgentInfo, []uint32) {
-	return dictationOrder(c.agents.Info(), c.agents.Transcript(), time.Now())
+	agents := c.agents.Info()
+	for i := range agents {
+		agents[i].Heard = c.cfg.HeardFor(agents[i].Name) // "Also written as" of its character
+	}
+	return dictationOrder(agents, c.agents.Transcript(), time.Now())
 }
 
 // dictationOrder is dictation's order from the sessions (most recently active

@@ -150,6 +150,11 @@ func VocabularyFor(cfg *preset.Config, agents *Agents) *Vocabulary {
 		}
 		for _, ch := range cfg.Characters {
 			entries = append(entries, ch.Name)
+			for _, h := range ch.Heard { // "Also written as": the text shows the name
+				if h = strings.TrimSpace(h); h != "" {
+					entries = append(entries, h+" -> "+ch.Name)
+				}
+			}
 		}
 	}
 	for _, a := range agents.Info() {

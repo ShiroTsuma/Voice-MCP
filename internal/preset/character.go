@@ -14,6 +14,20 @@ type Character struct {
 	Preset      string   `toml:"preset" json:"preset"`                   // the voice it speaks with; empty: the default
 	Image       string   `toml:"image,omitempty" json:"image,omitempty"` // picture file in the avatars folder
 	Color       string   `toml:"color,omitempty" json:"color,omitempty"` // the light it speaks in, a CSS colour; empty: one from the palette
+	// Heard are spellings speech recognition gives the name ("Alana" for
+	// Anna): a dictation addressed so reaches this character's session.
+	Heard []string `toml:"heard,omitempty" json:"heard,omitempty"`
+}
+
+// HeardFor is the spellings of a character's name, by its name; none for a
+// name no character has.
+func (c *Config) HeardFor(name string) []string {
+	for _, ch := range c.Characters {
+		if strings.EqualFold(ch.Name, name) {
+			return ch.Heard
+		}
+	}
+	return nil
 }
 
 // TraitChoices are the traits the characters window offers: the configured

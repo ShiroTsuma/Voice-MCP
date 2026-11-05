@@ -84,3 +84,22 @@ func TestProjectWords(t *testing.T) {
 		}
 	}
 }
+
+// A character's "Also written as" spellings address its session like its name.
+func TestRouteHeardSpellings(t *testing.T) {
+	agents := []AgentInfo{{PID: 1, Name: "Anna", Heard: []string{"Alana", "Anana"}}, {PID: 2, Name: "Fiona"}}
+	for text, want := range map[string]uint32{
+		"Alana, check the logs":              1, // first
+		"So what do you think, Alana, done?": 1, // set off
+		"can you check the logs Alana":       1, // last
+		"Fiona, check the logs":              2,
+	} {
+		to, _, _ := Route(text, agents)
+		if len(to) != 1 || to[0] != want {
+			t.Errorf("%q: %v, want %d", text, to, want)
+		}
+	}
+	if to, _, _ := Route("Alana, check the logs", []AgentInfo{{PID: 1, Name: "Anna"}}); len(to) != 0 {
+		t.Errorf("without the spelling Alana is nobody: %v", to)
+	}
+}

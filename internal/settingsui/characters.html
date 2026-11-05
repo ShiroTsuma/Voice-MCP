@@ -266,6 +266,10 @@
       </div>
       <div class="fields">
         <div class="row col">
+          <label class="lab" for="heard">Also written as<span class="opt">optional</span><span class="help">Spellings speech recognition gives the name, separated by commas; a dictation that says one reaches this character</span></label>
+          <input class="text" type="text" id="heard" maxlength="200" spellcheck="false" placeholder="e.g. Alana, Anana">
+        </div>
+        <div class="row col">
           <div class="lab">Personality</div>
           <div class="chips" id="traits"></div>
         </div>
@@ -539,7 +543,7 @@ function open(i) {
   image = c.image || '';
   color = c.color || '';
   $('empty').hidden = true; $('form').hidden = false;
-  $('name').value = c.name; $('desc').value = c.description || '';
+  $('name').value = c.name; $('desc').value = c.description || ''; $('heard').value = (c.heard || []).join(', ');
   paint();
   lights();
   const on = new Set(c.traits || []), box = $('traits'); box.textContent = '';
@@ -786,6 +790,8 @@ $('form').addEventListener('submit', async e => {
   chars[sel] = { name, traits: [...$('traits').querySelectorAll('button.on')].map(b => b.textContent),
     description: $('desc').value.trim(), preset: voice, image };
   if (color) chars[sel].color = color;
+  const heard = [...new Set($('heard').value.split(',').map(h => h.trim()).filter(h => h && h.toLowerCase() !== name.toLowerCase()))];
+  if (heard.length) chars[sel].heard = heard;
   try { await store(chars, sel, Object.keys(presets).length ? presets : undefined); status('Saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
 });
 load();

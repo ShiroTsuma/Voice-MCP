@@ -19,6 +19,25 @@ type AgentInfo struct {
 	NoSpeech bool      `json:"no_speech"`       // muted by the user
 	Style    string    `json:"style,omitempty"` // narrative while it tells a story (set_style)
 	Theme    string    `json:"theme,omitempty"` // the reading window's theme it chose (set_theme)
+	// Heard are the spellings speech recognition gives its name (its
+	// character's "Also written as"); Route takes them as the name.
+	Heard []string `json:"-"`
+}
+
+// withHeard adds a session under each spelling of its name as well, so the
+// rules that read an address by name take them all.
+func withHeard(agents []AgentInfo) []AgentInfo {
+	out := agents
+	for _, a := range agents {
+		for _, h := range a.Heard {
+			if h = strings.TrimSpace(h); h != "" && !strings.EqualFold(h, a.Name) {
+				alias := a
+				alias.Name, alias.Heard = h, nil
+				out = append(out, alias)
+			}
+		}
+	}
+	return out
 }
 
 // The words an address is read by (clientAliases, everyone, openers,
@@ -34,6 +53,7 @@ type AgentInfo struct {
 func Route(text string, agents []AgentInfo) (to []uint32, rest string, all bool) {
 	addrMu.RLock()
 	defer addrMu.RUnlock()
+	agents = withHeard(agents)
 	words := strings.Fields(text)
 	norm := make([]string, len(words))
 	for i, w := range words {

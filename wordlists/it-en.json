@@ -38,6 +38,7 @@
     "CSS": ["c s s"],
     "LLM": ["l l m"],
     "GPU": ["g p u"],
+    "GUI": ["g u i", "gooey"],
     "npm": ["n p m"],
     "PR": ["p r"]
   }
