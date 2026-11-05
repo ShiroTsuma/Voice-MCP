@@ -280,15 +280,7 @@ func (c *controller) deliver(text string, hwnd uintptr, fgPID uint32) string {
 // the report.
 func (c *controller) deliverText(text string, hwnd uintptr, fgPID uint32) (string, uint32, string) {
 	sv := c.cfg.Serve
-	// Sessions the user excluded from dictation never get it.
-	var open []service.AgentInfo
-	var candidates []uint32
-	for _, a := range c.agents.Info() {
-		if !a.NoInput {
-			open = append(open, a)
-			candidates = append(candidates, a.PID)
-		}
-	}
+	open, candidates := c.dictationOrder()
 	routed, all := false, false
 	if sv.DictateRouting != nil && *sv.DictateRouting {
 		if to, rest, everyone := service.Route(text, open); len(to) > 0 {
@@ -553,6 +545,71 @@ func codexQueue(pid uint32, thread, message string) error {
 	return nil
 }
 
+// lastSpeakerWindow is how long the session that spoke last stays the one a
+// dictation without a name goes to: the one the user has just heard and sees
+// at the top of the windows.
+const lastSpeakerWindow = 10 * time.Minute
+
+// dictationOrder lists the sessions dictation may reach (not those the user
+// excluded) and, in the order an unaddressed message tries them: the session
+// that spoke last, when it spoke in the last ten minutes, then the most
+// recently active ones.
+func (c *controller) dictationOrder() ([]service.AgentInfo, []uint32) {
+	return dictationOrder(c.agents.Info(), c.agents.Transcript(), time.Now())
+}
+
+// dictationOrder is dictation's order from the sessions (most recently active
+// first) and the transcript (oldest first), at now.
+func dictationOrder(agents []service.AgentInfo, lines []service.Line, now time.Time) ([]service.AgentInfo, []uint32) {
+	var open []service.AgentInfo
+	var order []uint32
+	for _, a := range agents {
+		if !a.NoInput {
+			open = append(open, a)
+			order = append(order, a.PID)
+		}
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := lines[i]
+		if l.Kind != "said" || l.PID == 0 {
+			continue
+		}
+		if now.Sub(l.At) > lastSpeakerWindow {
+			break
+		}
+		for j, pid := range order {
+			if pid == l.PID {
+				order = append([]uint32{pid}, append(order[:j:j], order[j+1:]...)...)
+				return open, order
+			}
+		}
+		break // the last speaker has gone or takes no dictation
+	}
+	return open, order
+}
+
+// recipient is who a dictation would reach now: the session its words name
+// (with routing on), everyone, or the default one; "" when none would.
+func (c *controller) recipient(text string) (name string, all bool) {
+	open, order := c.dictationOrder()
+	if sv := c.cfg.Serve; text != "" && sv.DictateRouting != nil && *sv.DictateRouting {
+		if to, _, everyone := service.Route(text, open); len(to) > 0 {
+			if everyone {
+				return "", true
+			}
+			order = to
+		}
+	}
+	for _, pid := range order {
+		for _, a := range open {
+			if a.PID == pid {
+				return a.Name, false
+			}
+		}
+	}
+	return "", false
+}
+
 // dictation is what the settings window shows while the user dictates.
 type dictation struct {
 	State string    `json:"state"` // listening | transcribing
@@ -561,12 +618,30 @@ type dictation struct {
 	// Text is what was heard so far, phrase by phrase, before the final
 	// transcription.
 	Text string `json:"text,omitempty"`
+	// To is the session it would reach now (All: every session): the one
+	// named once a name is heard, else the default one. The windows show it
+	// while the user speaks, so a message is never sent somewhere unseen.
+	To  string `json:"to,omitempty"`
+	All bool   `json:"all,omitempty"`
 }
 
 // setDictation records dictation's state for the settings window; "" ends it.
 func (c *controller) setDictation(state string, level float64) {
+	// Who it goes to, from the moment it starts (before the lock: the sessions
+	// and the transcript take theirs).
+	var to string
+	var all, starting bool
+	c.mu.Lock()
+	starting = c.dict.State == "" && state != ""
+	c.mu.Unlock()
+	if starting {
+		to, all = c.recipient("")
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if starting {
+		c.dict.To, c.dict.All = to, all
+	}
 	if state != c.dict.State {
 		c.dict.Since = time.Now()
 		if fn := c.onDictating; fn != nil && (state == "") != (c.dict.State == "") {
@@ -575,16 +650,18 @@ func (c *controller) setDictation(state string, level float64) {
 	}
 	c.dict.State, c.dict.Level = state, level
 	if state == "" {
-		c.dict.Text = ""
+		c.dict.Text, c.dict.To, c.dict.All = "", "", false
 	}
 }
 
-// setDictationText shows the words heard so far.
+// setDictationText shows the words heard so far, and who they would reach:
+// a name said switches the recipient as soon as it is heard.
 func (c *controller) setDictationText(text string) {
+	to, all := c.recipient(text)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.dict.State != "" {
-		c.dict.Text = text
+		c.dict.Text, c.dict.To, c.dict.All = text, to, all
 	}
 }
 

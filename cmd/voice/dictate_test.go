@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"voice/internal/service"
+)
 
 func TestOutcomeIsShort(t *testing.T) {
 	for in, want := range map[string]string{
@@ -41,5 +46,35 @@ func TestSpokenControl(t *testing.T) {
 		if got := spokenControl(in); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
 		}
+	}
+}
+
+// An unaddressed dictation goes to the session the user just heard (it spoke
+// in the last ten minutes), not to one that merely ran a hook since; with
+// nobody heard lately, to the most recently active.
+func TestDictationOrder(t *testing.T) {
+	now := time.Now()
+	agents := []service.AgentInfo{{PID: 1, Name: "Anna"}, {PID: 2, Name: "Diana"}, {PID: 3, Name: "Clara", NoInput: true}}
+	said := func(pid uint32, ago time.Duration) service.Line {
+		return service.Line{Kind: "said", PID: pid, At: now.Add(-ago)}
+	}
+	first := func(lines ...service.Line) uint32 {
+		_, order := dictationOrder(agents, lines, now)
+		return order[0]
+	}
+	if got := first(said(1, 9*time.Minute), said(2, 2*time.Minute)); got != 2 {
+		t.Errorf("Diana spoke last: %d", got)
+	}
+	if got := first(said(2, 11*time.Minute)); got != 1 {
+		t.Errorf("nobody heard lately: the most active, %d", got)
+	}
+	if got := first(said(2, time.Minute), service.Line{Kind: "dictated", PID: 1, At: now}); got != 2 {
+		t.Errorf("a dictation is not speaking: %d", got)
+	}
+	if got := first(said(3, time.Minute)); got != 1 {
+		t.Errorf("a session that takes no dictation: %d", got)
+	}
+	if open, order := dictationOrder(agents, nil, now); len(open) != 2 || len(order) != 2 {
+		t.Errorf("excluded sessions stay out: %v %v", open, order)
 	}
 }

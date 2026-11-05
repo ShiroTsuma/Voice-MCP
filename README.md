@@ -132,7 +132,9 @@ The agent installs and tests voice. Trusting the Codex hooks, restarting session
 **Answering them.** Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>, speak, then pause for two seconds or press the hotkey again. Your words appear in the settings window as you say them; at the end the whole recording is transcribed offline once more and delivered:
 
 - **to the agent you name**: start with its name ("Clara, add a dark theme"), or put it right after a short reply ("Sure, Clara. Remove them."), with **Pick the agent by name** on (Dictation). The words an address is read by (openers, "everyone", ...) come from per-language files; a JSON file of your own in the data folder's `addressing` folder adds words or another language;
-- otherwise **to the agent that spoke last** or most recently ran a hook.
+- otherwise **to the agent that spoke last**, the one you just heard, when it spoke in the last ten minutes; else to the one most recently at work.
+
+While you speak, the settings window and the corner popup show who it will reach ("You to Anna"), and switch as soon as you say another session's name, so a message never goes somewhere you did not see.
 
 How it arrives depends on the agent's state:
 

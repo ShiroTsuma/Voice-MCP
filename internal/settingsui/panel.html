@@ -1325,8 +1325,14 @@ function renderSaid() {
 function renderYou() {
   const d = lastStatus.dictation, to = $('youTo');
   if (d) {
-    // Who it is for is known once it is written down; until then, just you.
-    to.dataset.key = ''; to.textContent = '';
+    // Who it goes to, from the start: the session that spoke last (or the
+    // most active), and the one a name names as soon as it is heard.
+    const key = 'd:' + (d.all ? '*' : d.to || '');
+    if (to.dataset.key !== key) {
+      to.dataset.key = key; to.replaceChildren();
+      if (d.all) to.append('to everyone');
+      else if (d.to) to.append('to ', mark(d.to, 16), d.to);
+    }
     $('youWhen').textContent = 'now';
     // The words heard so far, phrase by phrase; the end stays in view.
     const el = $('youLine');
