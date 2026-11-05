@@ -357,6 +357,14 @@ func (b *backend) reader() *flyout.Window {
 	readerOnce.Do(func() {
 		reader = flyout.New(flyout.Options{
 			Width: 820, Height: 760, Margin: 24, Passive: true, Centre: true,
+			// Opened with its hotkey, the page's bottom bar moves the window.
+			OnMessage: func(m string) {
+				if m == "drag" && readerPinned.Load() {
+					if err := reader.Drag(); err != nil {
+						logf("reading window: drag: %v", err)
+					}
+				}
+			},
 			URL:        func() string { return "http://" + b.info.Addr + "/settings/reader?t=" + b.info.Token },
 			DataDir:    filepath.Join(core.DataDir(), "webview"),
 			Background: 0x16161d,
@@ -482,4 +490,12 @@ func loadingStatus() map[string]any {
 		return nil
 	}
 	return map[string]any{"engine": loadingName, "since": loadingSince}
+}
+
+// derefOr is *p, or def when p is nil.
+func derefOr(p *string, def string) string {
+	if p == nil {
+		return def
+	}
+	return *p
 }

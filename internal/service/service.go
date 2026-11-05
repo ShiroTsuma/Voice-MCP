@@ -39,6 +39,9 @@ type SpeakArgs struct {
 	// character or a preset; empty: Voice or the session's), spoken as one
 	// flowing utterance.
 	Lines SpeakLines `json:"lines,omitempty"`
+	// Scene: where and when the lines take place, for the reading window and
+	// its themes; nothing of it is spoken.
+	Scene *SceneInfo `json:"scene,omitempty"`
 	// Voice: for this call only, a character's name (its preset) or a
 	// preset's name; empty uses the session's character or the default.
 	Voice string `json:"voice,omitempty"`
@@ -167,6 +170,39 @@ type SpeakLine struct {
 	Voice string `json:"voice,omitempty"`
 	// Pause: seconds of silence after the line; alone, a break.
 	Pause float64 `json:"pause,omitempty"`
+	// What the reading window and its themes show besides the words; none of
+	// it is spoken. Kind: dialogue (the default), narration or thought. Mood:
+	// how it is said. Action: a stage direction ("leans on the bar"); a line
+	// with an action and no text is only shown. To: whom it is said to.
+	Kind   string `json:"kind,omitempty"`
+	Mood   string `json:"mood,omitempty"`
+	Action string `json:"action,omitempty"`
+	To     string `json:"to,omitempty"`
+}
+
+// SceneInfo is where and when a scene takes place. Background names a
+// picture a reading-window theme may have for it ("tavern", "night-road").
+type SceneInfo struct {
+	Title      string `json:"title,omitempty"`
+	Location   string `json:"location,omitempty"`
+	Time       string `json:"time,omitempty"`
+	Background string `json:"background,omitempty"`
+}
+
+// UnmarshalJSON takes the object, or the object as a JSON string (some
+// clients send nested arguments so).
+func (s *SceneInfo) UnmarshalJSON(b []byte) error {
+	var str string
+	if json.Unmarshal(b, &str) == nil {
+		b = []byte(str)
+	}
+	type plain SceneInfo
+	var v plain
+	if err := json.Unmarshal(b, &v); err != nil {
+		return fmt.Errorf("scene: an object with title, location, time and background: %w", err)
+	}
+	*s = SceneInfo(v)
+	return nil
 }
 
 // script turns a call's lines into the speaker's, each with its preset, and
@@ -203,6 +239,45 @@ func (s *Service) script(a SpeakArgs) ([]core.ScriptLine, string, error) {
 		return nil, "", userErr("lines has no text")
 	}
 	return out, strings.Join(said, " "), nil
+}
+
+// scene is a call's lines as the transcript keeps them: who says each, in
+// which voice, and the break after it. A break alone adds to the line before.
+func (s *Service) scene(a SpeakArgs, lines []core.ScriptLine) []SceneLine {
+	var out []SceneLine
+	k := 0 // lines has a line for each with text or a pause, in order
+	for _, l := range a.Lines {
+		text := strings.TrimSpace(l.Text)
+		if text == "" && strings.TrimSpace(l.Action) == "" {
+			if l.Pause > 0 {
+				if n := len(out) - 1; n >= 0 {
+					out[n].Pause += l.Pause
+				}
+				k++
+			}
+			continue
+		}
+		sl := SceneLine{Speaker: l.Voice, Text: text, Pause: l.Pause, Kind: l.Kind, Mood: l.Mood, Action: strings.TrimSpace(l.Action), To: l.To}
+		if text == "" {
+			// Only shown: a stage direction, with the break after it if any.
+			if l.Pause > 0 {
+				k++
+			}
+			out = append(out, sl)
+			continue
+		}
+		for _, ch := range s.Config.Characters {
+			if strings.EqualFold(ch.Name, l.Voice) {
+				sl.Speaker = ch.Name
+			}
+		}
+		if k < len(lines) {
+			sl.Voice = lines[k].Preset
+		}
+		k++
+		out = append(out, sl)
+	}
+	return out
 }
 
 // speakPreset is the preset a call speaks with: the voice it names (a
@@ -267,7 +342,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, UserError{err.Error()}
 	}
-	s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said, Scene: len(lines) > 0})
+	s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said, Scene: len(lines) > 0, Lines: s.scene(a, lines), Setting: a.Scene})
 	if a.Source != "hook" {
 		core.MarkAsked(a.PID) // its end-of-turn announcement and question reading stay quiet
 	}

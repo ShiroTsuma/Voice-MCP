@@ -22,6 +22,23 @@ type Line struct {
 	Outcome string    `json:"outcome,omitempty"` // dictated, message: where it went
 	From    string    `json:"from,omitempty"`    // message: the session that sent it
 	Scene   bool      `json:"scene,omitempty"`   // said: a script of lines ("Name: text ...")
+	// Lines: a scene's lines one by one, for the reading window and its themes.
+	Lines []SceneLine `json:"lines,omitempty"`
+	// Setting: where and when the scene takes place, as the call gave it.
+	Setting *SceneInfo `json:"setting,omitempty"`
+}
+
+// SceneLine is one line of a scene as the transcript keeps it.
+type SceneLine struct {
+	Speaker string  `json:"speaker,omitempty"` // the character who says it; empty: the session itself
+	Voice   string  `json:"voice,omitempty"`   // the preset it is said in
+	Text    string  `json:"text"`
+	Pause   float64 `json:"pause,omitempty"` // seconds of silence after it
+	// Shown, not spoken (see SpeakLine).
+	Kind   string `json:"kind,omitempty"`
+	Mood   string `json:"mood,omitempty"`
+	Action string `json:"action,omitempty"`
+	To     string `json:"to,omitempty"`
 }
 
 // transcriptSize is how many lines the transcript keeps.

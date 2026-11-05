@@ -55,6 +55,9 @@ type Deps struct {
 	Character func(pid uint32, name string)
 	// AvatarDir holds the characters' pictures.
 	AvatarDir string
+	// ThemesDir holds the reading window's themes, a folder each with a
+	// theme.css and what it uses (pictures, fonts).
+	ThemesDir string
 	// Clone runs a voice_clone action (record, add, list, preview, remove).
 	Clone func(ctx context.Context, a service.CloneArgs) (any, error)
 	// Integrations is the Integrations window's list.
@@ -116,6 +119,16 @@ func Register(mux *http.ServeMux, d Deps) {
 		w.Header().Set("Cache-Control", "max-age=31536000, immutable") // the name is the content's hash
 		http.ServeFile(w, r, path)
 	})
+	// A theme's files: /settings/theme/<name>/<file>, inside its folder only.
+	mux.HandleFunc("/settings/theme/", func(w http.ResponseWriter, r *http.Request) {
+		path, err := themePath(d.ThemesDir, strings.TrimPrefix(r.URL.Path, "/settings/theme/"))
+		if !authed(r) || err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache") // edited while the window is open
+		http.ServeFile(w, r, path)
+	})
 	api := func(path string, fn func(w http.ResponseWriter, r *http.Request)) {
 		mux.HandleFunc("/settings/api/"+path, func(w http.ResponseWriter, r *http.Request) {
 			if !authed(r) {
@@ -140,6 +153,9 @@ func Register(mux *http.ServeMux, d Deps) {
 		json.NewEncoder(w).Encode(v)
 	}
 	api("state", func(w http.ResponseWriter, r *http.Request) { reply(w, d.State(), nil) })
+	api("themes", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, map[string]any{"themes": themes(d.ThemesDir), "dir": d.ThemesDir}, nil)
+	})
 	api("avatar", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Data string `json:"data"`
@@ -362,6 +378,7 @@ func merge(s *settings.Settings, in settings.Settings) {
 	set(&s.Serve.ReaderWindow, in.Serve.ReaderWindow)
 	set(&s.Serve.ReaderAppear, in.Serve.ReaderAppear)
 	set(&s.Serve.ReaderHotkey, in.Serve.ReaderHotkey)
+	set(&s.Serve.ReaderTheme, in.Serve.ReaderTheme)
 	setB(&s.Serve.PopupDictation, in.Serve.PopupDictation)
 	setB(&s.Serve.VoiceReplies, in.Serve.VoiceReplies)
 	set(&s.Serve.UnloadAfter, in.Serve.UnloadAfter)

@@ -125,6 +125,9 @@ type Serve struct {
 	// ReaderHotkey shows the reading window and hides it again, like a game
 	// overlay; shown so, it scrolls and stays until the key hides it.
 	ReaderHotkey string `toml:"reader_hotkey"`
+	// ReaderTheme is a folder under themes in the data folder whose theme.css
+	// restyles the reading window; empty keeps the built-in look.
+	ReaderTheme *string `toml:"reader_theme"`
 	// VoiceReplies has an agent say its answer aloud when the user dictated the
 	// message, and read its questions aloud (off by default).
 	VoiceReplies *bool `toml:"voice_replies"`
@@ -353,6 +356,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if sv.ReaderAppear != nil {
 		c.Serve.ReaderAppear = sv.ReaderAppear
+	}
+	if sv.ReaderTheme != nil {
+		c.Serve.ReaderTheme = sv.ReaderTheme
 	}
 	if sv.VoiceReplies != nil {
 		c.Serve.VoiceReplies = sv.VoiceReplies

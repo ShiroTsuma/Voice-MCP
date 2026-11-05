@@ -51,8 +51,21 @@
   .msg.dictated .text { color: color-mix(in oklab, var(--you) 75%, var(--ground)); }
   .msg.dictated.last .text { color: var(--you); }
   .msg.dictated.last .text { font-size: 16px; }
-  .text .br { display: block; height: 6px; }
-  .text .who { font-weight: 600; color: var(--c, var(--ink-2)); }
+  /* A scene: a line each, with who says it; what is only for themes stays hidden here. */
+  .lines .line { display: block; }
+  .lines .line + .line { margin-top: 6px; }
+  .lines .text { font: inherit; color: inherit; }
+  .line .meta .name { font-weight: 600; color: var(--c); }
+  .line .meta .name::after { content: ":"; }
+  .line .meta { margin-right: .3em; }
+  .line .mood, .line .to, .line .voice, .setting .time { display: none; }
+  .line .action { font-style: italic; color: var(--ink-3); margin-right: .35em; }
+  .line[data-kind="narration"] .meta, .line[data-kind="narration"] .line-pic { display: none; }
+  .line[data-kind="narration"] .text, .line[data-kind="thought"] .text { font-style: italic; }
+  .line[data-kind="thought"] .text { color: var(--ink-2); }
+  .setting { font-size: 12px; color: var(--ink-3); letter-spacing: .02em; margin: 2px 0 4px; }
+  .setting span + span::before { content: " · "; }
+  .setting .title { color: var(--ink-2); font-weight: 600; }
   .w { transition: opacity .16s linear, color .2s linear, background-color .15s linear; border-radius: 4px; }
 
   /* Words as they are said: the rest is not there yet. */
@@ -67,15 +80,18 @@
   /* Who speaks: the character's picture, or the shape of their voice in their colour. */
   .pic { display: block; width: 100%; aspect-ratio: 1; border-radius: 4px; margin-top: 2px;
     background: oklch(17% 0.003 260) no-repeat; }
-  .text .who-pic { display: inline-block; width: 22px; height: 22px; margin: 0 7px 0 0; vertical-align: -5px; }
+  .line .line-pic { display: inline-block; width: 22px; height: 22px; margin: 0 7px 0 0; vertical-align: -5px; }
 
   /* Opened with its hotkey: it scrolls, and says how it goes away. */
   .pinned #list { overflow-y: auto; scrollbar-width: thin; scrollbar-color: oklch(40% 0.003 260) transparent; }
-  #hint { flex: none; padding: 8px 32px 12px; font-size: 12px; color: var(--ink-3); display: none; }
+  #hint { flex: none; padding: 8px 32px 12px; font-size: 12px; color: var(--ink-3); display: none; cursor: move;
+    border-top: 1px solid oklch(27% 0.003 260); }
+  #hint:hover { color: var(--ink-2); background: oklch(24% 0.003 260); }
   .pinned #hint { display: block; }
   @media (prefers-reduced-motion: reduce) { .msg, .win.enter { animation: none; } .w { transition: none; } }
 </style>
 </head>
+<link rel="stylesheet" id="theme" disabled>
 <body class="words">
 <div class="win enter" id="win">
   <div id="list"><div id="empty">Nothing said yet.</div></div>
@@ -210,36 +226,73 @@ let liveKey = null, live = null, raf = 0, followTop = -1;
 // Utterance ids start again with each run of voice, so the time tells two apart.
 const keyOf = l => (l.id || l.kind) + '|' + l.at + '|' + (l.pid || 0);
 
+// An element with a class and text.
+function mk(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+// Every field goes into the page, as an element with a class or a data- attribute, so a theme can
+// show, hide, reorder or restyle it; the built-in look shows only some (see the README's list).
+const setData = (el, data) => { for (const k in data) if (data[k] !== undefined && data[k] !== null && data[k] !== '') el.dataset[k] = data[k]; };
+
 function build(l) {
-  const el = document.createElement('div');
-  const you = l.kind === 'dictated';
-  el.className = 'msg ' + (you ? 'dictated' : 'said');
-  el.style.setProperty('--light', you ? 'var(--you)' : (colourOf(nameOf(l)) || 'var(--plain)'));
-  const head = document.createElement('div'); head.className = 'head';
-  const who = document.createElement('b'); who.textContent = you ? 'You' : nameOf(l);
-  const where = document.createElement('span');
-  where.textContent = you ? (l.name ? 'to ' + l.name : '') : [clientName(l.client), l.project].filter(Boolean).join(' in ');
-  const st = document.createElement('span'); st.className = 'state';
-  const when = document.createElement('time'); when.textContent = clock(l.at);
-  head.append(who, where, st, when);
-  const text = document.createElement('div'); text.className = 'text';
-  const toks = tokens(l.text), spans = [];
-  toks.forEach((t, i) => {
-    const s = document.createElement('span');
-    s.className = 'w'; s.textContent = t.w;
-    // In a scene a speaker's name starts a new line, in their colour.
-    const named = l.scene && /^[^\s:]{1,40}:$/.test(t.w) && (i === 0 || /[.!?…"”)]$/.test(toks[i - 1].w));
-    if (named) {
-      if (i) text.append(Object.assign(document.createElement('span'), { className: 'br' }));
-      s.classList.add('who');
-      const c = colourOf(t.w.slice(0, -1)); if (c) s.style.setProperty('--c', c);
-      text.append(pic(t.w.slice(0, -1), null, 'pic who-pic'));
-    } else if (i) text.append(' ');
-    text.append(s); spans.push(s);
+  const el = mk('div');
+  const you = l.kind === 'dictated', speaker = you ? 'You' : nameOf(l);
+  el.className = 'msg ' + (you ? 'dictated' : 'said') + (l.lines && l.lines.length ? ' scene' : '');
+  setData(el, { kind: l.kind, speaker, client: l.client, project: l.project, source: l.source, to: you ? l.name : '',
+    scene: l.scene ? 'true' : '', background: l.setting && l.setting.background });
+  el.style.setProperty('--light', you ? 'var(--you)' : (colourOf(speaker) || 'var(--plain)'));
+  const head = mk('div', 'head');
+  const where = you ? (l.name ? 'to ' + l.name : '') : [clientName(l.client), l.project].filter(Boolean).join(' in ');
+  const st = mk('span', 'state'), when = mk('time', '', clock(l.at));
+  when.dateTime = l.at;
+  head.append(mk('b', 'name', speaker), mk('span', 'where', where), st, when);
+  const body = mk('div', 'body'); body.append(head);
+  const toks = [], spans = [], lineOf = [];
+  // Words as spans, each knowing its place for the live fill.
+  const words = (box, text, line) => tokens(text).forEach((t, i) => {
+    const s = mk('span', 'w', t.w);
+    if (i) box.append(' ');
+    box.append(s); toks.push(t); spans.push(s); lineOf.push(line);
   });
-  const body = document.createElement('div'); body.append(head, text);
-  el.append(you ? pic('You', YOU) : pic(nameOf(l)), body);
-  return { el, toks, spans, st, l };
+
+  if (l.lines && l.lines.length) {
+    // A scene: where and when, then each line with who says it and how.
+    if (l.setting) {
+      const set = mk('div', 'setting');
+      for (const k of ['title', 'location', 'time']) if (l.setting[k]) set.append(mk('span', k, l.setting[k]));
+      setData(set, { background: l.setting.background });
+      body.append(set);
+    }
+    const box = mk('div', 'lines text');
+    l.lines.forEach((sl, n) => {
+      const who = sl.speaker || speaker, kind = sl.kind || 'dialogue';
+      const line = mk('div', 'line');
+      setData(line, { speaker: who, voice: sl.voice, kind, mood: sl.mood, to: sl.to, pause: sl.pause ? String(sl.pause) : '',
+        action: sl.action ? 'true' : '', spoken: sl.text ? 'true' : 'false', narrator: kind === 'narration' || /^narrat/i.test(who) ? 'true' : '', index: String(n) });
+      line.style.setProperty('--c', colourOf(who) || 'var(--plain)');
+      const meta = mk('span', 'meta');
+      meta.append(mk('b', 'name', who));
+      if (sl.mood) meta.append(mk('span', 'mood', sl.mood));
+      if (sl.to) meta.append(mk('span', 'to', sl.to));
+      if (sl.voice) meta.append(mk('span', 'voice', sl.voice));
+      line.append(pic(who, null, 'pic line-pic'), meta);
+      if (sl.action) line.append(mk('span', 'action', sl.action));
+      const text = mk('span', 'text');
+      if (sl.text) words(text, sl.text, line);
+      line.append(text);
+      box.append(line);
+    });
+    body.append(box);
+  } else {
+    const text = mk('div', 'text');
+    words(text, l.text, null);
+    body.append(text);
+  }
+  el.append(you ? pic('You', YOU) : pic(speaker), body);
+  return { el, toks, spans, lineOf, st, l };
 }
 
 function render() {
@@ -252,7 +305,7 @@ function render() {
   if (atEnd) requestAnimationFrame(() => { const ls = $('list'); ls.scrollTop = ls.scrollHeight; followTop = ls.scrollTop; });
   if (!pinned()) away = false;
   const key = state && state.serve && state.serve.reader_hotkey;
-  const hint = 'Scroll to read back' + (key && key !== 'none' ? ' · ' + key.replace(/\+/g, ' + ') + ' hides it' : '');
+  const hint = 'Scroll to read back · drag here to move' + (key && key !== 'none' ? ' · ' + key.replace(/\+/g, ' + ') + ' hides it' : '');
   if ($('hint').textContent !== hint) $('hint').textContent = hint;
   $('empty').hidden = t.length > 0;
   const keep = new Set(t.map(keyOf));
@@ -270,7 +323,11 @@ function render() {
   if (line) for (let i = t.length - 1; i >= 0; i--) if (t[i].id === line.id) { k = keyOf(t[i]); break; }
   const v = k ? views.get(k) : null;
   if (liveKey !== k || (v && live !== v)) {
-    if (live) { live.el.classList.remove('live'); live.spans.forEach(s => s.classList.remove('later', 'now')); live.st.textContent = ''; }
+    if (live) {
+      live.el.classList.remove('live'); live.spans.forEach(s => s.classList.remove('later', 'now')); live.st.textContent = '';
+      if (live.lineNow) live.lineNow.classList.remove('speaking');
+      delete document.body.dataset.speaker;
+    }
     liveKey = k; live = v || null; followTop = -1;
     if (live) {
       live.spoken = tokens(line.text); live.map = align(live.toks, live.spoken); live.now = -1;
@@ -323,6 +380,15 @@ function tick() {
     if (n >= 0) live.spans[n].classList.add('now');
     live.now = n;
   }
+  // The line of a scene being said now, and who says it, for themes.
+  const ln = cur >= 0 ? live.lineOf[cur] : null;
+  if (ln !== live.lineNow) {
+    if (live.lineNow) live.lineNow.classList.remove('speaking');
+    if (ln) ln.classList.add('speaking');
+    live.lineNow = ln;
+  }
+  const who = ln ? ln.dataset.speaker : live.el.dataset.speaker;
+  if (document.body.dataset.speaker !== who) document.body.dataset.speaker = who;
   follow(cur >= 0 ? live.spans[cur] : live.el);
   if (document.visibilityState === 'visible') raf = requestAnimationFrame(tick);
 }
@@ -331,6 +397,10 @@ function tick() {
 // reach the last lines, by a few lines at a time. With nothing said now it moves only to bring a new
 // message's end into view, never back up, so it does not jump when the voice stops.
 // Scrolled back to read, the view stays where the user put it until they scroll to the end again.
+// The bottom bar moves the window (voice does the moving).
+$('hint').addEventListener('pointerdown', e => {
+  if (e.button === 0 && window.chrome && chrome.webview) { e.preventDefault(); chrome.webview.postMessage('drag'); }
+});
 // Only the user's own scrolling counts (the wheel or the scroll bar), not the window following along.
 let away = false, touchedAt = 0;
 $('list').addEventListener('scroll', () => {
@@ -369,6 +439,16 @@ async function poll() {
 async function loadState() {
   try {
     state = await api('state');
+    // The chosen theme's stylesheet comes after the built-in look and overrides it.
+    const theme = (state.serve && state.serve.reader_theme) || '';
+    const link = $('theme');
+    if ((link.dataset.name || '') !== theme) {
+      link.dataset.name = theme;
+      link.disabled = !theme;
+      if (theme) link.href = '/settings/theme/' + encodeURIComponent(theme) + '/theme.css?v=' + Date.now();
+      else link.removeAttribute('href');
+    }
+    document.body.dataset.theme = theme;
     document.body.classList.toggle('block', appear() === 'block');
     document.body.classList.toggle('words', appear() === 'words');
     const sig = JSON.stringify(chars().map(c => [c.name, c.color, c.image]));
@@ -379,6 +459,7 @@ async function loadState() {
 async function onShow() {
   const w = $('win'); w.classList.remove('enter'); void w.offsetWidth; w.classList.add('enter');
   followTop = -1;
+  $('theme').dataset.name = '\n'; // read the theme again: it may have been edited
   await loadState();
   poll();
 }

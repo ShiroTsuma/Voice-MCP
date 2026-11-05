@@ -54,6 +54,8 @@ var (
 	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
 	procGetWindowLong    = user32.NewProc("GetWindowLongPtrW")
 	procSetWindowLong    = user32.NewProc("SetWindowLongPtrW")
+	procGetAsyncKeyState = user32.NewProc("GetAsyncKeyState")
+	procGetWindowRect    = user32.NewProc("GetWindowRect")
 )
 
 const (
@@ -77,6 +79,7 @@ const (
 	swpNoActivate = 0x0010
 	swpShowWindow = 0x0040
 	swpNoZOrder   = 0x0004
+	swpNoSize     = 0x0001
 	swRestore     = 9
 
 	wsOverlappedWindow = 0x00CF0000
@@ -145,7 +148,10 @@ type Window struct {
 	queue []func()
 
 	lastHide atomic.Int64 // unix nanos of the last hide on focus loss
-	placed   bool         // a normal window was positioned once; the user moves it after
+	moved    bool         // a Centre window the user dragged: it stays at at; UI thread only
+	dragging atomic.Bool
+	at       point
+	placed   bool // a normal window was positioned once; the user moves it after
 }
 
 func New(opt Options) *Window {
@@ -213,6 +219,44 @@ func (w *Window) SetClickThrough(on bool) error {
 		}
 		procSetWindowLong.Call(w.hwnd, gwlExStyle, ex)
 	})
+}
+
+// Drag moves the window with the mouse, from a press on the page (it posts
+// a message, the caller calls Drag), until the button is let go. A Centre
+// window then stays where it was put.
+//
+// The page's WebView holds the mouse, so the window follows the cursor while
+// the left button stays down rather than through Windows' own move loop.
+func (w *Window) Drag() error {
+	if w.dragging.Swap(true) {
+		return nil
+	}
+	var start point
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&start)))
+	if !w.Visible() {
+		w.dragging.Store(false)
+		return nil
+	}
+	var from rect // any thread may read where a window is
+	procGetWindowRect.Call(w.hwnd, uintptr(unsafe.Pointer(&from)))
+	go func() {
+		defer w.dragging.Store(false)
+		const vkLButton = 0x01
+		for {
+			if s, _, _ := procGetAsyncKeyState.Call(vkLButton); s&0x8000 == 0 {
+				return
+			}
+			var pt point
+			procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+			x, y := from.Left+pt.X-start.X, from.Top+pt.Y-start.Y
+			w.do(func() {
+				procSetWindowPos.Call(w.hwnd, 0, uintptr(x), uintptr(y), 0, 0, swpNoActivate|swpNoZOrder|swpNoSize)
+				w.moved, w.at = true, point{x, y}
+			})
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	return nil
 }
 
 // Visible reports whether the window is on screen.
@@ -436,6 +480,11 @@ func (w *Window) place(flags uintptr) {
 	}
 	if work.Top > full.Top {
 		y = work.Top + margin
+	}
+	if w.opt.Centre && w.moved {
+		// Where the user put it, at its size.
+		procSetWindowPos.Call(w.hwnd, hwndTopmost, uintptr(w.at.X), uintptr(w.at.Y), uintptr(width), uintptr(height), flags)
+		return
 	}
 	if w.opt.Centre {
 		width = min(width, work.Right-work.Left-2*margin)

@@ -164,7 +164,7 @@ func runServe(args []string) error {
 		settingsui.Register(mux, settingsui.Deps{
 			Token: info.Token, SettingsPath: settingsPath(*cfgPath),
 			State: b.state, Reload: b.reload, Test: b.test, Restart: b.restart,
-			Status: b.panelStatus, Control: b.control, Session: agents.SetSwitches, AvatarDir: filepath.Join(core.DataDir(), "avatars"),
+			Status: b.panelStatus, Control: b.control, Session: agents.SetSwitches, AvatarDir: filepath.Join(core.DataDir(), "avatars"), ThemesDir: filepath.Join(core.DataDir(), "themes"),
 			Character:    func(pid uint32, name string) { agents.SetName(pid, name) },
 			Clone:        svc.Clone,
 			Integrations: newIntegrations(agents),
@@ -386,7 +386,7 @@ func (b *backend) state() map[string]any {
 			"duck": duck, "stop_hotkey": orNone(cfg.Serve.StopHotkey), "mute_hotkey": orNone(cfg.Serve.MuteHotkey),
 			"barge_in": boolOr(cfg.Serve.BargeIn, false), "unload_after": unload, "preload_voices": boolOr(cfg.Serve.PreloadVoices, false), "corner_speaking": boolOr(cfg.Serve.CornerSpeaking, true),
 			"dictate_hotkey": orNone(cfg.Serve.DictateHotkey), "dictate_submit": boolOr(cfg.Serve.DictateSubmit, false),
-			"dictate_target": cfg.Serve.DictateTarget, "dictate_feedback": cfg.Serve.DictateFeedback, "dictate_routing": boolOr(cfg.Serve.DictateRouting, false), "dictate_theme": cfg.Serve.DictateTheme, "dictate_overlay_scale": floatOr(cfg.Serve.DictateOverlayScale, 1.5), "personas": boolOr(cfg.Serve.Personas, false), "speaking_popup": boolOr(cfg.Serve.SpeakingPopup, false), "popup_linger": floatOr(cfg.Serve.PopupLinger, 8), "reader_window": cfg.Serve.Reader(), "reader_appear": cfg.Serve.Appear(), "reader_hotkey": orNone(cfg.Serve.ReaderHotkey), "popup_dictation": boolOr(cfg.Serve.PopupDictation, false), "voice_replies": boolOr(cfg.Serve.VoiceReplies, false),
+			"dictate_target": cfg.Serve.DictateTarget, "dictate_feedback": cfg.Serve.DictateFeedback, "dictate_routing": boolOr(cfg.Serve.DictateRouting, false), "dictate_theme": cfg.Serve.DictateTheme, "dictate_overlay_scale": floatOr(cfg.Serve.DictateOverlayScale, 1.5), "personas": boolOr(cfg.Serve.Personas, false), "speaking_popup": boolOr(cfg.Serve.SpeakingPopup, false), "popup_linger": floatOr(cfg.Serve.PopupLinger, 8), "reader_window": cfg.Serve.Reader(), "reader_appear": cfg.Serve.Appear(), "reader_hotkey": orNone(cfg.Serve.ReaderHotkey), "reader_theme": derefOr(cfg.Serve.ReaderTheme, ""), "popup_dictation": boolOr(cfg.Serve.PopupDictation, false), "voice_replies": boolOr(cfg.Serve.VoiceReplies, false),
 		},
 		"listen":     map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice, "words": cfg.Listen.Words},
 		"languages":  cfg.Languages,

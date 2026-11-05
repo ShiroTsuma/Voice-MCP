@@ -562,6 +562,10 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="lab">Words appear<span class="help">One by one as they are said, or the whole message at once with the word being said marked</span></div>
             <div class="seg" id="readerAppear" role="group" aria-label="Words appear"><button type="button" data-v="words">As said</button><button type="button" data-v="block">At once</button></div>
           </div>
+          <div class="row col" id="themeRow">
+            <label class="lab" for="readerTheme">Reading window theme<span class="help" id="themeHelp">A folder with a theme.css in the themes folder</span></label>
+            <select id="readerTheme"></select>
+          </div>
           <div class="row">
             <div class="lab">Reading window key<span class="help">Shows the reading window to scroll back, and hides it again. Click, then press the keys</span></div>
             <button class="key" id="readerKey" type="button"></button>
@@ -1773,6 +1777,7 @@ function render(s) {
   $('lingerRow').hidden = !s.serve.speaking_popup;
   seg('readerWindow', s.serve.reader_window || 'off'); seg('readerAppear', s.serve.reader_appear || 'words');
   $('appearRow').hidden = (s.serve.reader_window || 'off') === 'off';
+  fillThemes(s.serve.reader_theme || '');
   $('voiceReplies').checked = !!s.serve.voice_replies;
   setKey($('stopKey'), s.serve.stop_hotkey); setKey($('muteKey'), s.serve.mute_hotkey); setKey($('dictateKey'), s.serve.dictate_hotkey); setKey($('readerKey'), s.serve.reader_hotkey);
   $('dictateTarget').value = s.serve.dictate_target || 'auto'; $('dictateSubmit').checked = !!s.serve.dictate_submit;
@@ -2067,6 +2072,15 @@ onSeg('goalWait', v => save({ hooks: { codex_goal_wait: +v } }));
 onSeg('popupLinger', v => save({ serve: { popup_linger: +v } }));
 onSeg('readerWindow', v => { $('appearRow').hidden = v === 'off'; save({ serve: { reader_window: v } }); });
 onSeg('readerAppear', v => save({ serve: { reader_appear: v } }));
+on('readerTheme', 'change', () => save({ serve: { reader_theme: $('readerTheme').value } }));
+// The themes found in the themes folder, asked each time the settings show.
+async function fillThemes(current) {
+  try {
+    const t = await api('themes');
+    fill($('readerTheme'), t.themes.map(n => ({ value: n, label: n })), current, [{ value: '', label: 'Built-in' }]);
+    $('themeHelp').textContent = 'A folder with a theme.css in ' + t.dir;
+  } catch (e) { fill($('readerTheme'), [], current, [{ value: '', label: 'Built-in' }]); }
+}
 on('popupDictation', 'change', () => save({ serve: { popup_dictation: $('popupDictation').checked } }));
 onSeg('summaryPart', v => { const [from, n] = v.split(':'); save({ hooks: { summary_from: from, summary_sentences: +n } }); });
 on('dictateTheme', 'change', () => save({ serve: { dictate_theme: $('dictateTheme').value } }));

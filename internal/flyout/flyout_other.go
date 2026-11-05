@@ -34,3 +34,4 @@ func (w *Window) Hide()                      {}
 func (w *Window) ShowPassive() error         { return errUnsupported }
 func (w *Window) Visible() bool              { return false }
 func (w *Window) SetClickThrough(bool) error { return errUnsupported }
+func (w *Window) Drag() error                { return errUnsupported }
