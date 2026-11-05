@@ -8,11 +8,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 
 	"voice/internal/core"
 	"voice/internal/flyout"
-	"voice/internal/service"
 )
 
 // The settings window is a flyout above the tray icon.
@@ -178,7 +176,7 @@ func (b *backend) speaking(on bool) {
 	// Nothing on screen says who speaks (no popup, no settings window): the
 	// agent's ring in the corner does, in its character's colour.
 	sv := b.cfg.Serve
-	popupOn := (sv.SpeakingPopup != nil && *sv.SpeakingPopup) || b.wantsReader()
+	popupOn := (sv.SpeakingPopup != nil && *sv.SpeakingPopup) || (reader != nil && reader.Visible())
 	corner := on && (sv.CornerSpeaking == nil || *sv.CornerSpeaking) && !popupOn && !b.panel().Visible()
 	b.ctl.cornerSpeech(corner, b.speakerTint())
 }
@@ -251,15 +249,8 @@ func (b *backend) showPopupLocked() {
 	if b.panel().Visible() {
 		return
 	}
-	// A long message or a scene goes to the reading window; once it is up, it
-	// stays for what follows.
-	if (reader != nil && reader.Visible()) || b.wantsReader() {
-		if err := b.reader().ShowPassive(); err != nil {
-			logf("reading window: %v", err)
-		}
-		if popup != nil {
-			popup.Hide()
-		}
+	// The reading window, when the user opened it, shows the speech already.
+	if reader != nil && reader.Visible() {
 		return
 	}
 	if sv := b.cfg.Serve; sv.SpeakingPopup == nil || !*sv.SpeakingPopup {
@@ -275,21 +266,12 @@ func (b *backend) showPopupLocked() {
 func (b *backend) dictating(on bool) {
 	popupMu.Lock()
 	defer popupMu.Unlock()
-	// The reading window shows the dictation too, as it is heard: when it is up
-	// or on its way for the speech now, or set to show always, it does instead
-	// of the corner popup.
+	// The reading window, when the user opened it, shows the dictation too.
 	sv := b.cfg.Serve
-	toReader := (reader != nil && reader.Visible()) || (popupSpeaking && b.wantsReader()) || sv.Reader() == "always"
-	if on && sv.PopupDictation != nil && *sv.PopupDictation && !b.panel().Visible() {
-		w, what := b.popup(), "speaking popup"
-		if toReader {
-			w, what = b.reader(), "reading window"
-			if popup != nil {
-				popup.Hide()
-			}
-		}
-		if err := w.ShowPassive(); err != nil {
-			logf("%s: %v", what, err)
+	readerUp := reader != nil && reader.Visible()
+	if on && sv.PopupDictation != nil && *sv.PopupDictation && !b.panel().Visible() && !readerUp {
+		if err := b.popup().ShowPassive(); err != nil {
+			logf("speaking popup: %v", err)
 		}
 	}
 	// Dictating holds the popup whenever it shows, also when it came up after
@@ -312,16 +294,13 @@ func (b *backend) lingerLocked() {
 		if popup != nil {
 			popup.Hide()
 		}
-		// Opened with its hotkey, the reading window stays until the key hides it.
-		if reader != nil && !readerPinned.Load() {
-			reader.Hide()
-		}
+
 	})
 }
 
-// The reading window: a large one in the middle of the screen with the
-// recent messages, for long messages and scenes the corner is too small for.
-// Like the popup it takes no focus and no clicks.
+// The reading window: a large one, in the middle of the screen until the
+// user moves it, with the transcript to read and scroll back. Only its hotkey
+// opens and hides it; it never takes the focus.
 var (
 	readerOnce sync.Once
 	reader     *flyout.Window
@@ -380,39 +359,6 @@ func (b *backend) reader() *flyout.Window {
 		})
 	})
 	return reader
-}
-
-// readerLong is how many characters make a message long enough for the
-// reading window ([serve] reader_window = "long").
-const readerLong = 280
-
-// wantsReader reports whether what is being said now goes to the reading
-// window.
-func (b *backend) wantsReader() bool {
-	switch b.cfg.Serve.Reader() {
-	case "always":
-		return true
-	case "long":
-		l := b.saying()
-		return l != nil && (l.Scene || utf8.RuneCountInString(l.Text) >= readerLong)
-	}
-	return false
-}
-
-// saying is the transcript's entry for what is being said now, or the newest
-// said one while the voice gets ready.
-func (b *backend) saying() *service.Line {
-	t := b.ctl.agents.Transcript()
-	id := ""
-	if l := b.sp.Status().Line; l != nil {
-		id = l.ID
-	}
-	for i := len(t) - 1; i >= 0; i-- {
-		if t[i].Kind == "said" && (id == "" || t[i].ID == id) {
-			return &t[i]
-		}
-	}
-	return nil
 }
 
 // The Integrations window: an ordinary window like the characters one.

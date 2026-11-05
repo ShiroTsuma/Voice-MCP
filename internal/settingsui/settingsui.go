@@ -375,7 +375,6 @@ func merge(s *settings.Settings, in settings.Settings) {
 	setB(&s.Serve.Personas, in.Serve.Personas)
 	setB(&s.Serve.SpeakingPopup, in.Serve.SpeakingPopup)
 	setF(&s.Serve.PopupLinger, in.Serve.PopupLinger)
-	set(&s.Serve.ReaderWindow, in.Serve.ReaderWindow)
 	set(&s.Serve.ReaderAppear, in.Serve.ReaderAppear)
 	set(&s.Serve.ReaderHotkey, in.Serve.ReaderHotkey)
 	set(&s.Serve.ReaderTheme, in.Serve.ReaderTheme)

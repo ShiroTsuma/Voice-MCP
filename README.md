@@ -183,7 +183,7 @@ A line can also carry what is shown and never spoken: `kind` (`dialogue`, `narra
 
 Kokoro's 54 voices suit a crowd of side characters (they run on the CPU at once); keep the GPU voices for one or two leads.
 
-The corner popup is small for a scene. Under **Reading window** in the settings, voice opens a large window in the middle of the screen instead, for long messages and scenes or always, with the recent messages as a log: each speaker of a scene on its own line in their colour, and your dictation as it is heard. **Words appear** shows each word as it is said, or the whole message at once with the word being said marked. Like a game overlay, **Reading window key** shows it any time to scroll back through the transcript with the mouse wheel, and hides it again; opened so, it stays until the key hides it, and its bottom bar moves it; it keeps the place you put it in.
+The corner popup is small for a scene. Like a game overlay, **Reading window key** in the settings shows a large window with the transcript as a log, and hides it again; nothing else opens it. Each speaker of a scene gets their own line in their colour, the message being said fills in as it is heard, and your dictation shows as it is heard. Scroll back with the mouse wheel, move it by its bottom bar and resize it from its corner. **Words appear** shows each word as it is said, or the whole message at once with the word being said marked.
 
 ### Reading window themes
 

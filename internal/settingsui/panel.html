@@ -555,11 +555,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="seg" id="popupLinger" role="group" aria-label="Stays after"><button type="button" data-v="4">4 s</button><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button></div>
           </div>
           <div class="row">
-            <div class="lab">Reading window<span class="help">A large window in the middle of the screen with the recent messages, for long messages and scenes</span></div>
-            <div class="seg" id="readerWindow" role="group" aria-label="Reading window"><button type="button" data-v="off">Off</button><button type="button" data-v="long">Long</button><button type="button" data-v="always">Always</button></div>
-          </div>
-          <div class="row" id="appearRow">
-            <div class="lab">Words appear<span class="help">One by one as they are said, or the whole message at once with the word being said marked</span></div>
+            <div class="lab">Words appear<span class="help">In the reading window: one by one as they are said, or the whole message at once with the word being said marked</span></div>
             <div class="seg" id="readerAppear" role="group" aria-label="Words appear"><button type="button" data-v="words">As said</button><button type="button" data-v="block">At once</button></div>
           </div>
           <div class="row col" id="themeRow">
@@ -567,7 +563,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <select id="readerTheme"></select>
           </div>
           <div class="row">
-            <div class="lab">Reading window key<span class="help">Shows the reading window to scroll back, and hides it again. Click, then press the keys</span></div>
+            <div class="lab">Reading window key<span class="help">Shows a large window with the transcript to read and scroll back, and hides it again. It opens only with this key. Click, then press the keys</span></div>
             <button class="key" id="readerKey" type="button"></button>
           </div>
         </div></div>
@@ -1775,8 +1771,7 @@ function render(s) {
   seg('popupLinger', String(s.serve.popup_linger || 8));
   $('popupDictation').checked = !!s.serve.popup_dictation;
   $('lingerRow').hidden = !s.serve.speaking_popup;
-  seg('readerWindow', s.serve.reader_window || 'off'); seg('readerAppear', s.serve.reader_appear || 'words');
-  $('appearRow').hidden = (s.serve.reader_window || 'off') === 'off';
+  seg('readerAppear', s.serve.reader_appear || 'words');
   fillThemes(s.serve.reader_theme || '');
   $('voiceReplies').checked = !!s.serve.voice_replies;
   setKey($('stopKey'), s.serve.stop_hotkey); setKey($('muteKey'), s.serve.mute_hotkey); setKey($('dictateKey'), s.serve.dictate_hotkey); setKey($('readerKey'), s.serve.reader_hotkey);
@@ -2070,7 +2065,6 @@ on('cornerSpeak', 'change', () => save({ serve: { corner_speaking: $('cornerSpea
 onSeg('overlayScale', v => save({ serve: { dictate_overlay_scale: +v } }));
 onSeg('goalWait', v => save({ hooks: { codex_goal_wait: +v } }));
 onSeg('popupLinger', v => save({ serve: { popup_linger: +v } }));
-onSeg('readerWindow', v => { $('appearRow').hidden = v === 'off'; save({ serve: { reader_window: v } }); });
 onSeg('readerAppear', v => save({ serve: { reader_appear: v } }));
 on('readerTheme', 'change', () => save({ serve: { reader_theme: $('readerTheme').value } }));
 // The themes found in the themes folder, asked each time the settings show.

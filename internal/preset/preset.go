@@ -115,10 +115,7 @@ type Serve struct {
 	// PopupLinger is how many seconds the popup stays after the voice stops
 	// (default 8).
 	PopupLinger *float64 `toml:"popup_linger"`
-	// ReaderWindow opens a large reading window in the middle of the screen
-	// with the recent messages: "off" (the default), "long" (long messages and
-	// scenes) or "always".
-	ReaderWindow *string `toml:"reader_window"`
+
 	// ReaderAppear is how the words show in it: "words" (each as it is said)
 	// or "block" (all at once, the word being said marked).
 	ReaderAppear *string `toml:"reader_appear"`
@@ -351,9 +348,7 @@ func (c *Config) merge(o *Config) {
 	if sv.PopupLinger != nil {
 		c.Serve.PopupLinger = sv.PopupLinger
 	}
-	if sv.ReaderWindow != nil {
-		c.Serve.ReaderWindow = sv.ReaderWindow
-	}
+
 	if sv.ReaderAppear != nil {
 		c.Serve.ReaderAppear = sv.ReaderAppear
 	}
@@ -673,14 +668,6 @@ func (s Serve) Linger() time.Duration {
 		v = max(1, min(*s.PopupLinger, 60))
 	}
 	return time.Duration(v * float64(time.Second))
-}
-
-// Reader is when the reading window opens: "off", "long" or "always".
-func (s Serve) Reader() string {
-	if s.ReaderWindow != nil && (*s.ReaderWindow == "long" || *s.ReaderWindow == "always") {
-		return *s.ReaderWindow
-	}
-	return "off"
 }
 
 // Appear is how words show in the reading window: "words" or "block".
