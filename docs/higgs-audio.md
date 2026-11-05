@@ -22,6 +22,12 @@ Or with Docker, from the model card: `docker pull lmsysorg/sglang-omni:dev`, run
 
 WSL2 forwards `localhost`, so Windows reaches the server at `http://127.0.0.1:8000`. The model is about 4B parameters in bf16; give it the graphics card to itself (12-16 GB). Boson states no figure.
 
+### Or a server elsewhere
+
+voice only needs the server's address, so it does not have to be this PC: another machine on your network with a GPU (`http://192.168.1.50:8000`), a rented GPU server, or a hosted service that speaks the OpenAI speech API. Set `url` (and `api_key`, sent only to that server, if it wants one) in your `config.toml`. Over the internet, every sentence waits for the network, so speech starts a little later.
+
+**What leaves your PC:** every request carries the text, and for a cloned voice its recording and transcript too. Point a cloned voice only at a server you trust with that recording; a voice you may not share belongs on a server of your own.
+
 ## 2. voice
 
 voice ships the engine ready (`[engines.higgs]` in its built-in config):
@@ -35,7 +41,7 @@ clone = "references"          # a cloned voice's recording and transcript go alo
 params = { temperature = 0.8, top_p = 0.8, top_k = 30 }
 ```
 
-Change the url in your `config.toml` if the server runs elsewhere. Then:
+Change the url in your `config.toml` if the server runs elsewhere. Integrations (GPU voices, Higgs Audio v3) shows whether it answers, and its **Setup guide** opens this page. Then:
 
 - the preset **higgs** speaks with the model's default voice (Kokoro speaks while the server is down);
 - a cloned voice can use it: `voice_clone add` (or `design`) with `engine: "higgs"`. The recording goes in each request as a data URL, so the server needs no access to voice's files; give the transcript, it makes the clone much closer.

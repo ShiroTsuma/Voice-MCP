@@ -51,6 +51,7 @@ type integrationFile struct {
 	Model    string   `toml:"model"`    // uses = "model": the name in `voice models`
 	Backend  string   `toml:"backend"`  // uses = "sidecar": a name in sidecar/backends.json
 	Engine   string   `toml:"engine"`   // uses = "speech-server": the engine (an [engines.<name>] of type openai)
+	Guide    string   `toml:"guide"`    // uses = "speech-server": how to set its server up (a web page), offered as an action
 	// Also: other groups it shows in. Languages: what it speaks or
 	// recognizes (en, pl, ...; "*" for nearly all); a sidecar backend's come
 	// from sidecar/backends.json when the file names none.
@@ -242,11 +243,25 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 			defer cancel()
-			if err := openaispeech.Probe(ctx, url); err != nil {
-				return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + "; start it (More has the steps). Until then another voice speaks"}
+			var guide []integrations.Action
+			if f.Guide != "" {
+				guide = []integrations.Action{{ID: "guide", Label: "Setup guide"}}
 			}
-			return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url}
-		}},
+			if err := openaispeech.Probe(ctx, url); err != nil {
+				if len(guide) > 0 {
+					guide[0].Primary = true
+				}
+				return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + ". Set one up (Setup guide) on this PC, another machine or a server, and set its url in config.toml; until then another voice speaks", Actions: guide}
+			}
+			return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url, Actions: guide}
+		},
+			do: func(_ context.Context, f integrationFile, action string, log func(string)) error {
+				if action != "guide" || f.Guide == "" {
+					return fmt.Errorf("%s has no action %q", f.Title, action)
+				}
+				log("Opening " + f.Guide)
+				return exec.Command("rundll32", "url.dll,FileProtocolHandler", f.Guide).Start() // the default browser
+			}},
 
 		"claude-hooks": {
 			status: func(integrationFile) integrations.Status {
