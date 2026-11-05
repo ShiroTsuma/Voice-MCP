@@ -1,0 +1,11 @@
+id = "chatterbox_turbo"
+group = "gpu"
+order = 12
+title = "Chatterbox Turbo"
+about = "English speech with laughs, sighs, coughs and a few emotions, and cloning from a clip over 5 seconds; lighter and faster than Chatterbox. Installs into Chatterbox's environment."
+size = "about 4 GB of weights"
+link = "https://huggingface.co/ResembleAI/chatterbox-turbo"
+also = ["cloning"]
+uses = "sidecar"
+backend = "chatterbox_turbo"
+requires = ["python"]

@@ -90,6 +90,66 @@
       "start_timeout": 1800
     },
     {
+      "name": "chatterbox_turbo",
+      "label": "Chatterbox Turbo",
+      "note": "English speech with laughs, sighs, coughs and a few emotions, and cloning from a clip over 5 seconds; lighter and faster than Chatterbox; runs in the Chatterbox environment",
+      "env": "chatterbox",
+      "pip": ["chatterbox-tts"],
+      "module": "chatterbox.tts_turbo",
+      "port": 8770,
+      "clones": true,
+      "transcript": false,
+      "languages": ["en"],
+      "prefetch": ["ResembleAI/chatterbox-turbo"],
+      "expressive": {
+        "emotion": "labels",
+        "sounds": {
+          "laugh": "[laugh]", "chuckle": "[chuckle]", "giggle": "[chuckle]", "sigh": "[sigh]", "gasp": "[gasp]",
+          "cough": "[cough]", "clear_throat": "[clear throat]", "sniff": "[sniff]", "sob": "[crying]", "groan": "[groan]"
+        },
+        "moods": {
+          "happy": "[happy]", "excited": "[happy]", "sarcastic": "[sarcastic]", "teasing": "[sarcastic]",
+          "angry": "[angry]", "afraid": "[fear]", "surprised": "[surprised]", "sad": "[crying]", "tender": "[whispering]"
+        }
+      }
+    },
+    {
+      "name": "omnivoice",
+      "label": "OmniVoice",
+      "note": "cloning in 600+ languages including Polish, from the clip and its transcript, with laughs and sighs; light (about 3 GB); research and non-commercial use",
+      "pip": ["omnivoice"],
+      "module": "omnivoice",
+      "port": 8771,
+      "clones": true,
+      "transcript": true,
+      "languages": ["ar", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hu", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sv", "tr", "uk", "vi", "zh"],
+      "prefetch": ["k2-fsa/OmniVoice"],
+      "expressive": {
+        "emotion": "none",
+        "sounds": { "laugh": "[laughter]", "chuckle": "[laughter]", "giggle": "[laughter]", "sigh": "[sigh]" }
+      }
+    },
+    {
+      "name": "dia",
+      "label": "Dia",
+      "note": "English dialogue with many non-verbal sounds (laughs, sighs, gasps, coughs, throat clearing), cloning from the clip and its transcript; without a clip each sentence may get another voice",
+      "pip": ["git+https://github.com/nari-labs/dia.git"],
+      "module": "dia",
+      "port": 8772,
+      "clones": true,
+      "transcript": true,
+      "languages": ["en"],
+      "start_timeout": 900,
+      "prefetch": ["nari-labs/Dia-1.6B-0626"],
+      "expressive": {
+        "emotion": "none",
+        "sounds": {
+          "laugh": "(laughs)", "chuckle": "(chuckle)", "giggle": "(laughs)", "sigh": "(sighs)", "gasp": "(gasps)",
+          "cough": "(coughs)", "clear_throat": "(clears throat)", "sniff": "(sniffs)", "groan": "(groans)", "breath": "(inhales)"
+        }
+      }
+    },
+    {
       "name": "test",
       "label": "Test tone",
       "note": "a tone instead of speech, to check the sidecar without a model",

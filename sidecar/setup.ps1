@@ -41,7 +41,12 @@ $ErrorActionPreference = 'Stop'
 # come from backends.json, which voice and the sidecar read too.
 $registry = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'backends.json') -Raw | ConvertFrom-Json
 $packages = @{}
-foreach ($r in $registry.backends) { $packages[$r.name] = @{ pip = @($r.pip); module = [string]$r.module; prefetch = @($r.prefetch | Where-Object { $_ }) } }
+foreach ($r in $registry.backends) {
+    # A backend may run in another's environment (env): it installs there and
+    # its stages are recorded under its own name.
+    $envName = if ($r.env) { [string]$r.env } else { [string]$r.name }
+    $packages[$r.name] = @{ pip = @($r.pip); module = [string]$r.module; prefetch = @($r.prefetch | Where-Object { $_ }); env = $envName }
+}
 $names = @($registry.backends | ForEach-Object name)
 $usage = "usage: setup.ps1 -Backend $($names -join '|')[,...] [-Gpu auto|nvidia|amd|cpu] [-Cuda cu128] [-TorchProfile name|file.json] [-TorchWheels url,...] [-Python path] [-Target dir] [-Force]"
 # -File passes a comma list as one string.
@@ -159,9 +164,13 @@ function Save-State([string]$envDir, $s) { $s | ConvertTo-Json | Set-Content -Li
 $done = @(); $skipped = @()
 foreach ($b in $Backend) {
     Write-Host "`n== $b =="
-    $envDir = Join-Path $Target "envs\$b"
+    $spec = $packages[$b]
+    $envDir = Join-Path $Target "envs\$($spec.env)"
     $py = Join-Path $envDir 'Scripts\python.exe'
     $state = Read-State $envDir
+    $own = $spec.env -eq $b
+    $backendKey = if ($own) { 'backend' } else { "backend:$b" }
+    $prefetchKey = if ($own) { 'prefetch' } else { "prefetch:$b" }
     # Another PyTorch build: start over, and replace the installed torch (pip
     # keeps an installed build of the same version otherwise).
     $switched = [bool]($state.gpu -and $state.gpu -ne $Gpu)
@@ -186,8 +195,13 @@ foreach ($b in $Backend) {
         if ($LASTEXITCODE) { $reason = 'this PyTorch build has no torch.distributed.ReduceOp, which F5-TTS imports' } else { $reason = '' }
     }
     if ($reason) { Write-Warning "skipping ${b}: $reason"; $skipped += $b; continue }
-    $spec = $packages[$b]
-    if ($spec.pip -and -not $state.backend) {
+    # In another backend's environment, what is there already is enough: pip
+    # would only pull that package's old torch pin and put the GPU build back.
+    if (-not $own -and $spec.module -and -not $state[$backendKey]) {
+        Invoke-Native { & $py -c "import $($spec.module)" 2>$null }
+        if (-not $LASTEXITCODE) { $state[$backendKey] = $true; Save-State $envDir $state }
+    }
+    if ($spec.pip -and -not $state[$backendKey]) {
         # Tested pins, when the repository has them for this backend and GPU.
         $constraints = Join-Path $PSScriptRoot "requirements\$b-$Gpu.txt"
         $extra = if (Test-Path -LiteralPath $constraints) { @('-c', $constraints) } else { @() }
@@ -204,11 +218,11 @@ foreach ($b in $Backend) {
         }
         & $py -c "import $($spec.module)"
         if ($LASTEXITCODE) { throw "$b installed but does not import; see the error above" }
-        $state.backend = $true; Save-State $envDir $state
+        $state[$backendKey] = $true; Save-State $envDir $state
     }
     # Model weights the backend loads on first use come now, into the
     # sidecar's models folder (where the engines look), with this progress.
-    if ($spec.prefetch -and -not $state.prefetch) {
+    if ($spec.prefetch -and -not $state[$prefetchKey]) {
         $env:HF_HOME = Join-Path $Target 'models'
         $env:HF_HUB_DISABLE_SYMLINKS_WARNING = '1'
         foreach ($m in $spec.prefetch) {
@@ -216,7 +230,7 @@ foreach ($b in $Backend) {
             & $py -c "import sys; from huggingface_hub import snapshot_download; print(snapshot_download(sys.argv[1]))" $m
             if ($LASTEXITCODE) { throw "downloading $m failed (rerun to resume)" }
         }
-        $state.prefetch = $true; Save-State $envDir $state
+        $state[$prefetchKey] = $true; Save-State $envDir $state
     }
     $done += $b
 }

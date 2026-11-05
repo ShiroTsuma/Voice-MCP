@@ -527,6 +527,9 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					return nil
 				}
 				if action == "remove" {
+					if b, ok := sidecar.Find(f.Backend); ok && b.EnvName() != f.Backend {
+						return fmt.Errorf("%s shares the %s environment; remove that instead", f.Title, b.EnvName())
+					}
 					dir := filepath.Join(httpengine.SidecarDir, "envs", f.Backend)
 					log("Removing " + dir)
 					if err := os.RemoveAll(dir); err != nil {
@@ -603,28 +606,42 @@ func claudePluginOn(claudeHome string) bool {
 func sidecarStatus(name string) integrations.Status {
 	install := []integrations.Action{{ID: "install", Label: "Install", Long: true, Primary: true}}
 	remove := integrations.Action{ID: "remove", Label: "Remove"}
-	var st struct {
-		Backend bool   `json:"backend"`
-		GPU     string `json:"gpu"`
+	// A backend in another's environment (chatterbox_turbo in chatterbox's)
+	// is recorded there under its own name, and Remove leaves that alone.
+	env, shared := name, false
+	if sb, ok := sidecar.Find(name); ok && sb.EnvName() != name {
+		env, shared = sb.EnvName(), true
 	}
-	if b, err := os.ReadFile(filepath.Join(httpengine.SidecarDir, "envs", name, ".voice-setup.json")); err == nil {
+	var st map[string]any
+	if b, err := os.ReadFile(filepath.Join(httpengine.SidecarDir, "envs", env, ".voice-setup.json")); err == nil {
 		// setup.ps1 writes it with Windows PowerShell, which starts it with a BOM.
 		json.Unmarshal(bytes.TrimPrefix(b, []byte("\xEF\xBB\xBF")), &st)
-		if st.Backend {
+		key := "backend"
+		if shared {
+			key = "backend:" + name
+		}
+		gpu, _ := st["gpu"].(string)
+		if on, _ := st[key].(bool); on {
 			// Loaded or not: voice loads it on first use and frees the graphics
 			// card after the idle time; Load now and Unload do it by hand.
-			acts := []integrations.Action{{ID: "load", Label: "Load now", Long: true}, {ID: "install", Label: "Reinstall", Long: true}, remove}
-			detail := "Installed for " + st.GPU + "; it loads when a voice uses it and frees the graphics card when idle (General, Free idle models)"
+			acts := []integrations.Action{{ID: "load", Label: "Load now", Long: true}, {ID: "install", Label: "Reinstall", Long: true}}
+			if !shared {
+				acts = append(acts, remove)
+			}
+			detail := "Installed for " + gpu + "; it loads when a voice uses it and frees the graphics card when idle (General, Free idle models)"
 			if e, ok := gpuEngine(name); ok {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				loaded := e.Loaded(ctx)
 				cancel()
 				if loaded {
 					acts[0] = integrations.Action{ID: "unload", Label: "Unload"}
-					detail = "Loaded on the graphics card (" + st.GPU + "); it frees it when idle, or now with Unload"
+					detail = "Loaded on the graphics card (" + gpu + "); it frees it when idle, or now with Unload"
 				}
 			}
 			return integrations.Status{State: integrations.On, Detail: detail, Actions: acts}
+		}
+		if shared {
+			return integrations.Status{State: integrations.Missing, Detail: "Installs into the " + env + " environment, beside it", Actions: install}
 		}
 		return integrations.Status{State: integrations.Partly, Detail: "The setup stopped before it finished; run it again to resume", Actions: append(install, remove)}
 	}
