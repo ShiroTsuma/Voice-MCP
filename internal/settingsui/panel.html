@@ -2246,6 +2246,8 @@ function gpuVerdict(g, peak, voices) {
   if (g.mode === 'one') return voices.length > 1 ? 'One at a time: when a speaker on another GPU voice talks, that voice loads first (a few seconds).' : 'One at a time: your one GPU voice stays loaded until idle.';
   if (g.mode === 'gb') {
     const alone = voices.filter(v => v.gb > g.limit_gb).map(v => v.label);
+    if (voices.length === 1) return peak <= g.limit_gb ? 'Within your ' + gbText(g.limit_gb) + ' budget.'
+      : voices[0].label + ' takes more than your ' + gbText(g.limit_gb) + ' budget by itself: it still speaks, and any other GPU voice is freed for it.';
     let t = peak <= g.limit_gb ? 'Within your ' + gbText(g.limit_gb) + ' budget: they can all stay loaded.'
       : 'Over your ' + gbText(g.limit_gb) + ' budget: they take turns, and the one used least recently is freed when another loads.';
     if (alone.length) t += ' ' + alone.join(' and ') + (alone.length > 1 ? ' take' : ' takes') + ' more than the budget by ' + (alone.length > 1 ? 'themselves and run' : 'itself and runs') + ' alone.';

@@ -622,6 +622,7 @@ const gbText = gb => (gb >= 10 || gb === Math.round(gb) ? Math.round(gb) : gb.to
 function gpuVerdict(g, peak, voices) {
   if (voices.length === 0) return 'None of your voices runs on the graphics card.';
   if (g.mode === 'one') return voices.length > 1 ? 'One at a time: when a speaker on another GPU voice talks, that voice loads first (a few seconds).' : 'One at a time: your one GPU voice stays loaded until idle.';
+  if (g.mode === 'gb' && voices.length === 1) return peak <= g.limit_gb ? 'Within your ' + gbText(g.limit_gb) + ' budget.' : voices[0].label + ' takes more than your ' + gbText(g.limit_gb) + ' budget by itself: it still speaks, and any other GPU voice is freed for it.';
   if (g.mode === 'gb') return peak <= g.limit_gb ? 'Within your ' + gbText(g.limit_gb) + ' budget: they can all stay loaded.' : 'Over your ' + gbText(g.limit_gb) + ' budget: they take turns, and the one used least recently is freed when another loads.';
   if (g.total_gb && peak > g.total_gb * 0.9) return 'No limit, and together they may not fit the card\'s ' + gbText(g.total_gb) + ': a budget (General) would make them take turns.';
   return 'No limit: they stay loaded until idle.';

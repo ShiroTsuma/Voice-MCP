@@ -255,7 +255,7 @@ func gpuOverview(cfg *preset.Config) map[string]any {
 			for _, c := range b.Option.Choices {
 				if c.Value != cur && c.VRAM > 0 && c.VRAM < u.GB && peak-u.GB+c.VRAM <= limit {
 					hints = append(hints, map[string]string{
-						"text":        fmt.Sprintf("%s at %s (about %s) would let them all fit.", b.Label, c.Label, gbText(c.VRAM)),
+						"text":        fmt.Sprintf("%s at %s (about %s) would %s.", b.Label, c.Label, gbText(c.VRAM), map[bool]string{true: "fit the budget", false: "let them all fit"}[len(voices) == 1]),
 						"label":       "Use " + c.Label,
 						"integration": integrationOf(b.Name),
 						"action":      "choose:" + c.Value,
