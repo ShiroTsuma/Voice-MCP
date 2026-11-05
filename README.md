@@ -6,14 +6,14 @@
 
 <p align="center">
   <strong>Hear your coding agents. Answer them by voice.</strong><br>
-  A local MCP server that gives Claude Code and Codex a voice on Windows: agents say when they finish or need you, and you dictate back.
+  A local MCP server that gives your AI agents a voice on Windows: agents say when they finish or need you, and you dictate back. Claude Code and Codex are set up for you; any other MCP client or LLM agent can use it too.
 </p>
 
 <p align="center">
   <a href="https://github.com/ShiroTsuma/Voice-MCP/releases/latest"><img src="https://img.shields.io/badge/Download-Windows_x64-8ab4f8?style=flat-square" alt="Download for Windows x64"></a>
   <img src="https://img.shields.io/badge/MCP-stdio_server-8ab4f8?style=flat-square" alt="MCP stdio server">
   <img src="https://img.shields.io/badge/Speech-offline-98c379?style=flat-square" alt="Speech runs offline">
-  <img src="https://img.shields.io/badge/Clients-Claude_Code_%7C_Codex-e5c07b?style=flat-square" alt="Claude Code and Codex">
+  <img src="https://img.shields.io/badge/Clients-Claude_Code_%7C_Codex_%7C_any_MCP_client-e5c07b?style=flat-square" alt="Claude Code, Codex and any MCP client">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-98c379?style=flat-square" alt="GPL-3.0 license"></a>
 </p>
 
@@ -21,6 +21,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#automatic-agent-setup">Automatic agent setup</a> ·
   <a href="#talk-to-your-agents">Talk to your agents</a> ·
+  <a href="#other-agents-and-llms">Other agents and LLMs</a> ·
   <a href="#characters">Characters</a> ·
   <a href="#add-your-own-voice">Add your own voice</a> ·
   <a href="#updating-from-an-earlier-version">Updating</a> ·
@@ -35,7 +36,7 @@
 
 You run several agent sessions and none of them is on screen. voice gives each one a name and a voice: when a turn ends or an agent needs a decision, you hear it ("shop-api. Two tests fail. Should I fix them now?"). Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>, say "Anna, yes, fix them", and the message reaches that session, whether it is busy, idle or in a window you cannot see.
 
-voice is an [MCP](https://modelcontextprotocol.io) server: any MCP client can use its tools to speak (`voice_speak`), ask and listen for a spoken answer (`voice_listen`), control playback and characters and read the transcript (`voice_control`) and clone voices (`voice_clone`); see [MCP tools](#mcp-tools). For Claude Code and Codex it adds hooks and a Claude Code mod, so announcements and dictation work even when the agent does not call a tool. Any other agent gets the same through the [session API](docs/http-api.md), with [examples/agent.py](examples/agent.py) as a starting point.
+voice is an [MCP](https://modelcontextprotocol.io) server: any MCP client can use its tools to speak (`voice_speak`), play a scene in several voices (`voice_scene`), ask and listen for a spoken answer (`voice_listen`), control playback and characters and read the transcript (`voice_control`) and clone voices (`voice_clone`); see [MCP tools](#mcp-tools). For Claude Code and Codex it adds hooks and a Claude Code mod, so announcements and dictation work even when the agent does not call a tool. Any other agent gets the same through the [session API](docs/http-api.md), with [examples/agent.py](examples/agent.py) as a starting point.
 
 Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recognition (Parakeet, Whisper) run on the CPU through sherpa-onnx; nothing you say leaves the machine. One Go binary that installs itself.
 
@@ -140,7 +141,7 @@ The agent installs and tests voice. Trusting the Codex hooks, restarting session
 
 **Answering them.** Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>, speak, then pause for two seconds or press the hotkey again. Your words appear in the settings window as you say them; at the end the whole recording is transcribed offline once more and delivered:
 
-- **to the agent you name**: start with its name ("Clara, add a dark theme"), with **Pick the agent by name** on (Dictation);
+- **to the agent you name**: start with its name ("Clara, add a dark theme"), or put it right after a short reply ("Sure, Clara. Remove them."), with **Pick the agent by name** on (Dictation). The words an address is read by (openers, "everyone", ...) come from per-language files; a JSON file of your own in the data folder's `addressing` folder adds words or another language;
 - otherwise **to the agent that spoke last** or most recently ran a hook.
 
 How it arrives depends on the agent's state:
@@ -154,6 +155,33 @@ How it arrives depends on the agent's state:
 | Asking you a question (Claude Code) | What you say answers the dialog, as if you had typed it under "Other" |
 
 Press <kbd>Esc</kbd> while dictating to drop the recording. Saying "cancel" alone, or ending with a sentence of its own such as "Scrap it." or "Cancel it.", drops it too; "start over" begins again. Nothing that could not be delivered is lost: it lands on the clipboard and voice tells you so.
+
+## Other agents and LLMs
+
+voice is not tied to Claude Code and Codex. They are the two it sets up for you; anything else connects in one of two ways.
+
+**Any MCP client.** Desktop chat apps, editors and agent frameworks that speak MCP get the same tools: `voice_speak`, `voice_scene`, `voice_listen`, `voice_control` and `voice_clone`. Add voice as a stdio server; most clients take this form in their MCP settings (paths from `mcp-install`; `voice paths` shows yours):
+
+```json
+{
+  "mcpServers": {
+    "voice": {
+      "command": "C:\\Users\\you\\.agents\\bin\\shared-mcp.exe",
+      "args": ["--idle-seconds", "300", "--", "C:\\Users\\you\\.agents\\tools\\voice\\binary-runtime\\voice.exe", "mcp"]
+    }
+  }
+}
+```
+
+The server's instructions tell the model when to speak and how briefly, so a client needs nothing else. What only Claude Code and Codex have are the hooks: there, voice announces a finished turn and passes dictation to a busy agent even when the model calls no tool. In another client the model speaks when it calls `voice_speak`, and your dictation reaches it as typed text in its window, or through `voice_listen` when the model asks.
+
+**Any LLM agent, with or without MCP.** An agent loop of your own, on a cloud model or a local one (Ollama, LM Studio, llama.cpp: anything with an OpenAI-compatible API), uses the small [session API](docs/http-api.md) over HTTP on this PC: it registers a session with a name, says what it wants said, reports when its turn ends, and polls for what you dictate to it, busy or idle, just like the built-in clients. [examples/agent.py](examples/agent.py) is a complete agent in plain Python on a local model:
+
+```powershell
+python examples/agent.py --name Mira --model qwen2.5:0.5b
+```
+
+Then say "Mira, hello": it answers aloud, and its turns show in the transcript beside your other sessions. A reply that starts with "@Name:" goes to another session, so agents can talk to each other.
 
 ## Characters
 
@@ -179,7 +207,7 @@ When characters speak, the agent passes the whole scene in **one** `voice_scene`
 
 `pause` sets the silence after a line in seconds (up to 10); a line with only a pause is a break between beats or scenes.
 
-Text can carry voice's own tags: `{laugh}`, `{sigh}`, `{cough}` and the other sounds, and `{pause}` or `{pause:1.5}`. Each engine declares, in one form, which sounds it makes and how it shows a `mood` (none, intensity, labels or an instruction); voice turns a tag into the engine's own token or drops it, so a tag is never read aloud, and `*laughs*` in prose counts as `{laugh}`. Integrations shows each voice engine's sounds and moods, and `voice_control list_presets` gives them per voice. Of the engines voice runs itself, Chatterbox shows moods (as intensity); **Chatterbox Turbo** (English) makes laughs, sighs, coughs and more and shows a few moods as labels; **OmniVoice** (600+ languages, Polish too) laughs and sighs. **Higgs Audio v3** makes sounds and shows moods, on a speech server of your own ([docs/higgs-audio.md](docs/higgs-audio.md)); Integrations sets that server's address. `{pause}` works with all of them.
+Text can carry voice's own tags: `{laugh}`, `{sigh}`, `{cough}` and the other sounds, and `{pause}` or `{pause:1.5}`. Each engine declares, in one form, which sounds it makes and how it shows a `mood` (none, intensity, labels or an instruction); voice turns a tag into the engine's own token or drops it, so a tag is never read aloud, and `*laughs*` in prose counts as `{laugh}`. Integrations shows each voice engine's sounds and moods, and `voice_control list_presets` gives them per voice. Of the engines voice runs itself, Chatterbox shows moods (as intensity); **Chatterbox Turbo** (English) makes laughs, sighs, coughs and more and shows a few moods as labels; **OmniVoice** (600+ languages) laughs and sighs. **Higgs Audio v3** makes sounds and shows moods, on a speech server of your own ([docs/higgs-audio.md](docs/higgs-audio.md)); Integrations sets that server's address. `{pause}` works with all of them.
 
 A line can also carry what is shown and never spoken: `kind` (`dialogue`, `narration` or `thought`), `mood`, `action` (a stage direction; a line with only an action is shown, not said) and `to` (whom it is said to). `scene` on the call gives the `title`, `location`, `time` and a `background` name. voice keeps all of it in the transcript and writes it into the reading window; the built-in look shows only some, and a theme decides the rest. Nothing of it goes back to the agent.
 
@@ -215,7 +243,7 @@ Variables: `--ground`, `--ink`, `--ink-2`, `--ink-3`, `--you`, `--plain`, `--ui`
 A voice comes in three layers, each in `config.toml` next to `voice.exe` (create it from `config.example.toml`):
 
 1. An **engine** makes the sound. Kokoro, Piper, Windows SAPI and the GPU backends (Chatterbox, Chatterbox Turbo, XTTS, F5, Qwen3-TTS, OmniVoice) are built in. Any program that writes a WAV file can be another one (`type = "exec"`), and so can any server that speaks voice's HTTP protocol (`type = "http"`).
-2. A **preset** picks an engine and tunes it: voice, speed, pitch, effects, a different engine for Polish. The built-in `calm-mature` is Kokoro's `af_nicole`, slower and lower.
+2. A **preset** picks an engine and tunes it: voice, speed, pitch, effects, another engine or voice for another language. The built-in `calm-mature` is Kokoro's `af_nicole`, slower and lower.
 3. A **character** speaks with a preset. Pick it in the Characters window (Voice), or set `preset` in its `[[characters]]` entry.
 
 For example, Chatterbox's own voice for one character, and a program of your own for another:
@@ -224,7 +252,7 @@ For example, Chatterbox's own voice for one character, and a program of your own
 # 2. A preset on a built-in engine (install Chatterbox in Integrations first).
 [presets.rebekka-voice]
 engine = "chatterbox"
-description = "Chatterbox, English and Polish"
+description = "Chatterbox, 23 languages"
 
 # 1. An engine of your own: any command that turns text into a WAV.
 #    Placeholders: {text} {voice} {lang} {speed} {wpm} {out}; without {text}
@@ -292,6 +320,7 @@ Close Codex and Claude Code, extract the new release over the old folder (your `
 
 **Both**
 
+- Installed with `mcp-install` 0.3.9 or newer, your agents run voice through one shared gateway (`~/.agents/bin/shared-mcp.exe`): a later voice update no longer cuts them off, and a session keeps its tools without a restart. Sessions started before that install need one last restart.
 - If an announcement plays twice after a turn, run `.\voice.exe install` again: an update of the Codex app may wrap voice's notify inside its own, and voice unwraps it.
 - `serve.log` in the data folder shows where each dictation went (`dictation: queued … for Annie (its Claude Code mod submits them)`, `… in Codex's queue`, `… busy (its next hook passes them on)`).
 
@@ -339,7 +368,7 @@ One background process, `voice serve`, owns the audio device, the models and the
 
 ### Dictation in detail
 
-voice knows the agents: the shared-mcp gateway passes each agent's process ID with its calls, and the hooks pass theirs. The recognizer is `[listen] model` (Parakeet handles Polish and English).
+voice knows the agents: the shared-mcp gateway passes each agent's process ID with its calls, and the hooks pass theirs. The recognizer is `[listen] model` (Parakeet: 25 European languages; Whisper: about 100).
 
 - **The agent is working** (Claude Code between its `UserPromptSubmit` and `Stop` hooks, Codex between its hooks): voice queues the message. The next hook hands it over: after the current tool call as context ("the user just said ..."), or at the end of the turn, which then goes on to answer it.
 - **The session runs voice's Claude Code mod**: the message waits in voice, and the mod submits it as your prompt once the session is idle, on screen or not. Nothing is typed. The status line shows the name you dictate to the session by (🎙 Annie). The mod polls voice on 127.0.0.1 every 1.5 s, with the address and token voice writes to `%APPDATA%\voice\daemon.json` while it runs; see [claude-plugin/voice-dictation](claude-plugin/voice-dictation/README.md). While a question dialog (AskUserQuestion) is open, the mod reads the question aloud and what you dictate answers it; a click still works.
@@ -370,10 +399,11 @@ Characters are `[[characters]]` in `config.toml`: `name`, `traits = [...]`, `des
 
 ### MCP tools
 
-- `voice_speak(text, intent, lang, interrupt)` queues speech and returns at once.
-- `voice_control(action: status|stop|mute|unmute|list_presets|set_preset|register|list_characters|set_character|transcript, ...)`. `transcript` returns the newest lines of what voice said and what the user dictated, with the session each was for and where it went; `session` filters by a session's or character's name (or `me`), `limit` sets how many (20 by default, 50 at most). The last 50 lines are kept in `transcript.json` in the data folder, so they survive a restart.
+- `voice_speak(text, intent, mood, lang, interrupt, voice)` queues a short message and returns at once, with an id; `voice_control status` with that id says whether it was heard.
+- `voice_scene(lines, scene, mode, save_to, lang)` says a whole scene: lines in several voices (characters or presets) with kinds, moods, stage directions and pauses. `mode`: `play` while it renders, `render` all of it first (one engine at a time, unloading a GPU model before the next), `auto` (the default) renders first when the voices need GPU models that may not fit together. `save_to` writes a WAV or MP3 file instead.
+- `voice_control(action: status|stop|mute|unmute|list_presets|set_preset|register|list_characters|set_character|set_style|list_themes|set_theme|transcript, ...)`. `transcript` returns the newest lines of what voice said and what the user dictated, with the session each was for and where it went; `session` filters by a session's or character's name (or `me`), `limit` sets how many (20 by default, 50 at most). The last 50 lines are kept in `transcript.json` in the data folder, so they survive a restart.
 - `voice_listen(prompt, wait_seconds, max_seconds)` optionally asks aloud, then records until the user pauses and returns `{"text","lang","seconds"}`. The microphone is open only during the call, between two chimes, and no voice process speaks meanwhile.
-- `voice_clone(action: record|add|list|preview|set_transcript|remove, ...)` creates a voice from the microphone (`record`, `seconds`) or a clip (`add`); both refuse without `rights_confirmed=true`, which the agent may only pass after the user confirms they may use that voice.
+- `voice_clone(action: record|add|design|list|preview|set_transcript|remove, ...)` creates a voice from the microphone (`record`, `seconds`) or a clip (`add`); both refuse without `rights_confirmed=true`, which the agent may only pass after the user confirms they may use that voice. `design` makes a new voice from a description (Qwen3-TTS).
 
 Server instructions tell agents to speak rarely and briefly, in English.
 
@@ -426,13 +456,13 @@ Presets combine an engine, voice, speed, pitch, effects and per-language overrid
 | `system` | Windows SAPI, no downloads |
 | `<name>` | one per cloned voice, by its name (earlier versions called it `clone-<name>`, which still works) |
 
-English is the default language (`default_lang`); the Polish Piper voices are used only when a request asks for `pl`.
+English is the default language (`default_lang`); a preset can give another language its own engine or voice (`lang.<code>`), used only when a request asks for that language.
 
 Engine types: `sherpa` (Kokoro, Piper/VITS, Pocket, ZipVoice in process), `http` (sidecar or any server speaking its protocol), `exec` (any program that writes WAV; `{ref}` and `{ref_text}` placeholders for cloning) and `sapi`.
 
 ### Cloning
 
-In the settings window: Voice clone → pick the engine (the installed ones first: Pocket on the CPU for English, Chatterbox or XTTS on the GPU for Polish too, Qwen3-TTS on the GPU for the closest English clone), then record from the microphone or drop a sound file. From the command line:
+In the settings window: Voice clone → pick the engine (the installed ones first: Pocket on the CPU for English, Chatterbox, XTTS or OmniVoice on the GPU for other languages, Qwen3-TTS on the GPU for the closest English clone), then record from the microphone or drop a sound file. From the command line:
 
 ```powershell
 voice clone record me -rights "my own voice"      # or: voice clone add me D:\clips\me.wav ...
@@ -440,7 +470,7 @@ voice clone preview me
 voice say -preset me "Hello."
 ```
 
-`record` counts down with three ticks, opens the microphone with a chime for 12 s (`-seconds 6..30`) and closes it with another; read a few natural sentences aloud. The recording is checked before it is used: almost silent or heavily clipped audio is refused with what to fix; quiet, slightly clipped or noisy audio is added with a warning. The clip is converted to mono 24 kHz, trimmed, capped at 15 s and normalized; 5-15 s of one clear speaker works best. Non-WAV input needs `ffmpeg` on PATH. When a recognition model is installed the clip is transcribed automatically (ZipVoice, F5 and Qwen3-TTS need the transcript). The default engine is Pocket (CPU, English); pass `-engine chatterbox` or `xtts` for Polish once the sidecar is set up.
+`record` counts down with three ticks, opens the microphone with a chime for 12 s (`-seconds 6..30`) and closes it with another; read a few natural sentences aloud. The recording is checked before it is used: almost silent or heavily clipped audio is refused with what to fix; quiet, slightly clipped or noisy audio is added with a warning. The clip is converted to mono 24 kHz, trimmed, capped at 15 s and normalized; 5-15 s of one clear speaker works best. Non-WAV input needs `ffmpeg` on PATH. When a recognition model is installed the clip is transcribed automatically (ZipVoice, F5 and Qwen3-TTS need the transcript). The default engine is Pocket (CPU, English); pass `-engine chatterbox`, `xtts` or `omnivoice` for other languages once the sidecar is set up.
 
 Only clone a voice you have the right to use.
 
@@ -456,7 +486,7 @@ Recognizers mishear names they have never heard. voice corrects the text afterwa
 {
   "id": "my-team",
   "title": "Our project names",
-  "languages": ["pl", "en"],
+  "languages": ["en"],
   "words": { "Kubernetes": ["kubernetis"], "Grafana": [] }
 }
 ```
@@ -475,7 +505,7 @@ The easiest way is the Integrations window (settings window → Integrations →
 
 **Saved voice prompts.** Qwen3-TTS saves what it computes from a cloned voice's recording as a **voice prompt** (`voices\<name>\prompt.pt`): the speaker embedding, the reference audio's codes, the transcript and the mode flags, with the model and its revision. It is made once, when the voice is cloned. Speech then needs no recording: the WAV is not read and not even looked for, so a voice made from a recording you may not keep around goes on speaking. The prompt stays in memory between sentences and is read from disk after a restart. The recording as it came is kept as `source.<ext>` next to the trimmed `ref.wav`, and the prompt is made from it. `voice clone prompt <name>` makes the prompt again, for example for the other model size; until then that size speaks from the recording. A reference description from a dataset tool works as the clip: `voice clone add luna reference.json -engine qwen3`, where the JSON holds `audio` and `text`.
 
-**Qwen3-TTS** (`qwen3`) clones from the clip and its transcript, not only from a speaker embedding, and comes closest to the recorded voice. It speaks ten languages: English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish and Italian. **Polish is not one of them**, so use Chatterbox or XTTS for Polish. The Integrations window offers two sizes: 1.7B, the default and closest, and 0.6B, faster and lighter. A change applies from the next sentence. On NVIDIA it runs in bfloat16 with PyTorch's SDPA attention; FlashAttention is not needed. Without a transcript it falls back to the speaker embedding alone, which sounds less alike, so voice transcribes the clip when speech recognition is installed.
+**Qwen3-TTS** (`qwen3`) clones from the clip and its transcript, not only from a speaker embedding, and comes closest to the recorded voice. It speaks ten languages: English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish and Italian. For other languages use Chatterbox, XTTS or OmniVoice. The Integrations window offers two sizes: 1.7B, the default and closest, and 0.6B, faster and lighter. A change applies from the next sentence. On NVIDIA it runs in bfloat16 with PyTorch's SDPA attention; FlashAttention is not needed. Without a transcript it falls back to the speaker embedding alone, which sounds less alike, so voice transcribes the clip when speech recognition is installed.
 
 GPUs: NVIDIA gets CUDA PyTorch (`-cuda cu128` default, needed for RTX 50). AMD gets AMD's ROCm PyTorch for Windows from a profile in `sidecar\profiles` (`amd-rocm-windows`: ROCm 7.2.1, PyTorch 2.9.1, Python 3.12, for Radeon RX 9070/9070 XT/9060 XT, RX 7900 XTX, RX 7700 and AI PRO R9700; driver 26.2.2 or newer). A newer ROCm release from [AMD's install page](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html) goes in as another profile (`-profile file.json`) or with `-torch-wheels`. F5-TTS needs `torch.distributed`, which AMD's Windows build lacks: setup checks that and skips f5 before downloading it. Tested pins for a backend go in `sidecar\requirements\<backend>-<gpu>.txt` (used as pip constraints). Everything outside the sidecar (Kokoro, Piper, Pocket cloning, Parakeet/Whisper listening) runs on the CPU and works the same on AMD and NVIDIA.
 
