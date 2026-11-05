@@ -486,6 +486,27 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					}
 					return saveSidecarOption(b.Name, b.Option.Key, value)
 				}
+				if action == "load" || action == "unload" {
+					e, ok := gpuEngine(f.Backend)
+					if !ok {
+						return fmt.Errorf("%s is not available in this voice", f.Title)
+					}
+					if action == "unload" {
+						ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+						defer cancel()
+						e.Unload(ctx)
+						log("Unloaded: the graphics card is free; the next sentence in its voice loads it again")
+						return nil
+					}
+					log("Loading " + f.Title + " on the graphics card; the first time can take minutes")
+					ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
+					defer cancel()
+					if err := e.Warm(ctx); err != nil {
+						return err
+					}
+					log("Loaded")
+					return nil
+				}
 				if action == "remove" {
 					dir := filepath.Join(httpengine.SidecarDir, "envs", f.Backend)
 					log("Removing " + dir)
@@ -568,8 +589,20 @@ func sidecarStatus(name string) integrations.Status {
 		// setup.ps1 writes it with Windows PowerShell, which starts it with a BOM.
 		json.Unmarshal(bytes.TrimPrefix(b, []byte("\xEF\xBB\xBF")), &st)
 		if st.Backend {
-			return integrations.Status{State: integrations.On, Detail: "Installed for " + st.GPU + "; it runs only while a voice uses it",
-				Actions: []integrations.Action{{ID: "install", Label: "Reinstall", Long: true}, remove}}
+			// Loaded or not: voice loads it on first use and frees the graphics
+			// card after the idle time; Load now and Unload do it by hand.
+			acts := []integrations.Action{{ID: "load", Label: "Load now", Long: true}, {ID: "install", Label: "Reinstall", Long: true}, remove}
+			detail := "Installed for " + st.GPU + "; it loads when a voice uses it and frees the graphics card when idle (General, Free idle models)"
+			if e, ok := gpuEngine(name); ok {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				loaded := e.Loaded(ctx)
+				cancel()
+				if loaded {
+					acts[0] = integrations.Action{ID: "unload", Label: "Unload"}
+					detail = "Loaded on the graphics card (" + st.GPU + "); it frees it when idle, or now with Unload"
+				}
+			}
+			return integrations.Status{State: integrations.On, Detail: detail, Actions: acts}
 		}
 		return integrations.Status{State: integrations.Partly, Detail: "The setup stopped before it finished; run it again to resume", Actions: append(install, remove)}
 	}
@@ -657,4 +690,27 @@ func serverStarting(id string) (time.Duration, bool) {
 	defer starting.Unlock()
 	at, ok := starting.at[id]
 	return time.Since(at), ok
+}
+
+// loadable is a GPU voice's engine that can be loaded and unloaded by hand.
+type loadable interface {
+	Warm(ctx context.Context) error
+	Loaded(ctx context.Context) bool
+	Unload(ctx context.Context)
+}
+
+// voiceEngine is an engine of the running voice (its speaker's).
+var voiceEngine func(name string) (engine.Engine, error)
+
+// gpuEngine is backend name's engine when voice runs it.
+func gpuEngine(name string) (loadable, bool) {
+	if voiceEngine == nil {
+		return nil, false
+	}
+	e, err := voiceEngine(name)
+	if err != nil {
+		return nil, false
+	}
+	l, ok := e.(loadable)
+	return l, ok
 }

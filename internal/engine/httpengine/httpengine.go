@@ -116,6 +116,18 @@ func SetIdle(seconds int) {
 // the first sentence is not late.
 func (e *Engine) Warm(ctx context.Context) error { return e.ensure(ctx) }
 
+// Loaded reports whether the engine's server runs with its model loaded.
+func (e *Engine) Loaded(ctx context.Context) bool { return e.healthy(ctx) }
+
+// Unload asks the engine's server to exit, freeing the graphics card; the
+// next sentence in its voice starts it again.
+func (e *Engine) Unload(ctx context.Context) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.shutdown(ctx)
+	e.running = nil
+}
+
 // chosen holds options set while voice runs (a model size picked in the
 // Integrations window), by engine name; they win over the start command's.
 var chosen sync.Map
