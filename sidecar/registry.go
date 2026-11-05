@@ -52,6 +52,17 @@ type Backend struct {
 	// Prefetch are Hugging Face models setup downloads with the backend, so
 	// the first sentence does not wait for them.
 	Prefetch []string `json:"prefetch"`
+	// Env is the Python environment it runs in (envs\<env>): another
+	// backend's, when it needs the same packages; empty is its own.
+	Env string `json:"env"`
+}
+
+// EnvName is the environment the backend runs in.
+func (b Backend) EnvName() string {
+	if b.Env != "" {
+		return b.Env
+	}
+	return b.Name
 }
 
 var backends = func() []Backend {
@@ -105,7 +116,7 @@ func (b Backend) Value(set map[string]string) string {
 // minutes, freeing the GPU.
 func (b Backend) Engine(set map[string]string) map[string]any {
 	port := strconv.Itoa(b.Port)
-	start := []any{"{python:" + b.Name + "}", "-m", "voice_sidecar", "--backend", b.Name, "--port", port, "--idle-seconds", "600"}
+	start := []any{"{python:" + b.EnvName() + "}", "-m", "voice_sidecar", "--backend", b.Name, "--port", port, "--idle-seconds", "600"}
 	if b.Option != nil {
 		start = append(start, "--option", b.Option.Key+"="+b.Value(set))
 	}

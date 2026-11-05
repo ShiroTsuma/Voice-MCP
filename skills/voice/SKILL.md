@@ -57,6 +57,12 @@ user asks for. `status` reports the active preset and the last error.
   nine other languages (not Polish; it needs the transcript), if the GPU
   sidecar is set up (`voice.exe sidecar setup chatterbox`, or `qwen3`).
 - `preview` before switching with `voice_control set_preset clone-<name>`.
+- `design` makes a new voice from a `description` in words (age, gender,
+  timbre, pace, mood, accent; English works best), with no recording and no
+  rights question. It needs Qwen3-TTS set up. The design model reads a
+  sample once, the sample becomes an ordinary cloned voice (so it sounds the
+  same every time), and a preview plays. Ask the user whether to keep it;
+  `remove` it if not, and try another description.
 
 ## Background process
 

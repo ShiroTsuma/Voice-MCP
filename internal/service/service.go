@@ -20,6 +20,7 @@ import (
 	"voice/internal/audio"
 	"voice/internal/clones"
 	"voice/internal/core"
+	"voice/internal/engine"
 	"voice/internal/engine/httpengine"
 	"voice/internal/listen"
 	"voice/internal/preset"
@@ -95,7 +96,17 @@ type CloneArgs struct {
 	Text            string  `json:"text,omitempty"`
 	Replace         bool    `json:"replace,omitempty"`
 	Seconds         float64 `json:"seconds,omitempty"` // record: length of the recording
+	// Description: design's voice in words ("a raspy older woman, slow and dry").
+	Description string `json:"description,omitempty"`
+	Lang        string `json:"lang,omitempty"` // design: the sample's language (default en)
 }
+
+// designEngine makes voices from a description (sidecar/backends.json).
+const designEngine = "qwen3_design"
+
+// designSample is what a designed voice reads once; it becomes the clone's
+// recording and transcript. About ten seconds, varied in tone.
+const designSample = "Hello there. This is a new voice, made from a short description. I can read you a story, answer a question, or let you know when the work is done. Shall we begin?"
 
 // API is what front ends call; Service and the daemon client implement it.
 type API interface {
@@ -674,6 +685,63 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 			}
 		}
 		return out, nil
+	case "design":
+		// A new voice from a description: the design model reads a sample
+		// once, and the sample becomes an ordinary cloned voice, so the voice
+		// is the same in every line. It plays a preview; remove drops it.
+		if err := need("name"); err != nil {
+			return nil, err
+		}
+		desc := strings.TrimSpace(a.Description)
+		if desc == "" {
+			return nil, userErr("design needs description: the voice in words, e.g. \"a raspy older woman, slow and dry, faint British accent\"")
+		}
+		if err := clones.ValidName(a.Name); err != nil {
+			return nil, UserError{err.Error()}
+		}
+		if _, err := clones.Get(a.Name); err == nil && !a.Replace {
+			return nil, userErr("a voice called %q exists; pick another name or pass replace=true", a.Name)
+		}
+		target := a.Engine
+		if target == "" {
+			target = "qwen3"
+		}
+		sample := strings.TrimSpace(a.Text)
+		if sample == "" {
+			sample = designSample
+		}
+		lang := a.Lang
+		if lang == "" {
+			lang = "en"
+		}
+		pcm, rate, err := s.design(ctx, desc, sample, lang)
+		if err != nil {
+			return nil, userErr("designing the voice failed: %v (it needs Qwen3-TTS installed, see Integrations, and a free graphics card)", err)
+		}
+		clip := filepath.Join(os.TempDir(), "voice-design-"+a.Name+".wav")
+		if err := os.WriteFile(clip, audio.EncodeWAV(pcm, rate), 0o644); err != nil {
+			return nil, err
+		}
+		defer os.Remove(clip)
+		res, err := s.Clone(ctx, CloneArgs{Action: "add", Name: a.Name, ClipPath: clip, Transcript: sample, Engine: target,
+			RightsConfirmed: true, Rights: "designed from a description; no recorded person", Replace: a.Replace})
+		if err != nil {
+			return nil, err
+		}
+		if err := clones.SetDesigned(a.Name, desc); err != nil {
+			return nil, err
+		}
+		out, _ := res.(map[string]any)
+		if out == nil {
+			out = map[string]any{"name": a.Name}
+		}
+		out["designed_from"] = desc
+		if _, err := s.Clone(ctx, CloneArgs{Action: "preview", Name: a.Name}); err != nil {
+			out["preview"] = "not played: " + err.Error()
+		} else {
+			out["preview"] = "playing; ask the user whether to keep it, and remove it if not"
+		}
+		return out, nil
 	case "make_prompt":
 		if err := need("name"); err != nil {
 			return nil, err
@@ -696,9 +764,9 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 	case "list":
 		rows := [][]any{}
 		for _, p := range clones.List() {
-			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Engine, p.Duration, p.Text != "", p.Source})
+			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Engine, p.Duration, p.Text != "", p.Source, p.Designed})
 		}
-		return map[string]any{"columns": []string{"name", "preset", "engine", "seconds", "transcript", "source"}, "rows": rows}, nil
+		return map[string]any{"columns": []string{"name", "preset", "engine", "seconds", "transcript", "source", "designed_from"}, "rows": rows}, nil
 	case "preview":
 		if err := need("name"); err != nil {
 			return nil, err
@@ -734,6 +802,27 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		return "removed " + a.Name, nil
 	}
 	return nil, userErr("unknown action %q", a.Action)
+}
+
+// design renders text in a voice made from desc by the design engine.
+func (s *Service) design(ctx context.Context, desc, text, lang string) ([]float32, int, error) {
+	e, err := s.Speaker.Engine(designEngine)
+	if err != nil {
+		return nil, 0, err
+	}
+	var pcm []float32
+	rate := 0
+	err = e.Synthesize(ctx, engine.Request{Text: text, Lang: lang, Speed: 1, Extra: map[string]any{"instruct": desc}}, func(c engine.Chunk) error {
+		if rate == 0 {
+			rate = c.SampleRate
+		}
+		pcm = append(pcm, c.PCM...)
+		return nil
+	})
+	if err == nil && (len(pcm) == 0 || rate == 0) {
+		err = errors.New("the design model returned no sound")
+	}
+	return pcm, rate, err
 }
 
 // KeepsPrompts reports whether an engine can save a voice prompt, so a

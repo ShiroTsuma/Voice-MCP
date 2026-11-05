@@ -16,6 +16,9 @@ type Request struct {
 	Lang  string // "pl", "en", ...
 	Voice Voice
 	Speed float64 // 1.0 = engine default
+	// Extra are per-request settings for engines that take them (the
+	// sidecar's "extra"), over the engine's own; others ignore them.
+	Extra map[string]any
 }
 
 // Voice selects a voice. Engines that do not support mixing use the heaviest

@@ -31,7 +31,7 @@ If the user asks for quiet, call voice_control with action "mute"; to change the
 
 voice_listen asks by voice and returns what the user said. Use it only when the user wants a spoken conversation (they asked for it or answer by voice); otherwise ask in text. If it returns no speech, ask in text instead of retrying.
 
-voice_clone makes a new voice from a recording. Only clone a voice the user says they have the right to use; ask them, and pass rights_confirmed only after they confirm. Preview the result before switching presets.`
+voice_clone makes a new voice from a recording, or designs one from a description (design). Only clone a recorded voice the user says they have the right to use; ask them, and pass rights_confirmed only after they confirm. Preview the result before switching presets; a designed voice the user does not like is removed.`
 
 var (
 	speakSchema = map[string]any{
@@ -194,12 +194,12 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 	})
 	s.AddTool(&mcp.Tool{
 		Name:        "voice_clone",
-		Description: "Create and manage cloned voices: record one from the microphone or import a clip. Only clone a voice the user has the right to use. After record or add, switch to it with voice_control set_preset clone-<name>.",
+		Description: "Create and manage cloned voices: record one from the microphone, import a clip, or design one from a description. Only clone a recorded voice the user has the right to use. Afterwards, switch to it with voice_control set_preset clone-<name>.",
 		InputSchema: cloneSchema,
 		Annotations: &mcp.ToolAnnotations{Title: "Clone voice", DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.CloneArgs
-		if err := decode(req, &a, "action", "name", "clip_path", "transcript", "engine", "rights_confirmed", "text", "seconds"); err != nil {
+		if err := decode(req, &a, "action", "name", "clip_path", "transcript", "engine", "rights_confirmed", "text", "seconds", "description", "lang"); err != nil {
 			return fail(err), nil
 		}
 		return result(api.Clone(ctx, a))

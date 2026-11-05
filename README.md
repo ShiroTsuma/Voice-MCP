@@ -442,6 +442,8 @@ voice say -preset clone-me "Hello."
 
 Only clone a voice you have the right to use.
 
+An agent can also design a new voice from a description: ask it for "a raspy older woman, slow and dry" and it calls `voice_clone` `design`. Qwen3-TTS's voice design model (downloaded on first use, about 4.5 GB, in the Qwen3-TTS environment) reads a sample sentence once in that voice; the sample becomes an ordinary cloned voice on Qwen3-TTS, so it sounds the same in every line, and a preview plays. Keep it, or have the agent remove it and try another description.
+
 ### Listening
 
 `[listen] model` picks the recognizer: Parakeet TDT v3 (default; fast, 25 European languages) or Whisper turbo (about 100 languages, several times slower on CPU). Silero VAD ends the recording after `end_silence` seconds of quiet.

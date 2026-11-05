@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
@@ -429,6 +430,14 @@ func (e *Engine) payload(req engine.Request) map[string]any {
 	payload := map[string]any{
 		"text": req.Text, "lang": req.Lang, "voice": req.Voice.Primary(),
 		"ref_audio": req.Voice.Ref, "ref_text": req.Voice.RefText, "speed": req.Speed, "extra": e.extra,
+	}
+	if len(req.Extra) > 0 {
+		extra := maps.Clone(e.extra)
+		if extra == nil {
+			extra = map[string]any{}
+		}
+		maps.Copy(extra, req.Extra)
+		payload["extra"] = extra
 	}
 	// A voice prompt this engine made, with the model it runs now: it reads
 	// that, not the recording. With another model size it uses the recording.

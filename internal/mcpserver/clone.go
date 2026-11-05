@@ -28,8 +28,8 @@ var cloneSchema = map[string]any{
 	"required": []string{"action"},
 	"properties": map[string]any{
 		"action": map[string]any{
-			"type": "string", "enum": []string{"record", "add", "list", "preview", "set_transcript", "make_prompt", "remove"},
-			"description": "record: record the user from the microphone (three ticks count down, a chime starts and ends it), check the quality and add it as a cloned voice; tell the user to read a few natural sentences aloud first. add: import an existing clip as a cloned voice (creates preset clone-<name>); list: stored voices; preview: say a sample with a voice; set_transcript: store what the clip says; make_prompt: make the voice's saved prompt again (qwen3 keeps one, so the voice speaks without its recording; add makes it already); remove: delete a voice.",
+			"type": "string", "enum": []string{"record", "add", "design", "list", "preview", "set_transcript", "make_prompt", "remove"},
+			"description": "record: record the user from the microphone (three ticks count down, a chime starts and ends it), check the quality and add it as a cloned voice; tell the user to read a few natural sentences aloud first. add: import an existing clip as a cloned voice (creates preset clone-<name>); design: make a new voice from a description in words (no recording, no rights question): it plays a preview, then ask the user whether to keep it and remove it if not; list: stored voices; preview: say a sample with a voice; set_transcript: store what the clip says; make_prompt: make the voice's saved prompt again (qwen3 keeps one, so the voice speaks without its recording; add makes it already); remove: delete a voice.",
 		},
 		"seconds":    map[string]any{"type": "number", "minimum": 6, "maximum": 30, "description": "record: length of the recording in seconds (default 12)."},
 		"name":       map[string]any{"type": "string", "description": "Voice name: lowercase letters, digits, - or _ (max 40)."},
@@ -43,7 +43,9 @@ var cloneSchema = map[string]any{
 			"type":        "boolean",
 			"description": "add: true only if the user explicitly told you they have the right to use this person's voice (their own voice, or the speaker's consent). Never assume it; ask the user.",
 		},
-		"text": map[string]any{"type": "string", "description": "preview: sentence to say (optional)."},
+		"text":        map[string]any{"type": "string", "description": "preview: sentence to say; design: what the sample reads, about ten seconds (both optional)."},
+		"description": map[string]any{"type": "string", "description": "design: the voice in words: age, gender, timbre, pace, mood, accent (\"a raspy older woman, slow and dry, faint British accent\"). English works best."},
+		"lang":        map[string]any{"type": "string", "description": "design: the sample's language (default en; Polish is not among Qwen3-TTS's)."},
 	},
 	"additionalProperties": false,
 }

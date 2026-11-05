@@ -60,6 +60,20 @@
       }
     },
     {
+      "name": "qwen3_design",
+      "label": "Qwen3-TTS voice design",
+      "note": "makes a new voice from a description, for voice_clone design; runs in the Qwen3-TTS environment",
+      "env": "qwen3",
+      "pip": ["qwen-tts"],
+      "module": "qwen_tts",
+      "port": 8769,
+      "clones": false,
+      "transcript": false,
+      "hidden": true,
+      "languages": ["de", "en", "es", "fr", "it", "ja", "ko", "pt", "ru", "zh"],
+      "start_timeout": 1800
+    },
+    {
       "name": "test",
       "label": "Test tone",
       "note": "a tone instead of speech, to check the sidecar without a model",

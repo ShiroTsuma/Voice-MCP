@@ -52,8 +52,11 @@ type Profile struct {
 	PromptEngine   string `toml:"prompt_engine,omitempty"`
 	PromptModel    string `toml:"prompt_model,omitempty"`
 	PromptRevision string `toml:"prompt_revision,omitempty"`
-	PromptPath     string `toml:"-"` // Prompt as a full path, when there is one
-	OriginalPath   string `toml:"-"`
+	// Designed is the description a voice was designed from (voice_clone
+	// design); empty for a recorded voice.
+	Designed     string `toml:"designed,omitempty"`
+	PromptPath   string `toml:"-"` // Prompt as a full path, when there is one
+	OriginalPath string `toml:"-"`
 }
 
 func dir(name string) string { return filepath.Join(Dir, name) }
@@ -171,6 +174,20 @@ func SetPrompt(name, engine, model, revision string) error {
 		return err
 	}
 	p.Prompt, p.PromptEngine, p.PromptModel, p.PromptRevision = "prompt.pt", engine, model, revision
+	var meta bytes.Buffer
+	if err := toml.NewEncoder(&meta).Encode(p); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir(name), "voice.toml"), meta.Bytes(), 0o644)
+}
+
+// SetDesigned records the description a voice was designed from.
+func SetDesigned(name, description string) error {
+	p, err := Get(name)
+	if err != nil {
+		return err
+	}
+	p.Designed = strings.TrimSpace(description)
 	var meta bytes.Buffer
 	if err := toml.NewEncoder(&meta).Encode(p); err != nil {
 		return err
