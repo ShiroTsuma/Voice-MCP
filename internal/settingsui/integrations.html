@@ -66,6 +66,8 @@
   .state.off::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
   .state.missing::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
   .about { margin: 3px 0 0; font: 13px/1.45 var(--ui-small); color: var(--ink-2); }
+  .expr { margin: 3px 0 0; font: 12px/1.6 var(--ui-small); color: var(--ink-3, var(--ink-2)); }
+  .expr .tok { font: 11.5px/1 ui-monospace, Consolas, monospace; color: var(--ink); background: var(--field); border-radius: 4px; padding: 1px 5px; }
   .detail { margin: 3px 0 0; font: 12.5px/1.45 var(--ui-small); color: var(--ink-3); user-select: text; }
   .detail a { color: var(--ink-2); }
   .acts { display: flex; gap: 8px; align-items: flex-start; }
@@ -229,6 +231,17 @@ const inGroup = (i, g) => i.group === g || (i.also || []).includes(g);
 // Language names from the browser, and what speaks the user's languages.
 const langName = code => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
 const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+const emotionText = { none: 'no moods', intensity: 'moods as intensity', labels: 'moods', instruct: 'any mood, by instruction' };
+function expressiveLine(x) {
+  const p = document.createElement('p'); p.className = 'expr';
+  const sounds = x.sounds || [];
+  const lab = document.createElement('span'); lab.textContent = sounds.length ? 'Sounds ' : 'No sound tags';
+  p.append(lab);
+  sounds.forEach(s => { const t = document.createElement('code'); t.className = 'tok'; t.textContent = '{' + s + '}'; p.append(t, ' '); });
+  const moods = (x.moods || []).filter(m => m !== 'any');
+  p.append(' · ' + (emotionText[x.emotion] || x.emotion) + (moods.length ? ': ' + moods.join(', ') : ''));
+  return p;
+}
 function languagesLine(it) {
   const langs = it.languages || [], mine = data.languages || [];
   if (!langs.length) return '';
@@ -290,6 +303,8 @@ function renderMain() {
       if (mine.length && !(it.languages || []).includes('*') && !mine.some(m => it.languages.includes(m))) l.classList.add('miss');
       left.append(l);
     }
+    // What it does with voice's sound tags ({laugh}) and moods, the same form for every voice engine.
+    if (it.expressive) left.append(expressiveLine(it.expressive));
     const bits = [it.status.detail, it.size].filter(Boolean);
     if (bits.length || it.link) {
       const d = document.createElement('p'); d.className = 'detail'; d.textContent = bits.join(' · ');

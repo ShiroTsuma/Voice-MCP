@@ -179,6 +179,8 @@ When characters speak, the agent passes the whole scene in **one** `voice_speak`
 
 `pause` sets the silence after a line in seconds (up to 10); a line with only a pause is a break between beats or scenes.
 
+Text can carry voice's own tags: `{laugh}`, `{sigh}`, `{cough}` and the other sounds, and `{pause}` or `{pause:1.5}`. Each engine declares, in one form, which sounds it makes and how it shows a `mood` (none, intensity, labels or an instruction); voice turns a tag into the engine's own token or drops it, so a tag is never read aloud, and `*laughs*` in prose counts as `{laugh}`. Integrations shows each voice engine's sounds and moods, and `voice_control list_presets` gives them per voice. Of the engines voice runs today, only Chatterbox shows moods (as intensity), and none makes sounds yet; `{pause}` works with all of them.
+
 A line can also carry what is shown and never spoken: `kind` (`dialogue`, `narration` or `thought`), `mood`, `action` (a stage direction; a line with only an action is shown, not said) and `to` (whom it is said to). `scene` on the call gives the `title`, `location`, `time` and a `background` name. voice keeps all of it in the transcript and writes it into the reading window; the built-in look shows only some, and a theme decides the rest. Nothing of it goes back to the agent.
 
 Kokoro's 54 voices suit a crowd of side characters (they run on the CPU at once); keep the GPU voices for one or two leads.

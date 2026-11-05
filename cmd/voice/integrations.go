@@ -119,6 +119,16 @@ func makeIntegration(f integrationFile, handlers map[string]handler) integration
 	if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" && len(it.Languages) == 0 {
 		it.Languages = b.Languages
 	}
+	// What a voice engine does with voice's tags and moods, in one form.
+	if f.Group == "speech" || f.Group == "gpu" {
+		var x core.Expressive
+		if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" {
+			x = core.ParseExpressive(b.Expressive)
+		} else {
+			x = core.ParseExpressive(nil)
+		}
+		it.Expressive = &integrations.Expressive{Sounds: x.SoundNames(), Emotion: x.Emotion, Moods: x.MoodNames()}
+	}
 	if f.Uses == "model" && it.Size == "" {
 		if m, ok := models.Find(f.Model); ok {
 			it.Size = fmt.Sprintf("%d MB", m.SizeMB)

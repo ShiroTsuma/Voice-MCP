@@ -11,7 +11,23 @@
       "clones": true,
       "transcript": false,
       "languages": ["ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh"],
-      "extra": { "exaggeration": 0.4, "cfg_weight": 0.4 }
+      "extra": { "exaggeration": 0.4, "cfg_weight": 0.4 },
+      "expressive": {
+        "emotion": "intensity",
+        "moods": {
+          "calm": { "exaggeration": 0.3, "cfg_weight": 0.5 },
+          "tender": { "exaggeration": 0.35, "cfg_weight": 0.5 },
+          "sad": { "exaggeration": 0.35, "cfg_weight": 0.5 },
+          "happy": { "exaggeration": 0.6 },
+          "amused": { "exaggeration": 0.6 },
+          "teasing": { "exaggeration": 0.6 },
+          "sarcastic": { "exaggeration": 0.55 },
+          "afraid": { "exaggeration": 0.7, "cfg_weight": 0.3 },
+          "surprised": { "exaggeration": 0.75, "cfg_weight": 0.3 },
+          "excited": { "exaggeration": 0.8, "cfg_weight": 0.3 },
+          "angry": { "exaggeration": 0.85, "cfg_weight": 0.3 }
+        }
+      }
     },
     {
       "name": "f5",

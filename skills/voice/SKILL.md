@@ -26,6 +26,17 @@ The voice MCP is the agent's mouth and ears on the user's machine.
   `rendering`, `playing`, `done`, or `error` with the reason (also
   `stopped`, `interrupted`, `muted`), with the engine that made the sound
   and whether it was a fallback.
+- Sounds and pauses: write voice's own tags in the text, never an engine's:
+  `{laugh}`, `{chuckle}`, `{giggle}`, `{sigh}`, `{gasp}`, `{cough}`,
+  `{clear_throat}`, `{sniff}`, `{sob}`, `{groan}`, `{yawn}`, `{breath}`, and
+  `{pause}` or `{pause:1.5}` (seconds) for silence, which every voice keeps.
+  A voice makes the sounds its engine supports and silently drops the rest;
+  a tag is never read aloud. `mood` (on the call or a script line: neutral,
+  happy, excited, amused, teasing, sarcastic, calm, tender, sad, angry,
+  afraid, surprised) is heard where the engine can show it.
+  `voice_control list_presets` gives each voice's `sounds` and `moods`, and
+  the status of a message says which sounds were made or dropped and
+  whether the mood was applied.
 
 ## Listening (`voice_listen`)
 

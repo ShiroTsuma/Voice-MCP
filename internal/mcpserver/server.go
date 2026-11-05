@@ -37,7 +37,8 @@ var (
 	speakSchema = map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code. Required unless lines is given."},
+			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code. Required unless lines is given. May hold voice's tags: {laugh}, {sigh}, {cough}... for a sound and {pause} or {pause:1.5} for silence; a voice makes the sounds it can (voice_control list_presets says which) and drops the rest, never reading a tag aloud."},
+			"mood": map[string]any{"type": "string", "enum": []string{"neutral", "happy", "excited", "amused", "teasing", "sarcastic", "calm", "tender", "sad", "angry", "afraid", "surprised"}, "description": "How text is said, where the voice's engine can show it (list_presets says which); others ignore it."},
 			"lines": map[string]any{
 				"type":        "array",
 				"description": "Only for a scene or dialogue the user asked to hear in several voices: the lines in order, each with its own voice (a character or a preset; omitted: yours), spoken as one flowing piece instead of text. One call for the whole scene, not one per line. A line may end with a pause (seconds of silence after it, up to 10); a line with only a pause is a break between beats or scenes.",
@@ -48,7 +49,7 @@ var (
 						"voice":  map[string]any{"type": "string"},
 						"pause":  map[string]any{"type": "number", "minimum": 0, "maximum": 10, "description": "Seconds of silence after this line (default: a short breath when the voice changes)."},
 						"kind":   map[string]any{"type": "string", "enum": []string{"dialogue", "narration", "thought"}, "description": "Shown, not spoken: what the line is (default dialogue)."},
-						"mood":   map[string]any{"type": "string", "description": "Shown, not spoken: how it is said (\"wary\", \"teasing\")."},
+						"mood":   map[string]any{"type": "string", "description": "How the line is said (neutral, happy, excited, amused, teasing, sarcastic, calm, tender, sad, angry, afraid, surprised): shown, and heard where the voice's engine can show it (list_presets says which)."},
 						"action": map[string]any{"type": "string", "description": "Shown, not spoken: a stage direction (\"leans on the bar\"). A line with only an action is shown and not said."},
 						"to":     map[string]any{"type": "string", "description": "Shown, not spoken: whom the line is said to."},
 					},
@@ -160,7 +161,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Speak", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.SpeakArgs
-		if err := decode(req, &a, "text", "lines", "scene", "intent", "lang", "interrupt", "voice", "save_to"); err != nil {
+		if err := decode(req, &a, "text", "lines", "scene", "mood", "intent", "lang", "interrupt", "voice", "save_to"); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.Preset, a.PID, a.Project = caller(req, client), presetName, callerPID(req), callerProject(req)

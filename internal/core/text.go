@@ -43,7 +43,15 @@ func Clean(s string) string {
 	s = reHeading.ReplaceAllString(s, "")
 	s = reBullet.ReplaceAllString(s, "")
 	s = reEmphasis.ReplaceAllString(s, "$2")
-	s = reStar.ReplaceAllString(s, "$1$2")
+	// *laughs* is a sound, made where the engine can and never read; other
+	// *emphasis* is read as the words.
+	s = reStar.ReplaceAllStringFunc(s, func(m string) string {
+		sm := reStar.FindStringSubmatch(m)
+		if tag := SoundTag(sm[2]); tag != "" {
+			return sm[1] + tag
+		}
+		return sm[1] + sm[2]
+	})
 	s = strings.ReplaceAll(s, "|", ", ")
 
 	var b strings.Builder

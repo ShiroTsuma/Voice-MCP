@@ -82,9 +82,21 @@ type Integration struct {
 	// empty when language does not apply. The window compares them with the
 	// languages the user speaks.
 	Languages []string
+	// Expressive is what a voice engine does with voice's sound tags and
+	// moods; nil when it is not a voice engine.
+	Expressive *Expressive
 	// Status reports the state; Do runs one of the actions Status offered.
 	Status func() Status
 	Do     func(ctx context.Context, action string, log func(string)) error
+}
+
+// Expressive is a voice engine's support of voice's tags ({laugh}) and moods,
+// in one form for every engine: the sounds it makes, how it shows a mood
+// (none, intensity, labels or instruct) and which moods.
+type Expressive struct {
+	Sounds  []string `json:"sounds"`
+	Emotion string   `json:"emotion"`
+	Moods   []string `json:"moods,omitempty"`
 }
 
 // Group is a section of the window.
@@ -109,12 +121,14 @@ type View struct {
 	Group     string   `json:"group"`
 	Also      []string `json:"also,omitempty"`
 	Languages []string `json:"languages,omitempty"`
-	Title     string   `json:"title"`
-	About     string   `json:"about,omitempty"`
-	Size      string   `json:"size,omitempty"`
-	Link      string   `json:"link,omitempty"`
-	Status    Status   `json:"status"`
-	Job       *Job     `json:"job,omitempty"` // the running or last action
+	// Expressive: a voice engine's sounds and moods (see Expressive).
+	Expressive *Expressive `json:"expressive,omitempty"`
+	Title      string      `json:"title"`
+	About      string      `json:"about,omitempty"`
+	Size       string      `json:"size,omitempty"`
+	Link       string      `json:"link,omitempty"`
+	Status     Status      `json:"status"`
+	Job        *Job        `json:"job,omitempty"` // the running or last action
 }
 
 // Job is an action that runs in the background.
@@ -164,7 +178,7 @@ func (r *Registry) List() []View {
 	sort.SliceStable(items, func(a, b int) bool { return order[items[a].Group] < order[items[b].Group] })
 	out := make([]View, 0, len(items))
 	for _, i := range items {
-		v := View{ID: i.ID, Group: i.Group, Also: i.Also, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link, Languages: i.Languages}
+		v := View{ID: i.ID, Group: i.Group, Also: i.Also, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link, Languages: i.Languages, Expressive: i.Expressive}
 		v.Status = safeStatus(i)
 		if missing := r.missing(i, items); len(missing) > 0 && v.Status.State != On {
 			names := make([]string, len(missing))

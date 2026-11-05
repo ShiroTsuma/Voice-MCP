@@ -41,6 +41,9 @@ type SpeakArgs struct {
 	// character or a preset; empty: Voice or the session's), spoken as one
 	// flowing utterance.
 	Lines SpeakLines `json:"lines,omitempty"`
+	// Mood: how text is said (core.Moods), where the voice's engine can show
+	// it; a script's lines carry their own.
+	Mood string `json:"mood,omitempty"`
 	// Scene: where and when the lines take place, for the reading window and
 	// its themes; nothing of it is spoken.
 	Scene *SceneInfo `json:"scene,omitempty"`
@@ -223,7 +226,7 @@ func (s *SceneInfo) UnmarshalJSON(b []byte) error {
 // the text the transcript keeps ("Clara: ..."). Without lines it is nil.
 func (s *Service) script(a SpeakArgs) ([]core.ScriptLine, string, error) {
 	if len(a.Lines) == 0 {
-		return nil, a.Text, nil
+		return nil, core.StripTags(a.Text), nil
 	}
 	own, err := s.speakPreset(a)
 	if err != nil {
@@ -243,11 +246,11 @@ func (s *Service) script(a SpeakArgs) ([]core.ScriptLine, string, error) {
 			if p, err = s.speakPreset(SpeakArgs{Voice: l.Voice}); err != nil {
 				return nil, "", err
 			}
-			said = append(said, l.Voice+": "+l.Text)
+			said = append(said, l.Voice+": "+core.StripTags(l.Text))
 		} else {
-			said = append(said, l.Text)
+			said = append(said, core.StripTags(l.Text))
 		}
-		out = append(out, core.ScriptLine{Text: l.Text, Preset: p, Pause: l.Pause})
+		out = append(out, core.ScriptLine{Text: l.Text, Preset: p, Pause: l.Pause, Mood: l.Mood})
 	}
 	if len(said) == 0 {
 		return nil, "", userErr("lines has no text")
@@ -271,7 +274,7 @@ func (s *Service) scene(a SpeakArgs, lines []core.ScriptLine) []SceneLine {
 			}
 			continue
 		}
-		sl := SceneLine{Speaker: l.Voice, Text: text, Pause: l.Pause, Kind: l.Kind, Mood: l.Mood, Action: strings.TrimSpace(l.Action), To: l.To}
+		sl := SceneLine{Speaker: l.Voice, Text: core.StripTags(text), Pause: l.Pause, Kind: l.Kind, Mood: l.Mood, Action: strings.TrimSpace(l.Action), To: l.To}
 		if text == "" {
 			// Only shown: a stage direction, with the break after it if any.
 			if l.Pause > 0 {
@@ -363,7 +366,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: a.Intent, Lang: a.Lang, Interrupt: a.Interrupt,
-		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars,
+		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood,
 	})
 	if errors.Is(err, core.ErrMuted) {
 		return nil, userErr("muted by the user; stay silent until they unmute")
@@ -494,10 +497,16 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		rows := [][]string{}
 		for _, name := range s.Config.PresetNames() {
 			if r, err := s.Config.Resolve(name); err == nil {
-				rows = append(rows, []string{name, r.Description})
+				x := sp.PresetExpressive(name)
+				moods := x.Emotion
+				if m := x.MoodNames(); len(m) > 0 && x.Emotion != "instruct" {
+					moods += ": " + strings.Join(m, ", ")
+				}
+				rows = append(rows, []string{name, r.Description, strings.Join(x.SoundNames(), " "), moods})
 			}
 		}
-		return map[string]any{"active": sp.Status().Preset, "columns": []string{"name", "description"}, "rows": rows}, nil
+		return map[string]any{"active": sp.Status().Preset, "columns": []string{"name", "description", "sounds", "moods"}, "rows": rows,
+			"tags": "Write {sound} in text for a sound (" + strings.Join(core.Sounds, ", ") + ") and {pause} or {pause:1.5} for silence; a voice makes the sounds in its column and drops the rest, never reading them aloud. mood (" + strings.Join(core.Moods, ", ") + ") works as its column says."}, nil
 	case "set_preset":
 		if a.Preset == "" {
 			return nil, userErr("set_preset needs preset; call list_presets for names")

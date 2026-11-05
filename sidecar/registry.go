@@ -52,6 +52,9 @@ type Backend struct {
 	// Prefetch are Hugging Face models setup downloads with the backend, so
 	// the first sentence does not wait for them.
 	Prefetch []string `json:"prefetch"`
+	// Expressive is what it does with voice's sound tags and moods (see
+	// core.Expressive): sounds, emotion, moods, instruct.
+	Expressive map[string]any `json:"expressive"`
 	// Env is the Python environment it runs in (envs\<env>): another
 	// backend's, when it needs the same packages; empty is its own.
 	Env string `json:"env"`
@@ -126,6 +129,9 @@ func (b Backend) Engine(set map[string]string) map[string]any {
 	}
 	if b.Batch {
 		e["batch"] = true
+	}
+	if len(b.Expressive) > 0 {
+		e["expressive"] = b.Expressive
 	}
 	if b.StartTimeout > 0 {
 		e["start_timeout"] = int64(b.StartTimeout)

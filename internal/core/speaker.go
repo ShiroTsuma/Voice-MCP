@@ -48,6 +48,8 @@ type Request struct {
 	Lines []ScriptLine
 	// MaxChars limits each line (or Text); 0 uses max_chars from the config.
 	MaxChars int
+	// Mood is Text's mood (Moods), shown where the engine can.
+	Mood string
 }
 
 // ScriptLine is one line of a script and the preset that says it. Pause is
@@ -57,6 +59,7 @@ type ScriptLine struct {
 	Text   string
 	Preset string
 	Pause  float64
+	Mood   string // how it is said, where the engine can show it (Moods)
 }
 
 // maxPause caps one break in a script, in seconds.
@@ -80,16 +83,21 @@ type Ticket struct {
 // being made, nothing heard yet), playing, then done, or error, stopped,
 // interrupted or muted. The speaker keeps the last trackKeep of them.
 type Track struct {
-	ID       string     `json:"id"`
-	State    string     `json:"state"`
-	Voices   []string   `json:"voices"`             // the presets that say it
-	Engine   string     `json:"engine,omitempty"`   // the engine that made the sound
-	Fallback bool       `json:"fallback,omitempty"` // a fallback engine, not the voice's own
-	Error    string     `json:"error,omitempty"`
-	Saved    string     `json:"saved,omitempty"` // save_to: the file
-	Queued   time.Time  `json:"queued"`
-	Heard    *time.Time `json:"heard,omitempty"` // the first sound
-	Ended    *time.Time `json:"ended,omitempty"`
+	ID       string   `json:"id"`
+	State    string   `json:"state"`
+	Voices   []string `json:"voices"`             // the presets that say it
+	Engine   string   `json:"engine,omitempty"`   // the engine that made the sound
+	Fallback bool     `json:"fallback,omitempty"` // a fallback engine, not the voice's own
+	Error    string   `json:"error,omitempty"`
+	Saved    string   `json:"saved,omitempty"` // save_to: the file
+	// Sounds were made by the engine; Dropped it could not make, so they
+	// were left out. Mood: applied, or ignored by the engine.
+	Sounds  []string   `json:"sounds,omitempty"`
+	Dropped []string   `json:"dropped,omitempty"`
+	Mood    string     `json:"mood,omitempty"`
+	Queued  time.Time  `json:"queued"`
+	Heard   *time.Time `json:"heard,omitempty"` // the first sound
+	Ended   *time.Time `json:"ended,omitempty"`
 }
 
 const trackKeep = 100
@@ -111,6 +119,7 @@ type item struct {
 	// primary is the engine its voice asks for (play sets it), to tell a
 	// fallback apart.
 	primary string
+	tags    *tagUse // what became of its tags and moods (play)
 }
 
 // part is a stretch of an utterance in one voice; pause is the silence after
@@ -119,6 +128,7 @@ type part struct {
 	text   string
 	preset preset.Resolved
 	pause  float64
+	mood   string
 }
 
 type Speaker struct {
@@ -197,8 +207,22 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	}
 	lines := req.Lines
 	if len(lines) == 0 {
-		lines = []ScriptLine{{Text: req.Text}}
+		lines = []ScriptLine{{Text: req.Text, Mood: req.Mood}}
 	}
+	// {pause} cuts a line in two with silence between.
+	var cut []ScriptLine
+	for _, l := range lines {
+		pieces, pauses := splitPauses(Clean(l.Text))
+		for i, piece := range pieces {
+			n := l
+			n.Text, n.Pause = piece, pauses[i]
+			if i == len(pieces)-1 {
+				n.Pause += l.Pause
+			}
+			cut = append(cut, n)
+		}
+	}
+	lines = cut
 	var texts []string
 	var kept []ScriptLine
 	lead := 0.0 // a break before the first line
@@ -215,7 +239,7 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 			continue
 		}
 		texts = append(texts, t)
-		kept = append(kept, ScriptLine{Text: t, Preset: l.Preset, Pause: pause})
+		kept = append(kept, ScriptLine{Text: t, Preset: l.Preset, Pause: pause, Mood: l.Mood})
 	}
 	if len(kept) == 0 {
 		return Ticket{}, errors.New("nothing speakable left after removing markdown, code and links")
@@ -265,13 +289,13 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 			}
 		}
 		// Lines in the same voice in a row are one part: they render together,
-		// unless a break was asked for between them.
-		if k := len(parts) - 1; k >= 0 && parts[k].preset.Name == p.Name && parts[k].pause == 0 {
+		// unless a break or another mood comes between them.
+		if k := len(parts) - 1; k >= 0 && parts[k].preset.Name == p.Name && parts[k].pause == 0 && parts[k].mood == l.Mood {
 			parts[k].text += " " + l.Text
 			parts[k].pause = l.Pause
 			continue
 		}
-		parts = append(parts, part{text: l.Text, preset: p, pause: l.Pause})
+		parts = append(parts, part{text: l.Text, preset: p, pause: l.Pause, mood: l.Mood})
 	}
 	s.nextID++
 	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead,
@@ -324,6 +348,9 @@ func endLocked(it *item, res Result) {
 	t.Ended = &now
 	t.Engine = res.Engine
 	t.Fallback = res.Engine != "" && res.Engine != "cache" && it.primary != "" && res.Engine != it.primary
+	if u := it.tags; u != nil {
+		t.Sounds, t.Dropped, t.Mood = keys(u.sounds), keys(u.dropped), u.mood
+	}
 	switch {
 	case res.Err == nil:
 		t.State = "done"
@@ -409,7 +436,7 @@ func (s *Speaker) Status() Status {
 	st := Status{Preset: s.active, Muted: s.muted || SharedMuted(), Speaking: s.current != nil, Queued: len(s.queue), LastError: s.lastErr}
 	if s.current != nil {
 		l := s.current.line
-		l.ID, l.Text = s.current.id, s.current.text
+		l.ID, l.Text = s.current.id, blankTags(s.current.text)
 		l.Preparing = l.At.IsZero()
 		st.Line = &l
 	}
@@ -739,6 +766,8 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		vs = append(vs, v)
 	}
 	first := vs[0]
+	tu := newTagUse()
+	it.tags = tu
 	if len(vs) == 1 && len(first.choice.Engines) > 0 {
 		it.primary = first.choice.Engines[0] // one voice: another engine is a fallback
 	}
@@ -823,7 +852,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				// than a short sentence and a long silence. The next batch renders
 				// while this one plays. A batch that fails goes sentence by sentence.
 				if m := min(batchSize, len(v.sentences)-k); m > 1 && engines[0] == v.choice.Engines[0] {
-					if pcms, err := s.renderBatch(ctx, engines[0], v.pitch, it.lang, v.choice, v.sentences[k:k+m]); err == nil {
+					if pcms, err := s.renderBatch(ctx, engines[0], v.pitch, it.lang, v.choice, v.sentences[k:k+m], v.mood, tu); err == nil {
 						used = engines[0]
 						for _, pcm := range pcms {
 							if !send(pcm) {
@@ -835,7 +864,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 					}
 				}
 				req := engine.Request{Text: v.sentences[k], Lang: it.lang, Voice: v.choice.Voice, Speed: v.choice.Speed / v.pitch}
-				pcm, name, rest, err := s.render(ctx, engines, v.choice.Engines[0], v.pitch, req)
+				pcm, name, rest, err := s.render(ctx, engines, v.choice.Engines[0], v.pitch, req, v.mood, tu)
 				if err != nil {
 					put(rendered{err: err})
 					return
@@ -923,7 +952,7 @@ const batchSize = 4
 
 // renderBatch renders sentences with one call to an engine that takes
 // batches (engine.Batcher), at the device rate; an error when it cannot.
-func (s *Speaker) renderBatch(ctx context.Context, name string, pitch float64, lang string, choice preset.Choice, sentences []string) ([][]float32, error) {
+func (s *Speaker) renderBatch(ctx context.Context, name string, pitch float64, lang string, choice preset.Choice, sentences []string, mood string, tu *tagUse) ([][]float32, error) {
 	e, err := s.Engine(name)
 	if err != nil {
 		return nil, err
@@ -935,9 +964,11 @@ func (s *Speaker) renderBatch(ctx context.Context, name string, pitch float64, l
 	s.mu.Lock()
 	s.used[name] = time.Now()
 	s.mu.Unlock()
+	x := s.expressive(name)
 	reqs := make([]engine.Request, len(sentences))
 	for i, t := range sentences {
-		reqs[i] = engine.Request{Text: t, Lang: lang, Voice: choice.Voice, Speed: choice.Speed / pitch}
+		text, extra := forEngine(x, t, mood, tu)
+		reqs[i] = engine.Request{Text: text, Lang: lang, Voice: choice.Voice, Speed: choice.Speed / pitch, Extra: extra}
 	}
 	chunks, err := b.SynthesizeBatch(ctx, reqs)
 	if err != nil {
@@ -953,9 +984,30 @@ func (s *Speaker) renderBatch(ctx context.Context, name string, pitch float64, l
 	return out, nil
 }
 
+// PresetExpressive is what preset name's own engine does with voice's tags
+// and moods (its first engine for the default language).
+func (s *Speaker) PresetExpressive(name string) Expressive {
+	r, err := s.cfg.Resolve(name)
+	if err != nil {
+		return Expressive{Emotion: "none"}
+	}
+	if c := r.For(s.cfg.DefaultLang); len(c.Engines) > 0 {
+		return s.expressive(c.Engines[0])
+	}
+	return Expressive{Emotion: "none"}
+}
+
+// expressive is what engine name declares about tags and moods.
+func (s *Speaker) expressive(name string) Expressive {
+	if c, ok := s.cfg.Engines[name]; ok {
+		return ParseExpressive(c["expressive"])
+	}
+	return Expressive{Emotion: "none"}
+}
+
 // render tries engines in order and returns audio at the device rate, the
 // engine used and the engines still eligible for the following sentences.
-func (s *Speaker) render(ctx context.Context, engines []string, primary string, pitch float64, req engine.Request) ([]float32, string, []string, error) {
+func (s *Speaker) render(ctx context.Context, engines []string, primary string, pitch float64, req engine.Request, mood string, tu *tagUse) ([]float32, string, []string, error) {
 	var errs []string
 	for i, name := range engines {
 		e, err := s.Engine(name)
@@ -968,6 +1020,12 @@ func (s *Speaker) render(ctx context.Context, engines []string, primary string, 
 			r := req
 			if name != primary {
 				r.Voice = engine.Voice{}
+			}
+			// voice's tags and the mood, as this engine has them; what it
+			// cannot make is left out, never read aloud.
+			r.Text, r.Extra = forEngine(s.expressive(name), req.Text, mood, tu)
+			if strings.TrimSpace(r.Text) == "" {
+				return nil, name, engines[i:], nil // only sounds it cannot make
 			}
 			err = e.Synthesize(ctx, r, func(c engine.Chunk) error {
 				from := int(math.Round(float64(c.SampleRate) * pitch))
