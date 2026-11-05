@@ -281,9 +281,13 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					log("Opening " + f.Guide)
 					return exec.Command("rundll32", "url.dll,FileProtocolHandler", f.Guide).Start() // the default browser
 				case action == "start" && len(f.Start) > 0:
-					// It runs on after the action: the server lives until stopped.
+					// It runs on after the action: the server lives until stopped,
+					// so it starts in the user's folder, not voice's own (a process
+					// working in that would keep an update from replacing it).
 					cmd := exec.Command(f.Start[0], f.Start[1:]...)
-					cmd.Dir = filepath.Dir(f.path)
+					if home, err := os.UserHomeDir(); err == nil {
+						cmd.Dir = home
+					}
 					hidden(cmd)
 					if err := cmd.Start(); err != nil {
 						return err
