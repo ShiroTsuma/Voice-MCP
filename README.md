@@ -134,7 +134,7 @@ The agent installs and tests voice. Trusting the Codex hooks, restarting session
 - **to the agent you name**: start with its name ("Clara, add a dark theme"), or put it right after a short reply ("Sure, Clara. Remove them."), with **Pick the agent by name** on (Dictation). The words an address is read by (openers, "everyone", ...) come from per-language files; a JSON file of your own in the data folder's `addressing` folder adds words or another language;
 - otherwise **to the agent that spoke last**, the one you just heard, when it spoke in the last ten minutes; else to the one most recently at work.
 
-While you speak, the settings window and the corner popup show who it will reach ("You to Anna"), and switch as soon as you say another session's name, so a message never goes somewhere you did not see.
+While you speak, the settings window and the corner popup show who it will reach ("You to Anna"), and switch as soon as you say another session's name, so a message never goes somewhere you did not see. A name shown there is where it goes: the last transcription of the whole recording may polish the words, but it does not send the message elsewhere when it hears the name otherwise.
 
 How it arrives depends on the agent's state:
 

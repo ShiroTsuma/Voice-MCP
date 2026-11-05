@@ -283,8 +283,22 @@ func (c *controller) deliverText(text string, hwnd uintptr, fgPID uint32) (strin
 	open, candidates := c.dictationOrder()
 	routed, all := false, false
 	if sv.DictateRouting != nil && *sv.DictateRouting {
+		heard := text
 		if to, rest, everyone := service.Route(text, open); len(to) > 0 {
 			candidates, text, routed, all = to, rest, true, everyone
+		}
+		// The recipient the user saw from a name they said is the one it goes
+		// to: the final transcription of the whole recording may hear the
+		// name otherwise ("and I" for "Anna") and must not send it elsewhere.
+		if name, everyone, ok := c.shownAddress(); ok {
+			if everyone && !all {
+				candidates, text, routed, all = nil, heard, true, true
+				for _, a := range open {
+					candidates = append(candidates, a.PID)
+				}
+			} else if pid := pidCalled(open, name); !everyone && pid != 0 && (all || len(candidates) == 0 || candidates[0] != pid || !routed) {
+				candidates, text, routed, all = []uint32{pid}, heard, true, false
+			}
 		}
 	}
 	if all {
@@ -627,6 +641,8 @@ type dictation struct {
 	firmTo  string
 	firmAll bool
 	firm    bool
+	// shownNamed: To came from a name heard, not from the default session.
+	shownNamed bool
 }
 
 // setDictation records dictation's state for the settings window; "" ends it.
@@ -655,7 +671,7 @@ func (c *controller) setDictation(state string, level float64) {
 	c.dict.State, c.dict.Level = state, level
 	if state == "" {
 		c.dict.Text, c.dict.To, c.dict.All = "", "", false
-		c.dict.firmTo, c.dict.firmAll, c.dict.firm = "", false, false
+		c.dict.firmTo, c.dict.firmAll, c.dict.firm, c.dict.shownNamed = "", false, false, false
 	}
 }
 
@@ -684,6 +700,28 @@ func (c *controller) setDictationText(text string) {
 		to, all = c.dict.firmTo, c.dict.firmAll
 	}
 	c.dict.Text, c.dict.To, c.dict.All = text, to, all
+	c.dict.shownNamed = named || c.dict.firm
+}
+
+// pidCalled is the open session with that name, 0 when none.
+func pidCalled(open []service.AgentInfo, name string) uint32 {
+	for _, a := range open {
+		if name != "" && strings.EqualFold(a.Name, name) {
+			return a.PID
+		}
+	}
+	return 0
+}
+
+// shownAddress is the recipient the windows showed from a name the user said
+// (not the default one) when the dictation ended, if any.
+func (c *controller) shownAddress() (name string, all, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.dict.State == "" || !c.dict.shownNamed {
+		return "", false, false
+	}
+	return c.dict.To, c.dict.All, true
 }
 
 // routeSoFar is who text would reach (recipient) and whether its words name
