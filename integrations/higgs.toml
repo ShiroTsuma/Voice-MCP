@@ -10,3 +10,8 @@ also = ["cloning"]
 languages = ["*"]
 uses = "speech-server"
 engine = "higgs"
+# Start server / Stop server: the WSL setup of docs/higgs-audio.md. For another
+# setup, copy this file to the integrations folder in voice's data folder and
+# change these (a file there with the same id replaces this one).
+start = ["wsl.exe", "-d", "Ubuntu", "--", "bash", "-lc", "~/higgs/serve.sh > ~/higgs/server.log 2>&1"]
+stop = ["wsl.exe", "-d", "Ubuntu", "--exec", "pkill", "-f", "omni serve --model"]

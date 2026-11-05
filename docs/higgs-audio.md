@@ -36,11 +36,19 @@ cd ~/sglang-omni && source .venv/bin/activate
 exec sgl-omni serve --model-path bosonai/higgs-audio-v3-tts-4b --port 8000
 ```
 
-Start it from Windows with `wsl -d Ubuntu -- ~/higgs/serve.sh`; stop it with Ctrl+C. The first request after a start takes about 10 s, later ones about 3-4 s to the first sound.
+With the script at `~/higgs/serve.sh` in a WSL distribution called Ubuntu, Integrations (GPU voices, Higgs Audio v3) has **Start server** and **Stop server**: the server takes the whole graphics card while it runs, so stop it before other GPU work. Its output goes to `~/higgs/server.log`. For another setup (distribution, script, Docker, a remote machine), copy `integrations\higgs.toml` next to voice.exe into the `integrations` folder in voice's data folder and change its `start` and `stop` commands. By hand: `wsl -d Ubuntu -- ~/higgs/serve.sh`, and Ctrl+C. The first request after a start takes about 10 s, later ones about 3-4 s to the first sound.
 
 Or with Docker, from the model card: `docker pull lmsysorg/sglang-omni:dev`, run it with `--gpus all --network host`, and start the same `sgl-omni serve` command inside.
 
 WSL2 forwards `localhost`, so Windows reaches the server at `http://127.0.0.1:8000`. The model is about 4B parameters in bf16; give it the graphics card to itself (12-16 GB). Boson states no figure.
+
+### AMD and Intel graphics cards
+
+The documented way to serve Higgs is for **NVIDIA** cards (CUDA). SGLang-Omni supports NVIDIA and Intel Arc (XPU), but **not AMD**, and its Intel support does not list Higgs. vLLM-Omni lists ROCm (AMD) support in general, but its Higgs recipe names CUDA only; Higgs on ROCm is untested by Boson and by voice. With an AMD card:
+
+- run the server on another machine with an NVIDIA card, or a rented GPU server (below), and point voice at it; or
+- try vLLM-Omni on native Linux with ROCm (not WSL) at your own risk;
+- or use voice's own GPU engines: its sidecar sets Chatterbox and Qwen3-TTS up with AMD's ROCm PyTorch for Windows on recent Radeon cards (the list is in `sidecar/profiles/amd-rocm-windows.json`); Chatterbox shows moods as intensity, neither makes sound tags.
 
 ### Or a server elsewhere
 

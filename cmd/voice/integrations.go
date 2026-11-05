@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"voice/internal/engine/openaispeech"
 
@@ -52,6 +53,10 @@ type integrationFile struct {
 	Backend  string   `toml:"backend"`  // uses = "sidecar": a name in sidecar/backends.json
 	Engine   string   `toml:"engine"`   // uses = "speech-server": the engine (an [engines.<name>] of type openai)
 	Guide    string   `toml:"guide"`    // uses = "speech-server": how to set its server up (a web page), offered as an action
+	// uses = "speech-server": commands that start and stop its server (Start
+	// server, Stop server); the start runs on in the background.
+	Start []string `toml:"start"`
+	Stop  []string `toml:"stop"`
 	// Also: other groups it shows in. Languages: what it speaks or
 	// recognizes (en, pl, ...; "*" for nearly all); a sidecar backend's come
 	// from sidecar/backends.json when the file names none.
@@ -241,26 +246,64 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			if url == "" {
 				return integrations.Status{State: integrations.Error, Detail: "No [engines." + f.Engine + "] with a url in the config"}
 			}
+			var acts []integrations.Action
+			add := func(id, label string, primary bool) {
+				acts = append(acts, integrations.Action{ID: id, Label: label, Primary: primary})
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 			defer cancel()
-			var guide []integrations.Action
-			if f.Guide != "" {
-				guide = []integrations.Action{{ID: "guide", Label: "Setup guide"}}
-			}
-			if err := openaispeech.Probe(ctx, url); err != nil {
-				if len(guide) > 0 {
-					guide[0].Primary = true
+			if err := openaispeech.Probe(ctx, url); err == nil {
+				if len(f.Stop) > 0 {
+					add("stop", "Stop server", false)
 				}
-				return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + ". Set one up (Setup guide) on this PC, another machine or a server, and set its url in config.toml; until then another voice speaks", Actions: guide}
+				if f.Guide != "" {
+					add("guide", "Setup guide", false)
+				}
+				return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url + "; it keeps the graphics card's memory until stopped", Actions: acts}
 			}
-			return integrations.Status{State: integrations.On, Detail: "Its server answers at " + url, Actions: guide}
+			if since, ok := serverStarting(f.ID); ok {
+				if len(f.Stop) > 0 {
+					add("stop", "Stop server", false)
+				}
+				return integrations.Status{State: integrations.Partly, Detail: fmt.Sprintf("Starting for %s; the first start tunes the graphics card for over 10 minutes, later ones take a few", since.Round(time.Second)), Actions: acts}
+			}
+			if len(f.Start) > 0 {
+				add("start", "Start server", true)
+			}
+			if f.Guide != "" {
+				add("guide", "Setup guide", len(f.Start) == 0)
+			}
+			return integrations.Status{State: integrations.Missing, Detail: "Its server does not answer at " + url + ". Set one up (Setup guide) on this PC, another machine or a server, and set its url in config.toml; until then another voice speaks", Actions: acts}
 		},
 			do: func(_ context.Context, f integrationFile, action string, log func(string)) error {
-				if action != "guide" || f.Guide == "" {
-					return fmt.Errorf("%s has no action %q", f.Title, action)
+				switch {
+				case action == "guide" && f.Guide != "":
+					log("Opening " + f.Guide)
+					return exec.Command("rundll32", "url.dll,FileProtocolHandler", f.Guide).Start() // the default browser
+				case action == "start" && len(f.Start) > 0:
+					// It runs on after the action: the server lives until stopped.
+					cmd := exec.Command(f.Start[0], f.Start[1:]...)
+					cmd.Dir = filepath.Dir(f.path)
+					hidden(cmd)
+					if err := cmd.Start(); err != nil {
+						return err
+					}
+					markStarting(f.ID, cmd)
+					log("Started: " + strings.Join(f.Start, " "))
+					log("It answers once loaded; the first start takes over 10 minutes.")
+					return nil
+				case action == "stop" && len(f.Stop) > 0:
+					cmd := exec.Command(f.Stop[0], f.Stop[1:]...)
+					cmd.Dir = filepath.Dir(f.path)
+					hidden(cmd)
+					out, err := cmd.CombinedOutput()
+					if s := strings.TrimSpace(string(out)); s != "" {
+						log(s)
+					}
+					stopStarting(f.ID)
+					return err
 				}
-				log("Opening " + f.Guide)
-				return exec.Command("rundll32", "url.dll,FileProtocolHandler", f.Guide).Start() // the default browser
+				return fmt.Errorf("%s has no action %q", f.Title, action)
 			}},
 
 		"claude-hooks": {
@@ -583,4 +626,35 @@ func cloneEngines() []map[string]any {
 		}
 	}
 	return out
+}
+
+// Speech servers started from the Integrations window, while they load.
+var starting = struct {
+	sync.Mutex
+	at map[string]time.Time
+}{at: map[string]time.Time{}}
+
+func markStarting(id string, cmd *exec.Cmd) {
+	starting.Lock()
+	starting.at[id] = time.Now()
+	starting.Unlock()
+	go func() { // the server stopped (or failed): no longer starting
+		cmd.Wait()
+		stopStarting(id)
+	}()
+}
+
+func stopStarting(id string) {
+	starting.Lock()
+	delete(starting.at, id)
+	starting.Unlock()
+}
+
+// serverStarting reports how long ago id's server was started, while its
+// process runs and it does not answer yet.
+func serverStarting(id string) (time.Duration, bool) {
+	starting.Lock()
+	defer starting.Unlock()
+	at, ok := starting.at[id]
+	return time.Since(at), ok
 }
