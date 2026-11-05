@@ -20,6 +20,12 @@ The voice MCP is the agent's mouth and ears on the user's machine.
   already announce permission prompts and finished turns, so do not repeat
   those yourself.
 - If `voice_speak` reports muted, stay silent until the user unmutes.
+- Its answer says `state: queued` and which `voice` (and character, `as`)
+  will say it; queued is not heard. Before telling the user something was
+  said, or when it matters, ask `voice_control` `status` with its `id`:
+  `rendering`, `playing`, `done`, or `error` with the reason (also
+  `stopped`, `interrupted`, `muted`), with the engine that made the sound
+  and whether it was a fallback.
 
 ## Listening (`voice_listen`)
 

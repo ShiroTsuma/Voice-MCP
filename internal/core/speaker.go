@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,10 +70,29 @@ type Result struct {
 
 type Ticket struct {
 	ID       string
-	Position int    // 0: plays next
-	Note     string // the default voice speaks because the preset's voice is gone
+	Position int      // 0: plays next
+	Note     string   // the default voice speaks because the preset's voice is gone
+	Voices   []string // the presets that will say it, in order
 	Done     <-chan Result
 }
+
+// Track is what became of one utterance: queued, rendering (its voice is
+// being made, nothing heard yet), playing, then done, or error, stopped,
+// interrupted or muted. The speaker keeps the last trackKeep of them.
+type Track struct {
+	ID       string     `json:"id"`
+	State    string     `json:"state"`
+	Voices   []string   `json:"voices"`             // the presets that say it
+	Engine   string     `json:"engine,omitempty"`   // the engine that made the sound
+	Fallback bool       `json:"fallback,omitempty"` // a fallback engine, not the voice's own
+	Error    string     `json:"error,omitempty"`
+	Saved    string     `json:"saved,omitempty"` // save_to: the file
+	Queued   time.Time  `json:"queued"`
+	Heard    *time.Time `json:"heard,omitempty"` // the first sound
+	Ended    *time.Time `json:"ended,omitempty"`
+}
+
+const trackKeep = 100
 
 type item struct {
 	id     string
@@ -86,7 +106,11 @@ type item struct {
 	lead   float64 // silence before the first part, in seconds
 	done   chan Result
 
-	line Line // progress, under Speaker.mu
+	line  Line   // progress, under Speaker.mu
+	track *Track // what became of it, under Speaker.mu
+	// primary is the engine its voice asks for (play sets it), to tell a
+	// fallback apart.
+	primary string
 }
 
 // part is a stretch of an utterance in one voice; pause is the silence after
@@ -117,6 +141,7 @@ type Speaker struct {
 	nextID      int
 	lastErr     string
 	gone        map[string]bool // presets whose missing voice was already reported
+	tracks      []*Track        // the last utterances, oldest first
 	// The sentence playing: its loudness every levelStep, from levelAt.
 	levels  []float32
 	levelAt time.Time
@@ -254,13 +279,66 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	if req.Interrupt {
 		s.dropLocked(ErrInterrupted)
 	}
+	var voices []string
+	for _, p := range parts {
+		if !slices.Contains(voices, p.preset.Name) {
+			voices = append(voices, p.preset.Name)
+		}
+	}
+	it.track = &Track{ID: it.id, State: "queued", Voices: voices, Queued: time.Now()}
+	s.tracks = append(s.tracks, it.track)
+	if len(s.tracks) > trackKeep {
+		s.tracks = s.tracks[len(s.tracks)-trackKeep:]
+	}
 	s.queue = append(s.queue, it)
 	pos := len(s.queue) - 1
 	if s.current != nil {
 		pos++
 	}
 	s.signal()
-	return Ticket{ID: it.id, Position: pos, Done: it.done, Note: note}, nil
+	return Ticket{ID: it.id, Position: pos, Done: it.done, Note: note, Voices: voices}, nil
+}
+
+// Track tells what became of the utterance id; false when it is unknown (too
+// old, or said before voice restarted).
+func (s *Speaker) Track(id string) (Track, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := len(s.tracks) - 1; i >= 0; i-- {
+		if s.tracks[i].ID == id {
+			t := *s.tracks[i]
+			t.Voices = slices.Clone(t.Voices)
+			return t, true
+		}
+	}
+	return Track{}, false
+}
+
+// endLocked records how an utterance ended; the caller holds s.mu.
+func endLocked(it *item, res Result) {
+	t := it.track
+	if t == nil || t.Ended != nil {
+		return
+	}
+	now := time.Now()
+	t.Ended = &now
+	t.Engine = res.Engine
+	t.Fallback = res.Engine != "" && res.Engine != "cache" && it.primary != "" && res.Engine != it.primary
+	switch {
+	case res.Err == nil:
+		t.State = "done"
+		if it.saveTo != "" {
+			t.Saved = it.saveTo
+		}
+	case errors.Is(res.Err, ErrStopped):
+		t.State = "stopped"
+	case errors.Is(res.Err, ErrInterrupted), errors.Is(res.Err, context.Canceled):
+		t.State = "interrupted"
+	case errors.Is(res.Err, ErrMuted):
+		t.State = "muted"
+	default:
+		t.State, t.Error = "error", res.Err.Error()
+	}
 }
 
 // Stop silences the current utterance and clears the queue.
@@ -272,6 +350,7 @@ func (s *Speaker) Stop() {
 
 func (s *Speaker) dropLocked(reason error) {
 	for _, it := range s.queue {
+		endLocked(it, Result{Err: reason})
 		it.done <- Result{Err: reason}
 	}
 	s.queue = nil
@@ -345,6 +424,10 @@ func (s *Speaker) playing(it *item, from, to int, pcm []float32) {
 	it.line.Done, it.line.From, it.line.To = from, from, to
 	it.line.At, it.line.Seconds = time.Now(), float64(len(pcm))/float64(audio.DeviceRate)
 	s.levels, s.levelAt = levels, it.line.At
+	if t := it.track; t != nil && t.Heard == nil {
+		at := it.line.At
+		t.State, t.Heard = "playing", &at
+	}
 	s.mu.Unlock()
 }
 
@@ -551,6 +634,9 @@ func (s *Speaker) loop() {
 		if it != nil {
 			ctx, s.cancel = context.WithCancel(context.Background())
 			s.current = it
+			if it.track != nil {
+				it.track.State = "rendering"
+			}
 		}
 		s.mu.Unlock()
 
@@ -570,6 +656,7 @@ func (s *Speaker) loop() {
 		if res.Err != nil && !errors.Is(res.Err, context.Canceled) {
 			s.lastErr = res.Err.Error()
 		}
+		endLocked(it, res)
 		idle := len(s.queue) == 0
 		s.mu.Unlock()
 		if hook := s.activity; hook != nil && idle && s.audibleOn {
@@ -652,6 +739,9 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		vs = append(vs, v)
 	}
 	first := vs[0]
+	if len(vs) == 1 && len(first.choice.Engines) > 0 {
+		it.primary = first.choice.Engines[0] // one voice: another engine is a fallback
+	}
 
 	// A question or an alert opens with a chime, played right before the
 	// first sound is ready: with a GPU voice that renders for a while, a

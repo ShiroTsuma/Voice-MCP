@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -67,6 +68,8 @@ type ControlArgs struct {
 	Limit   Count  `json:"limit,omitempty"` // transcript: how many lines, newest
 	// Style: set_style's choice, short (the default) or narrative.
 	Style string `json:"style,omitempty"`
+	// ID: status of one utterance, a speak answer's id.
+	ID string `json:"id,omitempty"`
 }
 
 // narrativeChars is how long one line may be in the narrative style.
@@ -300,6 +303,21 @@ func (s *Service) speakPreset(a SpeakArgs) (string, error) {
 	return s.presetFor(dirOr(a.Preset, s.characterPreset(a.PID)), a.Client), nil
 }
 
+// speakingAs is the character a call speaks as: the one it names, else the
+// session's own when its character's voice is used; empty for a bare preset.
+func (s *Service) speakingAs(a SpeakArgs) string {
+	if v := strings.TrimSpace(a.Voice); v != "" {
+		if ch, ok := s.Config.Character(v); ok {
+			return ch.Name
+		}
+		return ""
+	}
+	if a.Preset == "" && s.characterPreset(a.PID) != "" {
+		return s.Agents.Name(a.PID)
+	}
+	return ""
+}
+
 func (s *Service) presetFor(explicit, client string) string {
 	if explicit != "" || client == "" {
 		return explicit
@@ -346,8 +364,14 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if a.Source != "hook" {
 		core.MarkAsked(a.PID) // its end-of-turn announcement and question reading stay quiet
 	}
+	// Who and what will say it, so a caller knows what was chosen.
+	who := map[string]any{"voice": strings.Join(t.Voices, ", ")}
+	if as := s.speakingAs(a); as != "" && len(a.Lines) == 0 {
+		who["as"] = as
+	}
 	if !a.Wait {
-		out := map[string]any{"id": t.ID, "queue_position": t.Position}
+		out := map[string]any{"id": t.ID, "state": "queued", "queue_position": t.Position}
+		maps.Copy(out, who)
 		if t.Note != "" {
 			out["voice_note"] = t.Note + ". Tell the user once."
 		}
@@ -361,7 +385,8 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 		if res.Err != nil {
 			return nil, UserError{res.Err.Error()}
 		}
-		out := map[string]any{"id": t.ID, "engine": res.Engine}
+		out := map[string]any{"id": t.ID, "state": "done", "engine": res.Engine}
+		maps.Copy(out, who)
 		if t.Note != "" {
 			out["voice_note"] = t.Note + ". Tell the user once."
 		}
@@ -422,6 +447,13 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		}
 		return map[string]any{"you": s.Agents.Name(a.PID), "personas_on": s.personasOn(), "columns": []string{"name", "traits", "description"}, "rows": rows}, nil
 	case "status":
+		if a.ID != "" {
+			t, ok := sp.Track(a.ID)
+			if !ok {
+				return nil, userErr("no utterance %q: voice keeps the last 100, and ids start again when voice restarts", a.ID)
+			}
+			return t, nil
+		}
 		st := sp.Status()
 		out := map[string]any{"preset": st.Preset, "muted": st.Muted, "speaking": st.Speaking, "queued": st.Queued}
 		if st.LastError != "" {

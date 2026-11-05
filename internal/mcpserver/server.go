@@ -23,7 +23,7 @@ Speak when:
 - you need the user's decision, approval or input (intent "question"),
 - something needs attention now, such as a failure that blocks you (intent "attention").
 
-Keep each utterance to one or two short, natural sentences, in English (the voices are English even when the conversation is not). Say what happened and what you need; details stay on screen. Never read out code, paths, URLs, logs or lists. Do not narrate routine steps, and do not repeat yourself. voice_speak returns at once while audio plays in the background.
+Keep each utterance to one or two short, natural sentences, in English (the voices are English even when the conversation is not). Say what happened and what you need; details stay on screen. Never read out code, paths, URLs, logs or lists. Do not narrate routine steps, and do not repeat yourself. voice_speak returns at once while audio plays in the background: its answer says queued, not heard. To know whether the user heard it (before saying it was said, or when it matters), call voice_control status with its id.
 
 At the start of a session call voice_control with action "register" once: it says nothing, lets the user dictate to you with their voice hotkey (their words then arrive as their own message) and tells you the name the user calls you by ("Annie, ..."); tell the user that name when they ask who you are. If the user wants to call you something else, register again with that name. When the answer gives you a character, become it for the rest of the session in every reply, written and spoken, as it describes; when the user asks for another character, call set_character. A "note" in any voice result saying your character changed applies from then on.
 
@@ -83,13 +83,14 @@ var (
 		"properties": map[string]any{
 			"action": map[string]any{
 				"type": "string", "enum": []string{"register", "set_character", "list_characters", "set_style", "transcript", "status", "stop", "mute", "unmute", "list_presets", "set_preset"},
-				"description": "register: silently tell voice this session exists, so the user's dictation (their voice hotkey) reaches you, and get your name and character; set_character: become another character from list_characters when the user asks (the answer says who you are now); list_characters: the characters the user defined; set_style: how this session speaks, short or narrative (style); transcript: what voice said and what the user dictated, and to whom (session filters it); status: preset, mute and queue state; stop: silence now and clear the queue; mute/unmute: refuse or accept speech; list_presets: available voices; set_preset: switch voice for everyone using this server.",
+				"description": "register: silently tell voice this session exists, so the user's dictation (their voice hotkey) reaches you, and get your name and character; set_character: become another character from list_characters when the user asks (the answer says who you are now); list_characters: the characters the user defined; set_style: how this session speaks, short or narrative (style); transcript: what voice said and what the user dictated, and to whom (session filters it); status: preset, mute and queue state, or with id what became of one voice_speak call (queued, rendering, playing, done, or error, stopped, interrupted, muted; the voice and engine that said it); stop: silence now and clear the queue; mute/unmute: refuse or accept speech; list_presets: available voices; set_preset: switch voice for everyone using this server.",
 			},
 			"preset":    map[string]any{"type": "string", "description": "Preset name for set_preset, from list_presets."},
 			"name":      map[string]any{"type": "string", "description": "register: a name the user calls this session by when dictating (one word, e.g. one the user asked for). Omit to keep the one voice gave you."},
 			"character": map[string]any{"type": "string", "description": "set_character: the character's name, from list_characters (name works too)."},
 			"session":   map[string]any{"type": "string", "description": "transcript: only lines of this session, by its name or character (\"Rebekka\"), or \"me\" for this session; omit for every session."},
 			"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "default": 20, "description": "transcript: how many of the newest lines."},
+			"id":        map[string]any{"type": "string", "description": "status: a voice_speak answer's id, to learn whether it was heard."},
 			"style":     map[string]any{"type": "string", "enum": []string{"short", "narrative"}, "description": "set_style: short (the default: a sentence or two, details on screen) or narrative (only when the user asks for a story, a scene or a role-play: speech is the content and each reply is said in full)."},
 		},
 		"additionalProperties": false,
@@ -154,7 +155,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "voice", Version: version}, &mcp.ServerOptions{Instructions: Instructions})
 	s.AddTool(&mcp.Tool{
 		Name:        "voice_speak",
-		Description: "Say a short sentence aloud to the user. Returns immediately; playback is queued.",
+		Description: "Say a short sentence aloud to the user. Returns immediately with state queued, not heard yet, and the voice and character that will say it; voice_control status with its id tells whether it was heard.",
 		InputSchema: speakSchema,
 		Annotations: &mcp.ToolAnnotations{Title: "Speak", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -172,7 +173,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{Title: "Voice control", DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var a service.ControlArgs
-		if err := decode(req, &a, "action", "preset", "name", "character", "session", "limit", "style"); err != nil {
+		if err := decode(req, &a, "action", "preset", "name", "character", "session", "limit", "style", "id"); err != nil {
 			return fail(err), nil
 		}
 		a.Client, a.PID, a.Project = caller(req, client), callerPID(req), callerProject(req)
