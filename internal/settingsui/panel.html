@@ -589,7 +589,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <label class="switch"><input type="checkbox" id="project"><span></span></label>
           </div>
           <div class="more row">
-            <label class="lab" for="hookPreset">Voice<span class="help">Without characters</span></label>
+            <label class="lab" for="hookPreset">Announcement voice<span class="help">Who says that a session finished or needs you: each session in its own voice (its character's, or the default voice), or always the voice picked here</span></label>
             <select id="hookPreset"></select>
           </div>
         </div></div>
@@ -1789,7 +1789,7 @@ function render(s) {
   seg('summaryPart', (s.hooks.summary_from || 'end') + ':' + (s.hooks.summary_sentences || 2)); summaryUI();
   seg('goalWait', String(s.hooks.codex_goal_wait ?? 3));
   $('project').checked = s.hooks.announce_project !== false;
-  fill($('hookPreset'), presets, s.hooks.preset || '', [{ value: '', label: 'Same as default' }]);
+  fill($('hookPreset'), presets, s.hooks.preset || '', [{ value: '', label: 'Each session''s own voice' }]);
   fill($('model'), o.models.map(m => ({ value: m.dir, label: m.label })), s.listen.model);
   $('unload').value = s.serve.unload_after || '15m';
   $('preload').checked = !!s.serve.preload_voices;
