@@ -130,26 +130,6 @@
       }
     },
     {
-      "name": "dia",
-      "label": "Dia",
-      "note": "English dialogue with many non-verbal sounds (laughs, sighs, gasps, coughs, throat clearing), cloning from the clip and its transcript; without a clip each sentence may get another voice",
-      "pip": ["git+https://github.com/nari-labs/dia.git"],
-      "module": "dia",
-      "port": 8772,
-      "clones": true,
-      "transcript": true,
-      "languages": ["en"],
-      "start_timeout": 900,
-      "prefetch": ["nari-labs/Dia-1.6B-0626"],
-      "expressive": {
-        "emotion": "none",
-        "sounds": {
-          "laugh": "(laughs)", "chuckle": "(chuckle)", "giggle": "(laughs)", "sigh": "(sighs)", "gasp": "(gasps)",
-          "cough": "(coughs)", "clear_throat": "(clears throat)", "sniff": "(sniffs)", "groan": "(groans)", "breath": "(inhales)"
-        }
-      }
-    },
-    {
       "name": "test",
       "label": "Test tone",
       "note": "a tone instead of speech, to check the sidecar without a model",
