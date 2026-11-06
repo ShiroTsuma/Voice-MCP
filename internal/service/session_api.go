@@ -93,7 +93,15 @@ func (ag *Agents) sessionLocked(id string) (*agentSeen, uint32) {
 }
 
 // Session runs one session API action.
+// SessionActions are the Session API's actions; the daemon serves one route
+// per name, and Session takes no other, so an action added to Session without
+// a route fails its tests instead of answering 404.
+var SessionActions = []string{"register", "poll", "say", "scene", "status", "stop", "style", "theme", "themes", "presets", "event", "send", "end", "transcript"}
+
 func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
+	if !slices.Contains(SessionActions, a.Action) {
+		return nil, userErr("unknown action %q", a.Action)
+	}
 	if s.Agents == nil {
 		return nil, userErr("voice keeps no sessions here")
 	}

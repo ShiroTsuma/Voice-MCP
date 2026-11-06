@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"voice/internal/preset"
@@ -41,4 +42,16 @@ func TestPollInterrupted(t *testing.T) {
 	}
 	var none *Agents
 	none.Interrupted(11) // no sessions kept: nothing happens
+}
+
+// Every action Session handles has a route: the daemon serves SessionActions,
+// and Session refuses the rest, so an action missing from the list fails here.
+func TestSessionStopIsServed(t *testing.T) {
+	s := &Service{Config: &preset.Config{}, Agents: &Agents{}}
+	if _, err := s.Session(context.Background(), SessionArgs{Action: "stop", Session: "x"}); err == nil || !strings.Contains(err.Error(), "unknown session") {
+		t.Fatalf("stop is not a served action: %v", err)
+	}
+	if _, err := s.Session(context.Background(), SessionArgs{Action: "dance", Session: "x"}); err == nil || !strings.Contains(err.Error(), "unknown action") {
+		t.Fatalf("an unknown action got through: %v", err)
+	}
 }
