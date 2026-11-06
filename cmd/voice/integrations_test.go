@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"voice/internal/engine/httpengine"
@@ -63,6 +64,30 @@ command = ["cmd", "/c", "echo installed"]
 	if st := planned.Status(); st.State != integrations.Planned || len(st.Actions) != 0 || planned.Do != nil {
 		t.Fatalf("planned: %+v", st)
 	}
+	// The short line, the [i]'s explanation and its facts; a file without
+	// them (an older one) still reads.
+	full := makeIntegration(readIntegrationFile(write("full.toml", `
+about = "Short."
+details = "Long."
+license = "MIT"
+runs_on = "a graphics card"
+uses = "planned"`)), handlers)
+	if full.About != "Short." || full.Details != "Long." || full.License != "MIT" || full.RunsOn != "a graphics card" {
+		t.Fatalf("details: %+v", full)
+	}
+	if old := makeIntegration(readIntegrationFile(write("old.toml", `about = "Only this."`)), handlers); old.About != "Only this." || old.Details != "" || old.License != "" {
+		t.Fatalf("a file without details: %+v", old)
+	}
+	if m := makeIntegration(readIntegrationFile(write("cpu.toml", `uses = "model"
+model = "kokoro"`)), handlers); m.RunsOn != "the processor (CPU), on any PC" {
+		t.Fatalf("a model runs on the processor: %q", m.RunsOn)
+	}
+	// A GPU backend's cards come from backends.json, whatever the file says.
+	if g := makeIntegration(readIntegrationFile(write("gpu.toml", `uses = "sidecar"
+backend = "chatterbox"
+runs_on = "any PC"`)), handlers); !strings.Contains(g.RunsOn, "AMD") || g.VRAM <= 0 {
+		t.Fatalf("a sidecar's cards and memory: %q %v", g.RunsOn, g.VRAM)
+	}
 	if st := makeIntegration(readIntegrationFile(write("odd.toml", `uses = "teleport"`)), handlers).Status(); st.State != integrations.Error {
 		t.Fatalf("unknown handler: %+v", st)
 	}
@@ -84,6 +109,10 @@ func TestShippedIntegrationFilesParse(t *testing.T) {
 		}
 		if _, ok := known[f.Uses]; f.Uses != "" && f.Uses != "planned" && !ok {
 			t.Errorf("%s: unknown uses %q", p, f.Uses)
+		}
+		// Every shipped card has one short line and the explanation behind its [i].
+		if f.About == "" || len(f.About) > 90 || f.Details == "" {
+			t.Errorf("%s: about must be one short line (%d chars) and details set", p, len(f.About))
 		}
 	}
 }

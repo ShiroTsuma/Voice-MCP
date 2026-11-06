@@ -3,6 +3,7 @@ group = "speech"
 order = 31
 title = "Piper Polish: Justyna"
 about = "Another Polish female voice."
+details = "A Piper voice: small (64 MB) and quick, Polish only, plain speech without sounds or moods."
 languages = ["pl"]
 uses = "model"
 model = "piper-pl-justyna"

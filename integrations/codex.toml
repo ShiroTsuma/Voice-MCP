@@ -2,5 +2,6 @@ id = "codex"
 group = "agents"
 order = 30
 title = "Codex"
-about = "Announcements through notify, dictation through its hooks and its own queue, and the $character skill."
+about = "Announcements, dictation and the $character skill for Codex."
+details = "Codex's finished turns are announced through its notify setting, dictation reaches it through its hooks and voice's own queue, and the $character skill picks a session's character."
 uses = "codex"

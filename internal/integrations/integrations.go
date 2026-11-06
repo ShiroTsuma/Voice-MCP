@@ -90,9 +90,13 @@ type Integration struct {
 	ID    string
 	Group string // one of Groups
 	Title string
-	About string // one sentence: what it gives the user
-	Size  string // what it takes on disk, when it is a download
-	Link  string // where to read more
+	About string // one short line: what it gives the user
+	// Details is the full explanation behind the card's [i]; License its
+	// license, non-commercial ones saying so.
+	Details string
+	License string
+	Size    string // what it takes on disk, when it is a download
+	Link    string // where to read more
 	// Requires names integrations this one needs: a long action installs
 	// the missing ones first (their primary action), in the same job.
 	Requires []string
@@ -106,8 +110,12 @@ type Integration struct {
 	// Expressive is what a voice engine does with voice's sound tags and
 	// moods; nil when it is not a voice engine.
 	Expressive *Expressive
-	// RunsOn names the graphics cards it needs ("an NVIDIA graphics card"); empty is any.
+	// RunsOn names what it needs ("an NVIDIA graphics card", "the
+	// processor (CPU), on any PC"); empty is not known.
 	RunsOn string
+	// VRAM is about how much graphics memory it takes loaded, in GB; 0 when
+	// not known or not on a graphics card.
+	VRAM float64
 	// Status reports the state; Do runs one of the actions Status offered.
 	Status func() Status
 	Do     func(ctx context.Context, action string, log func(string)) error
@@ -147,8 +155,11 @@ type View struct {
 	// Expressive: a voice engine's sounds and moods (see Expressive).
 	Expressive *Expressive `json:"expressive,omitempty"`
 	RunsOn     string      `json:"runs_on,omitempty"`
+	VRAM       float64     `json:"vram,omitempty"`
 	Title      string      `json:"title"`
 	About      string      `json:"about,omitempty"`
+	Details    string      `json:"details,omitempty"`
+	License    string      `json:"license,omitempty"`
 	Size       string      `json:"size,omitempty"`
 	Link       string      `json:"link,omitempty"`
 	Status     Status      `json:"status"`
@@ -202,7 +213,8 @@ func (r *Registry) List() []View {
 	sort.SliceStable(items, func(a, b int) bool { return order[items[a].Group] < order[items[b].Group] })
 	out := make([]View, 0, len(items))
 	for _, i := range items {
-		v := View{ID: i.ID, Group: i.Group, Also: i.Also, Title: i.Title, About: i.About, Size: i.Size, Link: i.Link, Languages: i.Languages, Expressive: i.Expressive, RunsOn: i.RunsOn}
+		v := View{ID: i.ID, Group: i.Group, Also: i.Also, Title: i.Title, About: i.About, Details: i.Details, License: i.License,
+			Size: i.Size, Link: i.Link, Languages: i.Languages, Expressive: i.Expressive, RunsOn: i.RunsOn, VRAM: i.VRAM}
 		v.Status = safeStatus(i)
 		if missing := r.missing(i, items); len(missing) > 0 && v.Status.State != On {
 			names := make([]string, len(missing))

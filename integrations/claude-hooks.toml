@@ -2,5 +2,6 @@ id = "claude-hooks"
 group = "agents"
 order = 10
 title = "Claude Code hooks"
-about = "Announces finished turns and questions, and passes dictation into a running turn."
+about = "Announces finished turns and questions; dictation reaches a running turn."
+details = "voice's hooks in Claude Code's settings.json: a session's finished turn or its question is said aloud, and what you dictate while it works reaches the turn that runs. Nothing to download; Turn off takes the hooks out again."
 uses = "claude-hooks"

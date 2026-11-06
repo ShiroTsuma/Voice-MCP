@@ -9,11 +9,16 @@ id    = "my-tts"            # unique; defaults to the file name
 group = "speech"            # agents, speech, gpu, cloning or listening
 order = 50                  # position in its group, lower first
 title = "My TTS"
-about = "One sentence: what it gives the user."
+about = "One short line: what it gives the user."
+details = "The full explanation: what it is good at and what not."  # optional, behind the card's [i]
+license = "Apache-2.0"      # optional; a non-commercial one says so ("CC BY-NC 4.0, non-commercial use only")
+runs_on = "the processor (CPU), on any PC"  # optional: what it needs; see below
 size  = "1.2 GB"            # optional, shown for downloads
 link  = "https://…"         # optional, "More" opens it
 requires = ["python"]       # optional: integrations installed first, in the same job
 ```
+
+A card shows `about` as its one line under the title; the [i] next to the title holds `details` and the facts: what it runs on, graphics memory, size, languages, sounds and moods, license, and for a `planned` one that it is not in voice yet. A file without `details` (an older one) shows the facts alone. `runs_on` comes from `sidecar/backends.json` (`gpus`) for a `sidecar` backend, whatever the file says, and is "the processor (CPU), on any PC" for a `model` or `builtin` one when the file names none; name it for a `planned` engine without claiming a card nobody has tested ("a graphics card; which ones is not known until it is in voice").
 
 An integration either names a handler that does the work in voice's code:
 

@@ -44,10 +44,17 @@ type integrationFile struct {
 	ID    string `toml:"id"`
 	Group string `toml:"group"`
 	Title string `toml:"title"`
-	About string `toml:"about"`
-	Size  string `toml:"size"`
-	Link  string `toml:"link"`
-	Order int    `toml:"order"` // within its group, lower first
+	About string `toml:"about"` // one short line under the title
+	// Details is the full explanation behind the card's [i]: what it is good
+	// at and what it is not. Older files without it show the facts alone.
+	Details string `toml:"details"`
+	License string `toml:"license"` // non-commercial ones say so
+	// RunsOn names what it needs ("a graphics card"); a sidecar backend's
+	// comes from sidecar/backends.json, a model's is the processor.
+	RunsOn string `toml:"runs_on"`
+	Size   string `toml:"size"`
+	Link   string `toml:"link"`
+	Order  int    `toml:"order"` // within its group, lower first
 
 	Uses     string   `toml:"uses"`     // a handler: claude-hooks, claude-mod, codex, session-api, model, sidecar, python, builtin, planned
 	Requires []string `toml:"requires"` // integrations installed first (their ids)
@@ -126,12 +133,20 @@ func readIntegrationFile(path string) integrationFile {
 }
 
 func makeIntegration(f integrationFile, handlers map[string]handler) integrations.Integration {
-	it := integrations.Integration{ID: f.ID, Group: f.Group, Title: f.Title, About: f.About, Size: f.Size, Link: f.Link, Requires: f.Requires, Also: f.Also, Languages: f.Languages}
+	it := integrations.Integration{ID: f.ID, Group: f.Group, Title: f.Title, About: f.About, Details: f.Details, License: f.License, RunsOn: f.RunsOn,
+		Size: f.Size, Link: f.Link, Requires: f.Requires, Also: f.Also, Languages: f.Languages}
 	if b, ok := sidecar.Find(f.Backend); ok && f.Uses == "sidecar" {
 		if len(it.Languages) == 0 {
 			it.Languages = b.Languages
 		}
-		it.RunsOn = b.GPUNames()
+		// backends.json is what the install checks, so it wins over the file.
+		if g := b.GPUNames(); g != "" {
+			it.RunsOn = g
+		}
+		it.VRAM = b.VRAM
+	}
+	if it.RunsOn == "" && (f.Uses == "model" || f.Uses == "builtin") {
+		it.RunsOn = "the processor (CPU), on any PC"
 	}
 	// What a voice engine does with voice's tags and moods, in one form.
 	m, _ := models.Find(f.Model)

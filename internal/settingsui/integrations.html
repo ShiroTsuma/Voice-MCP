@@ -68,6 +68,12 @@
   .state.planned::before { background: transparent; border: 1.5px dashed var(--ink-3); box-sizing: border-box; }
   .it.planned h3 > span:first-child, .it.planned .about { color: var(--ink-2); }  /* not in voice yet */
   .about { margin: 3px 0 0; font: 13px/1.45 var(--ui-small); color: var(--ink-2); }
+  /* [i]: the longer explanation, on hover or focus, in one box above the page so no panel clips it (as in the other windows). */
+  .tip { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; border-radius: 50%; vertical-align: 1px;
+    box-shadow: inset 0 0 0 1.2px var(--ink-3); color: var(--ink-2); font: 600 10px/1 var(--ui-small); cursor: help; }
+  .tip:hover, .tip:focus-visible { color: var(--ink); box-shadow: inset 0 0 0 1.2px var(--ink-2); outline: none; }
+  #tipbox { position: fixed; z-index: 50; max-width: 320px; padding: 9px 11px; border-radius: 6px; background: var(--field-hi); color: var(--ink);
+    font: 12.5px/1.45 var(--ui-small); white-space: pre-line; box-shadow: 0 6px 24px rgb(0 0 0 / .35); pointer-events: none; }
   .expr { margin: 3px 0 0; font: 12px/1.6 var(--ui-small); color: var(--ink-3, var(--ink-2)); }
   .expr .tok { font: 11.5px/1 ui-monospace, Consolas, monospace; color: var(--ink); background: var(--field); border-radius: 4px; padding: 1px 5px; }
   .detail { margin: 3px 0 0; font: 12.5px/1.45 var(--ui-small); color: var(--ink-3); user-select: text; }
@@ -299,6 +305,35 @@ function renderGroups() {
 
 const stateText = { on: 'Set up', off: 'Off', missing: 'Not installed', partly: 'Needs a step', error: 'Problem', planned: 'Coming later' };
 
+// The [i] beside a card's title: its details (what it is good at), then the
+// facts in short lines. Info and settings has the same and more: the state,
+// the settings, every language and sound by name, and the link.
+const sizeText = s => /\d[BM]$/.test(s) ? s + ' parameters' : s;
+function soundsText(x) {
+  const sounds = x.sounds || [], moods = (x.moods || []).filter(m => m !== 'any');
+  const noMood = x.emotion === 'none' || !x.emotion;
+  if (!sounds.length && noMood) return 'Plain speech: sound tags and moods are left out.';
+  const tags = sounds.slice(0, 4).map(n => '{' + n + '}');
+  const s = !sounds.length ? 'none' : sounds.length > 4 ? tags.join(', ') + ' and ' + (sounds.length - 4) + ' more' : andList(tags);
+  const m = noMood ? 'none' : x.emotion === 'instruct' ? 'any, by instruction'
+    : (moods.length ? moods.length : 'some') + (x.emotion === 'intensity' ? ', set as intensity' : x.emotion === 'labels' ? ', as labels' : '');
+  return 'Sounds: ' + s + '; moods: ' + m + '.';
+}
+function tipText(it) {
+  const facts = [];
+  if (it.status.state === 'planned') facts.push('Coming later: not in voice yet, so there is nothing to install.');
+  if (it.runs_on) facts.push('Runs on ' + it.runs_on + '.');
+  if (it.vram) facts.push('Takes about ' + it.vram + ' GB of graphics memory while loaded.');
+  if (it.size) facts.push('Size: ' + sizeText(it.size) + '.');
+  const langs = it.languages || [];
+  if (langs.includes('*')) facts.push('Languages: nearly every language.');
+  else if (langs.length > 12) facts.push('Languages: ' + langs.length + '; Info lists them.');
+  else if (langs.length) facts.push('Languages: ' + andList(langs.map(langName)) + '.');
+  if (it.expressive) facts.push(soundsText(it.expressive));
+  if (it.license) facts.push('License: ' + it.license + '.');
+  return [it.details, facts.join('\n')].filter(Boolean).join('\n\n');
+}
+
 function renderMain() {
   const main = $('main'), g = data.groups.find(x => x.id === group);
   const keepScroll = main.scrollTop;
@@ -317,6 +352,9 @@ function renderMain() {
     const left = document.createElement('div');
     const h3 = document.createElement('h3');
     const name = document.createElement('span'); name.textContent = it.title;
+    // One short line under the title; the rest behind the [i] beside it.
+    const why = tipText(it);
+    if (why) { const t = document.createElement('span'); t.className = 'tip'; t.tabIndex = 0; t.textContent = 'i'; t.dataset.tip = why; t.dataset.for = it.id; name.append(t); }
     const st = document.createElement('span'); st.className = 'state ' + it.status.state;
     const running = it.job && !it.job.done;
     st.textContent = running ? 'Working…' : it.status.label || stateText[it.status.state] || it.status.state;
@@ -480,7 +518,8 @@ function renderInfo() {
     r.append(l, v); box.append(r);
   };
   const text = s => { const p = document.createElement('span'); p.textContent = s; return p; };
-  if (it.about) { const p = document.createElement('p'); p.className = 'about'; p.textContent = it.about; box.append(p); }
+  // The dialog is the whole sheet: the card's line and its [i]'s explanation, then the facts in rows.
+  for (const s of [it.about, it.details]) if (s) { const p = document.createElement('p'); p.className = 'about'; p.textContent = s; box.append(p); }
   row('State', it.status.detail ? text(it.status.detail) : null);
   const langs = it.languages || [];
   if (langs.length) row('Languages', text(langs.includes('*') ? 'Nearly every language' : languagesLine(it) + (langs.length <= 30 ? ' — ' + langs.map(langName).join(', ') : '')));
@@ -495,7 +534,9 @@ function renderInfo() {
     row('Moods', text((emotionText[x.emotion] || x.emotion) + (moods.length ? ': ' + moods.join(', ') : '')));
   }
   row('Runs on', it.runs_on ? text(it.runs_on.replace(/^an? /, '').replace(/^./, c => c.toUpperCase())) : null);
-  row('Size', it.size ? text(it.size) : null);
+  row('Graphics memory', it.vram ? text('About ' + it.vram + ' GB while loaded') : null);
+  row('Size', it.size ? text(sizeText(it.size)) : null);
+  row('License', it.license ? text(it.license) : null);
   // The row names the setting, so the controls go without their own label.
   const bare = el => { el.firstChild.remove(); return el; };
   if (it.status.choice) row(it.status.choice.label, bare(picker(it)));
@@ -534,13 +575,32 @@ function fieldRow(it) {
 
 function render() { renderGroups(); renderMain(); }
 
+// [i]: its data-tip in a box under it (above, near the bottom), kept inside the window; as in the other windows.
+const tipbox = document.createElement('div'); tipbox.id = 'tipbox'; tipbox.hidden = true; tipbox.setAttribute('role', 'tooltip'); document.body.append(tipbox);
+let tipFor = null;
+function showTip(t) {
+  tipFor = t;
+  tipbox.textContent = t.dataset.tip || ''; tipbox.hidden = !tipbox.textContent;
+  const r = t.getBoundingClientRect(), w = tipbox.offsetWidth, h = tipbox.offsetHeight;
+  tipbox.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - 12)) + 'px';
+  tipbox.style.top = (r.bottom + 6 + h > innerHeight - 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
+}
+document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('.tip'); if (t) showTip(t); });
+document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.tip')) tipbox.hidden = true; });
+document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('tip')) showTip(e.target); });
+document.addEventListener('focusout', () => { tipbox.hidden = true; });
+// Scrolling carries the box along with its [i].
+document.addEventListener('scroll', () => { if (!tipbox.hidden && tipFor) showTip(tipFor); }, true);
+document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); showTip(e.target); } });
+
 async function refresh() {
   clearTimeout(timer);
   // Not while an address is being typed: the redraw would take the cursor away.
   const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.field');
   try {
     data = await api('integrations');
-    if (!typing && !actMenu) { render(); if (infoId) renderInfo(); }
+    // Nor while an [i] is open: the redraw would take its box away.
+    if (!typing && !actMenu && tipbox.hidden) { render(); if (infoId) renderInfo(); }
   } catch (e) { $('main').textContent = e.message; }
   const busy = data.items.some(i => i.job && !i.job.done);
   if (document.visibilityState === 'visible') timer = setTimeout(refresh, busy ? 1000 : 5000);

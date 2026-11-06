@@ -12,7 +12,7 @@ import (
 func TestRegistry(t *testing.T) {
 	on := false
 	r := &Registry{}
-	r.Add(Integration{ID: "late", Group: "listening", Title: "Late"})
+	r.Add(Integration{ID: "late", Group: "listening", Title: "Late", About: "Short.", Details: "Long.", License: "MIT", RunsOn: "a graphics card", VRAM: 4})
 	r.Add(Integration{
 		ID: "hooks", Group: "agents", Title: "Hooks",
 		Status: func() Status {
@@ -44,6 +44,13 @@ func TestRegistry(t *testing.T) {
 	}
 	if list[2].Status.State != On {
 		t.Fatalf("no status func means on: %+v", list[2].Status)
+	}
+	// What the card's [i] shows reaches the window under its JSON names.
+	b, _ := json.Marshal(list[2])
+	for _, want := range []string{`"about":"Short."`, `"details":"Long."`, `"license":"MIT"`, `"runs_on":"a graphics card"`, `"vram":4`} {
+		if !strings.Contains(string(b), want) {
+			t.Fatalf("view JSON lacks %s: %s", want, b)
+		}
 	}
 
 	if _, err := r.Start("hooks", "off"); err == nil {

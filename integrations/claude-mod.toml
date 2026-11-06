@@ -2,5 +2,6 @@ id = "claude-mod"
 group = "agents"
 order = 20
 title = "Claude Code mod"
-about = "Starts a turn with dictation in an idle session, shows its name, adds /character and answers question dialogs by voice."
+about = "Dictation starts a turn in an idle session; question dialogs answered by voice."
+details = "The voice@voice Claude Code mod: dictation starts a turn in a session that waits, the session shows the name you call it by, /character picks its character, and its question dialogs can be answered by voice. Works with the hooks above."
 uses = "claude-mod"
