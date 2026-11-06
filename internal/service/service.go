@@ -413,10 +413,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	maxChars := 0
-	if s.Agents.Style(a.PID) == StyleNarrative {
-		maxChars = narrativeChars // speech is the content: a reply is not cut short
-	}
+	maxChars := s.speechChars(a.PID) // a narrative, or most of a reply said aloud, is not cut short
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: a.Intent, Lang: a.Lang, Interrupt: a.Interrupt,
 		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood, Mode: a.Mode, Owner: a.PID, Turn: a.Turn,
@@ -467,6 +464,9 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 			if l := s.takeLangNote(a.PID, false); l != "" {
 				notes = append(notes, l)
 			}
+			if l := s.takeAloudNote(a.PID, false); l != "" {
+				notes = append(notes, l)
+			}
 		}
 		if len(notes) > 0 {
 			out["note"] = strings.Join(notes, " ")
@@ -511,7 +511,7 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		if persona, _ := s.takePersona(a.PID, true); persona != "" {
 			out += ". Your character: " + persona
 		}
-		return out + ". " + s.takeLangNote(a.PID, true), nil
+		return strings.TrimSpace(out + ". " + s.takeLangNote(a.PID, true) + " " + s.takeAloudNote(a.PID, true)), nil
 	case "set_character":
 		// The agent takes another character from the list, e.g. when the user asks.
 		if a.PID == 0 {
@@ -533,7 +533,8 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		if persona == "" {
 			return fmt.Sprintf("the user calls you %s now; characters are switched off in the settings, so keep your usual tone", name), nil
 		}
-		return "From now on: " + persona + " " + s.takeLangNote(a.PID, true), nil
+		// How much it says aloud only when the new character changes it (a switch back to short included).
+		return strings.TrimSpace("From now on: " + persona + " " + s.takeLangNote(a.PID, true) + " " + s.takeAloudNote(a.PID, false)), nil
 	case "transcript":
 		return s.Agents.TranscriptFor(a.PID, a.Session, int(a.Limit)), nil
 	case "list_characters":

@@ -34,7 +34,7 @@ A session is one conversation of your agent, named by an id you choose (`"sessio
 | `project` | its working folder's name: the user can dictate "notes: …" to reach it |
 | `name` | what the user calls it ("Mira, …"); without it the session takes the next free character |
 
-Answer: `{"name": "Mira", "persona": "…", "messages": [], "others": ["Tobias", "Zofia"]}`. `others` are the other sessions' names, which `send` takes. `persona`, when present, is the character the user gave the session (with **Give sessions characters** on): put it in your system prompt.
+Answer: `{"name": "Mira", "persona": "…", "messages": [], "others": ["Tobias", "Zofia"]}`. `others` are the other sessions' names, which `send` takes. `persona`, when present, is the character the user gave the session (with **Give sessions characters** on): put it in your system prompt. `speech`, when present, says how much of each reply to say aloud, because the user works by voice (**Says aloud** set to Most of it or Nearly all): put it in your system prompt too, and `say` far more than a sentence or two, a long reply in pieces with one `turn`. Without it, keep speech short.
 
 Register again with the same `session` after voice restarts; it is harmless at any time.
 
@@ -49,7 +49,7 @@ Poll every second or two while your agent runs. A session that has not polled fo
 - `"state": "idle"`: the agent waits for the user. `messages` are the user's next prompt; answer them. The turn they start counts as busy until you poll idle again or send `done`.
 - `"state": "busy"`: the agent is working. `messages` are what the user said meanwhile ("also check the tests"): take them into account in the running turn.
 
-Answer: `{"name": "Mira", "messages": ["add a dark theme"], "voice_reply": true, "persona": "…", "others": ["Tobias", "Zofia"]}`. `voice_reply` means the user spoke these words and has **Answer by voice** on: say the key point of your answer aloud (`say`). `persona` appears once after the user changed the session's character. `"interrupted": true` appears once after the user started dictating while this session spoke or had speech queued: voice has already stopped that speech, so drop the rest of what you meant to say and listen to what comes next.
+Answer: `{"name": "Mira", "messages": ["add a dark theme"], "voice_reply": true, "persona": "…", "others": ["Tobias", "Zofia"]}`. `voice_reply` means the user spoke these words and has **Answer by voice** on: say the key point of your answer aloud (`say`), or as much as `speech` says. `persona` appears once after the user changed the session's character, and `speech` once after the user changed how much it says aloud (back to short included): it replaces what you were told before. `"interrupted": true` appears once after the user started dictating while this session spoke or had speech queued: voice has already stopped that speech, so drop the rest of what you meant to say and listen to what comes next.
 
 ### say
 
@@ -57,7 +57,7 @@ Answer: `{"name": "Mira", "messages": ["add a dark theme"], "voice_reply": true,
 {"session": "notes-3f2a", "text": "The dark theme is in.", "intent": "info"}
 ```
 
-Speaks in the session's character's voice and returns at once while it plays: `{"id": "v12", "queue_position": 0}`. `intent` is `info` (default), `question` or `attention`. Keep it to one or two short sentences; details belong on screen.
+Speaks in the session's character's voice and returns at once while it plays: `{"id": "v12", "queue_position": 0}`. `intent` is `info` (default), `question` or `attention`. Keep it to one or two short sentences; details belong on screen, unless `speech` from `register` or `poll` asks for more. Then a line may be up to 4000 characters, and a long reply goes in several `say` calls with the same `turn`.
 
 The rest is optional, as on the MCP's `voice_speak`:
 

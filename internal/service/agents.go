@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"voice/internal/preset"
 )
 
 // Agents remembers the agent processes that used voice (spoke, listened,
@@ -66,6 +68,7 @@ type agentSeen struct {
 	told     string    // the character whose persona the agent last received
 	toldText string    // that persona as it went out, so an edit to the character (immersion, traits) goes out too
 	toldLang string    // the language its voice speaks, as the agent last heard it
+	toldLong int       // how much of a reply it says aloud (preset.Aloud*), as the agent last heard it; 0: short, nothing told
 	asked    int       // the user's messages since its character was last recalled
 	custom   bool      // the name is the user's own, not one from the character list
 	session  string    // Claude Code's session id, from its hooks
@@ -359,6 +362,10 @@ type AgentResult struct {
 	// user dictated, as strongly as the character steers (character immersion).
 	Reminder   string `json:"reminder,omitempty"`
 	ReplyAloud string `json:"reply_aloud,omitempty"`
+	// Speech says how much of each reply to say aloud, when the user wants
+	// more than a sentence or two (character aloud): at the start, after it
+	// changed and with the reminders.
+	Speech string `json:"speech,omitempty"`
 }
 
 // Speaking styles of a session (voice_control set_style).
@@ -460,10 +467,19 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 	if res.Persona != "" {
 		st.asked = 0
 	} else if !sub && a.Event == "busy" && strings.TrimSpace(a.Prompt) != "" {
-		// A message of the user's (UserPromptSubmit): the character is recalled every so many.
+		// A message of the user's (UserPromptSubmit): the character, and how
+		// much to say aloud when that is more than a sentence or two, are
+		// recalled every so many (without a character, as often as the others).
 		st.asked++
-		if ch, every := s.sessionCharacter(st.name); ch != nil && every > 0 && st.asked >= every {
-			res.Reminder, st.asked = ch.Reminder(s.Config.ImmersionOf(*ch)), 0
+		ch, every := s.sessionCharacter(st.name)
+		if ch == nil && s.Config != nil {
+			every = s.Config.GuidanceOf(preset.Character{})
+		}
+		if every > 0 && st.asked >= every {
+			if ch != nil {
+				res.Reminder = ch.Reminder(s.Config.ImmersionOf(*ch))
+			}
+			res.Speech, st.asked = preset.AloudNote(s.aloudFor(st.name)), 0
 		}
 	}
 	report := func() {}
@@ -479,6 +495,9 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 	}
 	if !sub && (a.Start || a.Event == "busy") {
 		res.LangNote = s.takeLangNote(a.PID, a.Start)
+		if n := s.takeAloudNote(a.PID, a.Start); n != "" {
+			res.Speech = n // at the start or after a change; a reminder's would say the same
+		}
 	}
 	return res, nil
 }

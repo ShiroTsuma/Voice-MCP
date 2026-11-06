@@ -180,7 +180,61 @@ func (s *Service) persona(name string) string {
 	if !ok {
 		ch = preset.Character{Name: name}
 	}
-	return ch.Persona(s.Config.ImmersionOf(ch))
+	return ch.PersonaAloud(s.Config.ImmersionOf(ch), s.Config.AloudOf(ch))
+}
+
+// aloudFor is how much of a reply the session called name says aloud: its
+// character's choice, or the general one when it has none or characters are off.
+func (s *Service) aloudFor(name string) int {
+	if s.Config == nil {
+		return preset.DefaultAloud
+	}
+	if ch, _ := s.sessionCharacter(name); ch != nil {
+		return s.Config.AloudOf(*ch)
+	}
+	return s.Config.AloudOf(preset.Character{})
+}
+
+// takeAloudNote tells pid's agent how much of each reply to say aloud: at the
+// start (start) when that is more than a sentence or two, and once after it
+// changed (another level, or another character with its own); "" otherwise.
+func (s *Service) takeAloudNote(pid uint32, start bool) string {
+	if s.Agents == nil || pid == 0 {
+		return ""
+	}
+	level := s.aloudFor(s.Agents.Name(pid))
+	ag := s.Agents
+	ag.mu.Lock()
+	defer ag.mu.Unlock()
+	st := ag.seen[pid]
+	if st == nil {
+		return ""
+	}
+	told := st.toldLong
+	if told == 0 {
+		told = preset.AloudShort // what every agent hears without a note
+	}
+	st.toldLong = level
+	switch {
+	case start:
+		return preset.AloudNote(level)
+	case told == level:
+		return ""
+	}
+	return preset.AloudChanged(level)
+}
+
+// speechChars is how long one spoken line may be for pid: a narrative or a
+// session that says most of its replies aloud is not cut short; 0 uses
+// max_chars.
+func (s *Service) speechChars(pid uint32) int {
+	if s.Agents == nil {
+		return 0
+	}
+	if s.Agents.Style(pid) == StyleNarrative || pid != 0 && s.aloudFor(s.Agents.Name(pid)) > preset.AloudShort {
+		return narrativeChars
+	}
+	return 0
 }
 
 // sessionCharacter is the character a session called name plays and every
@@ -197,9 +251,18 @@ func (s *Service) sessionCharacter(name string) (*preset.Character, int) {
 }
 
 // replyAloud tells an agent how to answer aloud what the user dictated: as
-// briefly or as fully as its character speaks (in lang, "Polish").
+// much as the user wants said aloud, else as briefly or as fully as its
+// character speaks (in lang, "Polish").
 func (s *Service) replyAloud(name, lang string) string {
 	const tail = ", no code or lists; details stay on screen. If you ask them something, say the question aloud too."
+	long := " in natural spoken sentences, in " + lang + "; code, paths, logs, raw output and long lists stay on screen (say in a few words what they hold). " +
+		"Send a long answer in several voice_speak calls with the same turn. If you ask them something, say the question aloud too."
+	switch s.aloudFor(name) {
+	case preset.AloudMost:
+		return "The user is talking to you by voice. Besides your written reply, say its substance aloud with the voice_speak tool (what you did, found or decided, and what you need from them)," + long
+	case preset.AloudNearlyAll:
+		return "The user is talking to you by voice. Besides your written reply, say nearly all of it aloud with the voice_speak tool, as you would tell it in person," + long
+	}
 	level := 0
 	if ch, _ := s.sessionCharacter(name); ch != nil {
 		level = s.Config.ImmersionOf(*ch)

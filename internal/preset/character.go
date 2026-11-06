@@ -25,6 +25,61 @@ type Character struct {
 	// it, in the user's messages (0: only at the start); unset uses the general one.
 	Immersion int  `toml:"immersion,omitempty" json:"immersion,omitempty"`
 	Guidance  *int `toml:"guidance,omitempty" json:"guidance,omitempty"`
+	// Aloud is how much of each reply its agent says aloud (Aloud*); 0 uses
+	// the general one.
+	Aloud int `toml:"aloud,omitempty" json:"aloud,omitempty"`
+}
+
+// How much of its reply an agent says aloud.
+const (
+	// AloudShort: a sentence or two; the details stay on screen.
+	AloudShort = 1
+	// AloudMost: the substance of each reply; code, paths, logs and lists stay on screen.
+	AloudMost = 2
+	// AloudNearlyAll: the whole reply but code, paths and raw output.
+	AloudNearlyAll = 3
+)
+
+// DefaultAloud is how much is said aloud when neither the character nor the settings choose.
+const DefaultAloud = AloudShort
+
+// AloudOf is how much of a reply ch's agent says aloud: its own, else the
+// settings', else the default. Character{} gives the general one, which a
+// session without a character (characters off) follows.
+func (c *Config) AloudOf(ch Character) int {
+	if ch.Aloud >= AloudShort && ch.Aloud <= AloudNearlyAll {
+		return ch.Aloud
+	}
+	if p := c.Serve.CharacterAloud; p != nil && *p >= AloudShort && *p <= AloudNearlyAll {
+		return *p
+	}
+	return DefaultAloud
+}
+
+// AloudNote tells an agent how much of each reply to say aloud, for a level
+// above short; "" for short, which the usual guidance already says.
+func AloudNote(level int) string {
+	const pieces = "Send a long reply in several voice_speak calls with the same turn, so they play as one. "
+	const notRead = "Code, paths, URLs, logs, raw output, tables and long lists stay on screen: say in a few words what they hold instead of reading them. "
+	switch level {
+	case AloudMost:
+		return "The user works mostly by voice and does not keep reading the screen, so speak more than a sentence or two: " +
+			"after each reply, say its substance aloud with voice_speak (what you did, found or decided, what is left, what you need from them) " +
+			"in natural spoken sentences. " + notRead + pieces + "If you ask them something, say the question aloud too."
+	case AloudNearlyAll:
+		return "The user works by voice and does not read the screen, so speak more than a sentence or two: " +
+			"say nearly all of each reply aloud with voice_speak, as you would tell it to them in person. " + notRead + pieces +
+			"If you ask them something, say the question aloud too."
+	}
+	return ""
+}
+
+// AloudChanged tells an agent that how much it says aloud changed to level.
+func AloudChanged(level int) string {
+	if n := AloudNote(level); n != "" {
+		return "The user changed how much you say aloud. From now on: " + n
+	}
+	return "The user changed how much you say aloud. From now on keep it short: one or two sentences aloud; the details stay on screen."
 }
 
 // How strongly a character steers its agent.
@@ -114,8 +169,15 @@ func (c *Config) Character(name string) (Character, bool) {
 }
 
 // Persona is the instruction that makes an agent this character, as strongly
-// as immersion says.
+// as immersion says, with short speech.
 func (ch Character) Persona(immersion int) string {
+	return ch.PersonaAloud(immersion, AloudShort)
+}
+
+// PersonaAloud is Persona for an agent that says aloud as much as aloud
+// says: above short, the levels that keep speech short only keep it plain or
+// in the character's voice, and AloudNote says how much.
+func (ch Character) PersonaAloud(immersion, aloud int) string {
 	var who []string
 	if len(ch.Traits) > 0 {
 		who = append(who, strings.Join(ch.Traits, ", "))
@@ -129,8 +191,13 @@ func (ch Character) Persona(immersion int) string {
 	}
 	const work = "It shapes only how you talk, never the work: stay correct, complete, honest and safe, and keep helping even when the character is mean or teasing. "
 	var how string
+	long := aloud > AloudShort
 	switch immersion {
 	case ImmersionLight:
+		if long {
+			how = "Let it colour your written replies for the rest of the session. When you speak aloud, keep it plain. " + work
+			break
+		}
 		how = "Let it colour your written replies for the rest of the session. When you speak aloud, keep it short and plain. " + work
 	case ImmersionFull:
 		how = "Be this character in every reply, written and spoken, for the rest of the session: its tone, wording, opinions and moods are yours, " +
@@ -142,6 +209,11 @@ func (ch Character) Persona(immersion int) string {
 			"never harm the work or the user's things (no sabotage, no deleting, no lying about what you did or found), " +
 			"and when the user writes \"" + ch.Name + ", out of character: ...\" answer that plainly as yourself, then go back to the character. "
 	default:
+		if long {
+			how = "Stay in it in every reply, written and spoken, for the rest of the session: your tone, wording and attitude follow it. " +
+				"What you say aloud sounds like you, not like a status report. " + work
+			break
+		}
 		how = "Stay in it in every reply, written and spoken, for the rest of the session: your tone, wording and attitude follow it. " +
 			"What you say aloud stays short, but sounds like you, not like a status report. " + work
 	}

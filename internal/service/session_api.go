@@ -69,6 +69,9 @@ type SessionResult struct {
 	Interrupted bool `json:"interrupted,omitempty"`
 	// Others are the other sessions' names, which send takes.
 	Others []string `json:"others"`
+	// Speech says how much of each reply to say aloud, when the user wants
+	// more than a sentence or two: at register, and once after it changed.
+	Speech string `json:"speech,omitempty"`
 }
 
 // othersThan lists the names of the sessions other than pid.
@@ -133,7 +136,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 			name = ag.SetName(a.PID, a.Name)
 		}
 		persona, _ := s.takePersona(a.PID, true)
-		return SessionResult{Name: name, Persona: persona, Messages: []string{}, Others: ag.othersThan(a.PID)}, nil
+		return SessionResult{Name: name, Persona: persona, Messages: []string{}, Others: ag.othersThan(a.PID), Speech: s.takeAloudNote(a.PID, true)}, nil
 	}
 
 	ag.mu.Lock()
@@ -180,6 +183,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 		ag.mu.Unlock()
 		report()
 		out.Persona, _ = s.takePersona(pid, false) // after the user changed its character
+		out.Speech = s.takeAloudNote(pid, false)   // after the user changed how much it says aloud
 		out.Others = ag.othersThan(pid)
 		return out, nil
 	case "say":

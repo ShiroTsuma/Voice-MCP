@@ -110,10 +110,12 @@ def main():
     voice.on_restart = register
     name = reg["name"]
     persona = reg.get("persona", "")
+    speech = reg.get("speech", "")  # the user wants more than a sentence or two aloud
 
     def system_prompt(others):
-        text = (f"You are {name}, a helpful assistant the user talks to by voice. Answer in one or two short "
-                "sentences.")
+        text = f"You are {name}, a helpful assistant the user talks to by voice. "
+        text += "Answer in spoken sentences, as fully as the user needs, without code or lists." if speech else \
+            "Answer in one or two short sentences."
         if others:
             text += (f" Other agents you can message: {', '.join(others)}. When the user asks you to ask or tell "
                      "one of them something, do not answer it yourself: reply with only @Name: and the message. "
@@ -129,6 +131,8 @@ def main():
             got = voice.call("poll", session=session, state="idle")
             if got.get("persona"):
                 persona = got["persona"]
+            if got.get("speech"):  # the user changed how much is said aloud; back to short says "keep it short"
+                speech = "" if "keep it short" in got["speech"] else got["speech"]
             others = got.get("others", others)
             if not got["messages"]:
                 time.sleep(1)

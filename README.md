@@ -120,7 +120,7 @@ The agent installs and tests voice. Trusting the Codex hooks, restarting session
 
 ## Talk to your agents
 
-**Hearing them.** voice speaks when an agent finishes a turn, asks for permission or asks you a question. The agent can also speak for itself through the `voice_speak` tool, which its skill tells it to use rarely and briefly. With **Answer by voice** on (Speaking), an agent that you dictated to says the key point of its answer aloud too.
+**Hearing them.** voice speaks when an agent finishes a turn, asks for permission or asks you a question. The agent can also speak for itself through the `voice_speak` tool, which its skill tells it to use rarely and briefly. With **Answer by voice** on (Speaking), an agent that you dictated to says the key point of its answer aloud too. To work mostly by voice without reading the console, set **Says aloud** (Characters window) to **Most of it** or **Nearly all**: the agent then says much more of each reply aloud (see [Characters](#characters)).
 
 <table>
   <tr>
@@ -185,6 +185,10 @@ Two settings decide how much of the character the agent shows, for all character
 - **Reminders**, how often the agent is reminded of its character, counted in your messages: only at the start, every message, every 3 (the default), 5, 10 or any number. A reminder is one line (name and traits), or the whole description at Full and Role-play; the editor shows what that costs in tokens. The whole description also goes out at the start and with your next message after a change: another character, or this one edited (its traits, description or immersion), even in a session already running.
 
 With characters off, agents get none of this.
+
+A third setting sits beside them, for all sessions at the top of the Characters window and for one character in its editor:
+
+- **Says aloud**, how much of each reply the agent says aloud: **Short** (the default: a sentence or two when it finishes something or needs you; details on screen), **Most of it** (the substance of each reply: what it did, found or decided, what is left and what it needs from you; code, paths, logs and lists stay on screen, and it says in a few words what they hold) or **Nearly all** (the whole reply as it would tell you in person, but code, paths, links and raw output). It is for working by voice without reading the console. Above Short, the agent is told at the start, with the reminders and once after a change, sends a long reply in pieces of one turn so it plays as one utterance, and its spoken lines may be as long as the narrative style's. Unlike the other two it also applies with characters off: sessions without a character follow the general level.
 
 <img src="docs/images/characters.png" alt="The characters window: a list of characters and the editor for Clara with personality traits, description, voice and colour">
 
@@ -391,7 +395,7 @@ voice knows the agents: the shared-mcp gateway passes each agent's process ID wi
 
 Typing waits until you let go of Ctrl and Alt, so ending the recording with the hotkey does not turn the text into shortcuts. `[serve] dictate_submit = true` presses Enter after typed text. `dictate_target = "console"` only uses terminal agents, `"window"` only the window in front. A server cannot start the user's turn over MCP, which is why voice types, hands over through hooks, or leaves it to the mod. `voice dictate "text"` delivers text the same way, to try it without speaking.
 
-Characters are `[[characters]]` in `config.toml`: `name`, `traits = [...]`, `description`, `preset`, `color` and `image` (cropped to a square, kept in `data\avatars`). `[serve] personas = true` turns on **Give sessions characters**; `character_immersion` (1 light .. 4 role-play) and `character_guidance` (every N of your messages, 0 only at the start) set the two settings above, and a character's own `immersion` and `guidance` override them. Claude Code learns its character from its SessionStart hook, Codex from `voice_control register`; a character changed in the settings reaches Claude Code with its next hook and Codex with its next voice call, and an agent can switch itself with `voice_control set_character` when you ask (`list_characters` shows the list).
+Characters are `[[characters]]` in `config.toml`: `name`, `traits = [...]`, `description`, `preset`, `color` and `image` (cropped to a square, kept in `data\avatars`). `[serve] personas = true` turns on **Give sessions characters**; `character_immersion` (1 light .. 4 role-play) and `character_guidance` (every N of your messages, 0 only at the start) set the two settings above, `character_aloud` (1 short, 2 most of it, 3 nearly all) sets **Says aloud**, and a character's own `immersion`, `guidance` and `aloud` override them. Claude Code learns its character from its SessionStart hook, Codex from `voice_control register`; a character changed in the settings reaches Claude Code with its next hook and Codex with its next voice call, and an agent can switch itself with `voice_control set_character` when you ask (`list_characters` shows the list).
 
 ### Commands
 

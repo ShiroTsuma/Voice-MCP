@@ -14,7 +14,10 @@ The voice MCP is the agent's mouth and ears on the user's machine.
   (`attention`). Not for routine progress.
 - One or two short, natural sentences in the language `register` names
   for your voice (English unless it says otherwise), even when the
-  conversation is in another language. Omit `lang`: voice uses your voice's
+  conversation is in another language. When `register` (or a later note)
+  says the user works by voice and wants most or nearly all of each reply
+  aloud, do that instead: speak after each reply, as it says, and send a
+  long reply in several calls with the same `turn`. Omit `lang`: voice uses your voice's
   language. A note in a voice result says when it changes.
 - Never read code, paths, URLs, logs or lists aloud. The screen has details.
 - The call returns at once; audio plays in the background. Client hooks

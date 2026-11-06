@@ -26,7 +26,7 @@ Speak when:
 - you need the user's decision, approval or input (intent "question"),
 - something needs attention now, such as a failure that blocks you (intent "attention").
 
-Keep each utterance short and natural, one or two sentences, unless your character (from register) says to say more; speak in the language register tells you your voice speaks (English unless it says otherwise, even when the conversation is not). Without a character, say what happened and what you need; details stay on screen. Never read out code, paths, URLs, logs or lists. Do not narrate routine steps, and do not repeat yourself. voice_speak returns at once while audio plays in the background: its answer says queued, not heard. To know whether the user heard it (before saying it was said, or when it matters), call voice_control status with its id.
+Keep each utterance short and natural, one or two sentences, unless your character or a note from register (the user works by voice and wants most of each reply aloud) says to say more; that note then also has you speak after each reply. Speak in the language register tells you your voice speaks (English unless it says otherwise, even when the conversation is not). Without a character, say what happened and what you need; details stay on screen. Never read out code, paths, URLs, logs or lists. Do not narrate routine steps, and do not repeat yourself. voice_speak returns at once while audio plays in the background: its answer says queued, not heard. To know whether the user heard it (before saying it was said, or when it matters), call voice_control status with its id.
 
 At the start of a session call voice_control with action "register" once: it says nothing, lets the user dictate to you with their voice hotkey (their words then arrive as their own message) and tells you the name the user calls you by ("Annie, ..."); tell the user that name when they ask who you are. If the user wants to call you something else, register again with that name. When the answer gives you a character, become it for the rest of the session in every reply, written and spoken, as strongly as it describes (that also decides how you sound aloud); when the user asks for another character, call set_character. A "note" in any voice result saying your character changed applies from then on.
 
@@ -43,7 +43,7 @@ var (
 		"type":     "object",
 		"required": []string{"text"},
 		"properties": map[string]any{
-			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences, no markdown or code. May hold voice's tags: {laugh}, {sigh}, {cough}... for a sound and {pause} or {pause:1.5} for silence; a voice makes the sounds it can (voice_control list_presets says which) and drops the rest, never reading a tag aloud."},
+			"text": map[string]any{"type": "string", "description": "What to say: one or two short spoken sentences (more when register's note says the user wants more aloud), no markdown or code. May hold voice's tags: {laugh}, {sigh}, {cough}... for a sound and {pause} or {pause:1.5} for silence; a voice makes the sounds it can (voice_control list_presets says which) and drops the rest, never reading a tag aloud."},
 			"mood": map[string]any{"type": "string", "enum": []string{"neutral", "happy", "excited", "amused", "teasing", "sarcastic", "calm", "tender", "sad", "angry", "afraid", "surprised"}, "description": "How text is said, where the voice's engine can show it (list_presets says which); others ignore it."},
 			"intent": map[string]any{
 				"type": "string", "enum": []string{core.IntentInfo, core.IntentAttention, core.IntentQuestion}, "default": core.IntentInfo,
@@ -179,7 +179,7 @@ func New(api service.API, version, client, presetName string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "voice", Version: version}, &mcp.ServerOptions{Instructions: Instructions})
 	s.AddTool(&mcp.Tool{
 		Name:        "voice_speak",
-		Description: "Say a short sentence aloud to the user (for a scene in several voices, or a recording to a file: voice_scene). Returns immediately with state queued, not heard yet, and the voice and character that will say it; voice_control status with its id tells whether it was heard.",
+		Description: "Say a short sentence aloud to the user, or more when register says the user wants most of each reply aloud (for a scene in several voices, or a recording to a file: voice_scene). Returns immediately with state queued, not heard yet, and the voice and character that will say it; voice_control status with its id tells whether it was heard.",
 		InputSchema: speakSchema,
 		Annotations: &mcp.ToolAnnotations{Title: "Speak", DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

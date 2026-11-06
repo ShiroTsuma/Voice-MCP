@@ -436,6 +436,9 @@ func merge(s *settings.Settings, in settings.Settings) {
 	if in.Serve.CharacterGuidance != nil {
 		s.Serve.CharacterGuidance = in.Serve.CharacterGuidance
 	}
+	if in.Serve.CharacterAloud != nil {
+		s.Serve.CharacterAloud = in.Serve.CharacterAloud
+	}
 	setB(&s.Serve.SpeakingPopup, in.Serve.SpeakingPopup)
 	setF(&s.Serve.PopupLinger, in.Serve.PopupLinger)
 	set(&s.Serve.ReaderAppear, in.Serve.ReaderAppear)

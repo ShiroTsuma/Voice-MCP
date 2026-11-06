@@ -125,6 +125,10 @@ type Serve struct {
 	// start). A character's own value overrides them.
 	CharacterImmersion *int `toml:"character_immersion"`
 	CharacterGuidance  *int `toml:"character_guidance"`
+	// CharacterAloud: how much of each reply an agent says aloud (1 short ..
+	// 3 nearly all, preset.Aloud*); a character's own value overrides it, and
+	// a session without a character follows it.
+	CharacterAloud *int `toml:"character_aloud"`
 	// SpeakingPopup shows who speaks and what, in a small window in the corner,
 	// while an agent speaks (off by default).
 	SpeakingPopup *bool `toml:"speaking_popup"`
@@ -384,6 +388,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if sv.CharacterGuidance != nil {
 		c.Serve.CharacterGuidance = sv.CharacterGuidance
+	}
+	if sv.CharacterAloud != nil {
+		c.Serve.CharacterAloud = sv.CharacterAloud
 	}
 	if sv.SpeakingPopup != nil {
 		c.Serve.SpeakingPopup = sv.SpeakingPopup

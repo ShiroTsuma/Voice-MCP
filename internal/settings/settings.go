@@ -91,6 +91,7 @@ type Character struct {
 	Lang        string   `toml:"lang,omitempty" json:"lang,omitempty"`           // the language it speaks; empty: the general one
 	Immersion   int      `toml:"immersion,omitempty" json:"immersion,omitempty"` // how strongly it steers; 0: the general one
 	Guidance    *int     `toml:"guidance,omitempty" json:"guidance,omitempty"`   // reminded every N user messages; unset: the general one
+	Aloud       int      `toml:"aloud,omitempty" json:"aloud,omitempty"`         // how much of a reply it says aloud; 0: the general one
 }
 
 type Serve struct {
@@ -109,6 +110,7 @@ type Serve struct {
 	Personas            *bool    `toml:"personas,omitempty" json:"personas,omitempty"`
 	CharacterImmersion  *int     `toml:"character_immersion,omitempty" json:"character_immersion,omitempty"`
 	CharacterGuidance   *int     `toml:"character_guidance,omitempty" json:"character_guidance,omitempty"`
+	CharacterAloud      *int     `toml:"character_aloud,omitempty" json:"character_aloud,omitempty"`
 	SpeakingPopup       *bool    `toml:"speaking_popup,omitempty" json:"speaking_popup,omitempty"`
 	PopupDictation      *bool    `toml:"popup_dictation,omitempty" json:"popup_dictation,omitempty"`
 	PopupLinger         *float64 `toml:"popup_linger,omitempty" json:"popup_linger,omitempty"`

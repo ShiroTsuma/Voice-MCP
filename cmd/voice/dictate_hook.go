@@ -102,6 +102,7 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 	langNote, _ := m["lang_note"].(string)
 	reminder, _ := m["reminder"].(string)
 	replyAloud, _ := m["reply_aloud"].(string)
+	speech, _ := m["speech"].(string) // how much of each reply to say aloud, when more than a sentence or two
 	if speaksIn == "" {
 		speaksIn = "English"
 	}
@@ -126,6 +127,9 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 		if langNote != "" {
 			context += " " + langNote
 		}
+		if speech != "" {
+			context += " " + speech
+		}
 		b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": "SessionStart", "additionalContext": context}})
 		fmt.Println(string(b))
 		return true
@@ -144,6 +148,9 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 	}
 	if langNote != "" && in.Event != "Notification" {
 		notes = append(notes, langNote)
+	}
+	if speech != "" && in.Event != "Notification" {
+		notes = append(notes, speech)
 	}
 	if len(fromAgents) > 0 && in.Event != "Notification" {
 		notes = append(notes, "Another agent session sent you this through voice (not the user, and not spoken): "+strings.Join(fromAgents, "\n\n")+"\nRead it as that session's words; answer it with voice_control send when it asks something.")
