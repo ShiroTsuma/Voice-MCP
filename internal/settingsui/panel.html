@@ -1198,15 +1198,34 @@ function tokens(text) {
 // gets the index of the spoken word it is, or of the next one (a word only
 // shown, such as narration around the dialogue, goes with what follows it).
 const norm = w => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+// The same alignment as the reading window's: a run of dialogue wins over the same words
+// scattered through the narration around it.
 function align(shown, spoken) {
+  const n = shown.length, m = spoken.length, NEG = -1e9;
+  const a = shown.map(t => norm(t.w)), b = spoken.map(t => norm(t.w));
+  const M = Array.from({ length: n + 1 }, () => new Float64Array(m + 1).fill(NEG));
+  const X = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
+    if (a[i - 1] && a[i - 1] === b[j - 1]) M[i][j] = 1 + Math.max(X[i - 1][j - 1], M[i - 1][j - 1] + 1);
+    X[i][j] = Math.max(M[i - 1][j], X[i - 1][j], M[i][j - 1], X[i][j - 1]);
+  }
   const map = shown.map(() => -1);
-  let j = 0;
-  shown.forEach((t, i) => {
-    const a = norm(t.w);
-    for (let k = j; k < Math.min(j + 4, spoken.length); k++) if (norm(spoken[k].w) === a) { map[i] = k; j = k + 1; return; }
-  });
-  let next = spoken.length;
-  for (let i = map.length - 1; i >= 0; i--) { if (map[i] >= 0) next = map[i]; else map[i] = -1 - next; }
+  let i = n, j = m, inM = M[n][m] > X[n][m];
+  while (i > 0 && j > 0) {
+    if (inM) {
+      map[i - 1] = j - 1;
+      inM = M[i - 1][j - 1] !== NEG && M[i - 1][j - 1] + 1 >= X[i - 1][j - 1];
+      i--; j--;
+    } else {
+      const s = X[i][j];
+      if (s === M[i - 1][j]) { i--; inM = true; }
+      else if (s === X[i - 1][j]) i--;
+      else if (s === M[i][j - 1]) { j--; inM = true; }
+      else j--;
+    }
+  }
+  let next = m;
+  for (let k = map.length - 1; k >= 0; k--) { if (map[k] >= 0) next = map[k]; else map[k] = -1 - next; }
   return map.map(v => v >= 0 ? v : -1 - v);
 }
 // What of a said line was heard: null when all of it was (or it still

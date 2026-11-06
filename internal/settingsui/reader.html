@@ -305,15 +305,36 @@ function tokens(text) {
 // being spoken, so each shown word knows when it is said. A word with no match (a name) goes with the
 // word after it.
 const norm = w => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+// The best alignment over the whole text, one match per word, where a match right after another
+// (in both texts) counts extra: a run of dialogue wins over the same words scattered through the
+// narration around it ("...you know you are late." "You are late, darling.").
 function align(shown, spoken) {
+  const n = shown.length, m = spoken.length, NEG = -1e9;
+  const a = shown.map(t => norm(t.w)), b = spoken.map(t => norm(t.w));
+  // M: best score with shown[i-1] matched to spoken[j-1]; X: best otherwise.
+  const M = Array.from({ length: n + 1 }, () => new Float64Array(m + 1).fill(NEG));
+  const X = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
+    if (a[i - 1] && a[i - 1] === b[j - 1]) M[i][j] = 1 + Math.max(X[i - 1][j - 1], M[i - 1][j - 1] + 1);
+    X[i][j] = Math.max(M[i - 1][j], X[i - 1][j], M[i][j - 1], X[i][j - 1]);
+  }
   const map = shown.map(() => -1);
-  let j = 0;
-  shown.forEach((t, i) => {
-    const a = norm(t.w);
-    for (let k = j; k < Math.min(j + 4, spoken.length); k++) if (norm(spoken[k].w) === a) { map[i] = k; j = k + 1; return; }
-  });
-  let next = spoken.length;
-  for (let i = map.length - 1; i >= 0; i--) { if (map[i] >= 0) next = map[i]; else map[i] = -1 - next; }
+  let i = n, j = m, inM = M[n][m] > X[n][m];
+  while (i > 0 && j > 0) {
+    if (inM) {
+      map[i - 1] = j - 1;
+      inM = M[i - 1][j - 1] !== NEG && M[i - 1][j - 1] + 1 >= X[i - 1][j - 1];
+      i--; j--;
+    } else {
+      const s = X[i][j];
+      if (s === M[i - 1][j]) { i--; inM = true; }
+      else if (s === X[i - 1][j]) i--;
+      else if (s === M[i][j - 1]) { j--; inM = true; }
+      else j--;
+    }
+  }
+  let next = m;
+  for (let k = map.length - 1; k >= 0; k--) { if (map[k] >= 0) next = map[k]; else map[k] = -1 - next; }
   return map; // >= 0: that spoken word; < 0: goes with spoken word -1-v
 }
 
