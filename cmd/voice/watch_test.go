@@ -25,6 +25,15 @@ func TestWatchFilesSeesWritesCreatesAndRemoves(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatalf("%s was not seen", what)
 		}
+		// One write can be seen in two steps (the file created empty, then
+		// filled), each a change of its own; take them until it is quiet.
+		for {
+			select {
+			case <-changes:
+			case <-time.After(40 * time.Millisecond):
+				return
+			}
+		}
 	}
 	quiet := func() {
 		t.Helper()
