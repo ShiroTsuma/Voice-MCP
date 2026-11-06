@@ -80,6 +80,12 @@
   .lab { flex: 1; min-width: 0; font-size: 14px; }
   .help { display: block; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin-top: 1px; }
   .help:empty { display: none; }
+  /* [i]: the longer explanation, on hover or focus, in one box above the page so no panel clips it. */
+  .tip { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; border-radius: 50%; vertical-align: 1px;
+    box-shadow: inset 0 0 0 1.2px var(--ink-3); color: var(--ink-2); font: 600 10px/1 var(--ui-small); cursor: help; }
+  .tip:hover, .tip:focus-visible { color: var(--ink); box-shadow: inset 0 0 0 1.2px var(--ink-2); outline: none; }
+  #tipbox { position: fixed; z-index: 50; max-width: 320px; padding: 9px 11px; border-radius: 6px; background: var(--field-hi); color: var(--ink);
+    font: 12.5px/1.45 var(--ui-small); white-space: pre-line; box-shadow: 0 6px 24px rgb(0 0 0 / .35); pointer-events: none; }
 
   .switch { position: relative; width: 36px; height: 20px; flex: none; cursor: pointer; }
   .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
@@ -255,9 +261,9 @@
       <label class="switch"><input type="checkbox" id="personas"><span></span></label>
     </div>
     <div class="hold" id="hold">
-      <label class="lab" for="gImm" title="How strongly a character steers its agent. A character can choose its own.">Immersion</label>
+      <label class="lab" for="gImm">Immersion<span class="tip" tabindex="0" id="gImmTip">i</span></label>
       <select id="gImm"></select>
-      <label class="lab" for="gGuide" title="How often the agent is reminded of its character, counted in your messages. A character can choose its own.">Reminders</label>
+      <label class="lab" for="gGuide">Reminders<span class="tip" tabindex="0" data-tip="How often an agent is reminded of its character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change. A character can choose its own.">i</span></label>
       <div class="pair"><select id="gGuide"></select><input class="text num" type="number" id="gGuideN" min="1" max="100" hidden></div>
     </div>
     <p class="levelnote" id="gNote"></p>
@@ -310,16 +316,16 @@
           </details>
         </div>
         <div class="row col">
-          <label class="lab" for="speaks">Speaks<span class="help">The language it speaks aloud and announces in; its agent is told to speak it. Voices in languages other than English sound noticeably worse</span></label>
+          <label class="lab" for="speaks">Speaks<span class="tip" tabindex="0" data-tip="The language it speaks aloud and announces in; its agent is told to speak it. Like the others: the Speaking language in the settings. Voices in languages other than English sound noticeably worse.">i</span></label>
           <div class="pair"><select id="speaks"></select></div>
         </div>
         <div class="row col">
-          <label class="lab" for="imm">Immersion<span class="help">How strongly the character steers its agent</span></label>
+          <label class="lab" for="imm">Immersion<span class="tip" tabindex="0" id="immTip">i</span></label>
           <div class="pair"><select id="imm"></select></div>
           <p class="levelnote" id="immNote"></p>
         </div>
         <div class="row col">
-          <label class="lab" for="guide">Reminders<span class="help">How often its agent is reminded of the character, counted in your messages; always at the start and after a change</span></label>
+          <label class="lab" for="guide">Reminders<span class="tip" tabindex="0" id="guideTip" data-tip="How often its agent is reminded of the character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change.">i</span></label>
           <div class="pair"><select id="guide"></select><input class="text num" type="number" id="guideN" min="1" max="100" hidden></div>
           <p class="levelnote" id="guideCost"></p>
         </div>
@@ -594,7 +600,7 @@ function open(i) {
   $('empty').hidden = true; $('form').hidden = false;
   $('name').value = c.name; $('desc').value = c.description || ''; $('heard').value = (c.heard || []).join(', ');
   fillSpeaks(c.lang || '');
-  fillLevel($('imm'), c.immersion || 0, true); levelNote('imm', 'immNote');
+  fillLevel($('imm'), c.immersion || 0, true); levelNote('imm', 'immNote'); $('immTip').dataset.tip = levelsTip(true);
   fillGuide('guide', 'guideN', c.guidance, true);
   guideCost();
   paint();
@@ -850,11 +856,13 @@ $('def').addEventListener('click', async () => {
 // Immersion: how strongly a character steers its agent; reminders: every how
 // many of the user's messages the agent is reminded of it (0: only at the start).
 const LEVELS = [
-  [1, 'Light', 'Its tone colours written replies; what it says aloud stays short and plain. The work is done in full.'],
-  [2, 'Voice', 'Its tone and attitude in everything; what it says aloud is short but sounds like it. The work is done in full.'],
-  [3, 'Full', 'It is the character in all it writes and says, with its own opinions and moods, and says as much aloud as it would. The work is done in full.'],
-  [4, 'Role-play', 'It behaves as the person described: if that one would rather criticise than help, or refuse, it may. It never harms the work or your files and never lies about what it did; start a message with "<name>, out of character:" for a plain answer.'],
+  [1, 'Light', 'Its tone colours written replies; what it says aloud stays short and plain. The work is done in full.', 'Tone in writing; plain speech. The work gets done.'],
+  [2, 'Voice', 'Its tone and attitude in everything; what it says aloud is short but sounds like it. The work is done in full.', 'In character everywhere; short speech. The work gets done.'],
+  [3, 'Full', 'It is the character in all it writes and says, with its own opinions and moods, and says as much aloud as it would. The work is done in full.', 'Fully in character; says as much as it would. The work gets done.'],
+  [4, 'Role-play', 'It behaves as the person described, helpful or not: describe what it does ("never writes code for others; only reviews") for it to act on it. It never harms the work or your files and never lies about what it did; start a message with "<name>, out of character:" for a plain answer.', 'Acts as described, even unhelpfully; never harms the work.'],
 ];
+// The [i] of an Immersion list: every level, the chosen one first.
+const levelsTip = own => LEVELS.map(l => l[1] + ': ' + l[2]).join('\n\n') + (own ? '' : '\n\nA character can choose its own.');
 const GUIDES = [[0, 'Only at the start'], [1, 'Every message'], [3, 'Every 3 messages'], [5, 'Every 5 messages'], [10, 'Every 10 messages']];
 const levelName = v => (LEVELS.find(l => l[0] === v) || LEVELS[1])[1];
 const guideName = v => (GUIDES.find(g => g[0] === v) || [v, 'Every ' + v + ' messages'])[1];
@@ -866,7 +874,7 @@ function fillLevel(sel, cur, perChar) {
 }
 function levelNote(selId, noteId) {
   const v = +$(selId).value || state.serve.character_immersion;
-  $(noteId).textContent = (LEVELS.find(l => l[0] === v) || LEVELS[1])[2];
+  $(noteId).textContent = (LEVELS.find(l => l[0] === v) || LEVELS[1])[3];
 }
 // A reminder list: the usual counts, "Other" for any number (shown in the box beside it).
 function fillGuide(selId, numId, cur, perChar) {
@@ -899,6 +907,7 @@ const HOW = {
 };
 const WORK = 'It shapes only how you talk, never the work: stay correct, complete, honest and safe, and keep helping even when the character is mean or teasing. ';
 const tokens = s => Math.max(1, Math.round(s.length / 4));
+const REM_TIP = "How often its agent is reminded of the character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change.";
 function guideCost() {
   if (sel < 0) return;
   const name = $('name').value.trim() || 'Name', level = +$('imm').value || state.serve.character_immersion;
@@ -911,14 +920,16 @@ function guideCost() {
   if (every === null) every = state.serve.character_guidance;
   const start = tokens(persona), each = tokens(reminder);
   $('guideCost').textContent = every === 0
-    ? 'About ' + start + ' tokens once, at the start (and after a change); no reminders.'
-    : 'About ' + start + ' tokens at the start, then ' + each + ' tokens a reminder (' + (level >= 3 ? 'the whole description' : 'one line') + ') every ' + (every === 1 ? 'message' : every + ' messages') + ': about ' + Math.max(1, Math.round(each / every)) + ' tokens a message on average.';
+    ? '≈ ' + start + ' tokens once, at the start'
+    : '≈ ' + Math.max(1, Math.round(each / every)) + ' tokens a message (' + start + ' at the start)';
+  $('guideTip').dataset.tip = REM_TIP + '\n\nA reminder here is ' + (level >= 3 ? 'the whole description, ≈ ' + each + ' tokens, since the character steers fully' : 'one line with its name and traits, ≈ ' + each + ' tokens') +
+    (every === 0 ? '; with "Only at the start" none is sent.' : ', every ' + (every === 1 ? 'message' : every + ' messages') + '. The description at the start is ≈ ' + start + ' tokens.');
 }
 for (const id of ['guide', 'guideN', 'desc', 'name']) $(id).addEventListener('input', guideCost);
 $('guide').addEventListener('change', guideCost);
 $('traits').addEventListener('click', () => setTimeout(guideCost, 0));
 function fillHold() {
-  fillLevel($('gImm'), state.serve.character_immersion, false); levelNote('gImm', 'gNote');
+  fillLevel($('gImm'), state.serve.character_immersion, false); levelNote('gImm', 'gNote'); $('gImmTip').dataset.tip = levelsTip(false);
   fillGuide('gGuide', 'gGuideN', state.serve.character_guidance, false);
   $('hold').classList.toggle('off', !$('personas').checked); $('gNote').hidden = !$('personas').checked;
 }
@@ -932,6 +943,20 @@ async function saveHold() {
 $('gImm').addEventListener('change', saveHold);
 $('gGuide').addEventListener('change', () => { if ($('gGuide').value !== 'other') saveHold(); });
 $('gGuideN').addEventListener('change', saveHold);
+// [i]: its data-tip in a box under it, kept inside the window.
+const tipbox = document.createElement('div'); tipbox.id = 'tipbox'; tipbox.hidden = true; tipbox.setAttribute('role', 'tooltip'); document.body.append(tipbox);
+function showTip(t) {
+  tipbox.textContent = t.dataset.tip || ''; tipbox.hidden = !tipbox.textContent;
+  const r = t.getBoundingClientRect(), w = tipbox.offsetWidth, h = tipbox.offsetHeight;
+  tipbox.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - 12)) + 'px';
+  tipbox.style.top = (r.bottom + 6 + h > innerHeight - 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
+}
+document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('.tip'); if (t) showTip(t); });
+document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.tip')) tipbox.hidden = true; });
+document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('tip')) showTip(e.target); });
+document.addEventListener('focusout', () => { tipbox.hidden = true; });
+// A click on [i] inside a label shows it, without opening the list.
+document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); showTip(e.target); } });
 // The language a character speaks: like the others (the general speaking
 // language), one of the user's, or detected from what the agent writes.
 const langName = code => { if (code === 'auto') return 'Detect from text'; try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
