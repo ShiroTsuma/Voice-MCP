@@ -241,13 +241,13 @@
   .help { display: block; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin-top: 1px; }
   .sub { padding-left: 14px; margin-left: 2px; border-left: 1px solid var(--rule); }
 
-  /* The transcript: what voice said and what you dictated, newest first. A line is the time, who, and the
-     words; a dictation adds where it went. An announcement (a hook) is a shade quieter than the agent itself. */
+  /* The transcript: what voice said and what you dictated, newest first. A line is who and the words, the time
+     at the right; a dictation adds where it went. An announcement (a hook) is a shade quieter than the agent itself. */
   .log { padding: 2px 0 4px; }
   .log > .help { margin: 4px 0 2px; }
-  .ln { display: grid; grid-template-columns: 38px 20px 1fr; column-gap: 9px; align-items: start; padding: 7px 0; }
+  .ln { display: grid; grid-template-columns: 20px 1fr auto; column-gap: 9px; align-items: start; padding: 7px 0; }
   .ln + .ln { border-top: 1px solid color-mix(in oklab, var(--rule) 70%, transparent); }
-  .ln time { font: 12px/1.5 var(--ui-small); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .ln time { font: 12px/1.5 var(--ui-small); color: var(--ink-3); font-variant-numeric: tabular-nums; text-align: right; }
   .ln .thumb, .ln .dot { margin-top: 1px; }
   .ln > div { min-width: 0; }
   .ln .who { display: flex; align-items: baseline; gap: 6px; min-width: 0; font: 12px/1.5 var(--ui-small); color: var(--ink-2); white-space: nowrap; }
@@ -1732,7 +1732,7 @@ function renderLog() {
     else txt.textContent = l.text;
     body.append(who, txt);
     if ((you || l.kind === 'message') && l.outcome) { const out = document.createElement('div'); out.className = 'out'; out.textContent = cap(l.outcome); body.append(out); }
-    ln.append(t, you ? mark('', 20, true) : l.pid ? mark(l.name, 20) : mark('', 20), body);
+    ln.append(you ? mark('', 20, true) : l.pid ? mark(l.name, 20) : mark('', 20), body, t);
     box.append(ln);
   }
   $('sumTranscript').textContent = transcript.length
