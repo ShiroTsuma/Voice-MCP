@@ -179,6 +179,13 @@ Then say "Mira, hello": it answers aloud, and its turns show in the transcript b
 
 Sessions take their names from a list of characters (settings window → Characters). Each has a name, personality traits, an optional description in your own words, a voice, a colour for its light and an optional picture. **Also written as** lists the spellings speech recognition gives its name ("Alana" for Anna): a dictation that says one reaches that character, and the text shows the name. A new session takes the first character no other session uses; the first one (★) is the default.
 
+Two settings decide how much of the character the agent shows, for all characters at the top of the Characters window and for one in its editor:
+
+- **Immersion**, how strongly it steers: **Light** (its tone in written replies; speech short and plain), **Voice** (the default: its tone and attitude everywhere, speech short but in character), **Full** (it is the character in all it writes and says, with opinions and moods, and says as much aloud as it would), **Role-play** (it behaves as the person described: it may criticise instead of helping, or refuse; it never harms the work or your files and never lies about what it did, and a message starting "Clara, out of character: ..." gets a plain answer). Below Role-play the work is always done in full.
+- **Reminders**, how often the agent is reminded of its character, counted in your messages: only at the start, every message, every 3 (the default), 5, 10 or any number. A reminder is one line (name and traits), or the whole description at Full and Role-play; the editor shows what that costs in tokens. The whole description also goes out at the start and after a change.
+
+With characters off, agents get none of this.
+
 <img src="docs/images/characters.png" alt="The characters window: a list of characters and the editor for Clara with personality traits, description, voice and colour">
 
 *The characters window: personality traits, a description in your own words, a voice, a colour and an optional picture.*
@@ -384,7 +391,7 @@ voice knows the agents: the shared-mcp gateway passes each agent's process ID wi
 
 Typing waits until you let go of Ctrl and Alt, so ending the recording with the hotkey does not turn the text into shortcuts. `[serve] dictate_submit = true` presses Enter after typed text. `dictate_target = "console"` only uses terminal agents, `"window"` only the window in front. A server cannot start the user's turn over MCP, which is why voice types, hands over through hooks, or leaves it to the mod. `voice dictate "text"` delivers text the same way, to try it without speaking.
 
-Characters are `[[characters]]` in `config.toml`: `name`, `traits = [...]`, `description`, `preset`, `color` and `image` (cropped to a square, kept in `data\avatars`). `[serve] personas = true` turns on **Give sessions characters**. Claude Code learns its character from its SessionStart hook, Codex from `voice_control register`; a character changed in the settings reaches Claude Code with its next hook and Codex with its next voice call, and an agent can switch itself with `voice_control set_character` when you ask (`list_characters` shows the list).
+Characters are `[[characters]]` in `config.toml`: `name`, `traits = [...]`, `description`, `preset`, `color` and `image` (cropped to a square, kept in `data\avatars`). `[serve] personas = true` turns on **Give sessions characters**; `character_immersion` (1 light .. 4 role-play) and `character_guidance` (every N of your messages, 0 only at the start) set the two settings above, and a character's own `immersion` and `guidance` override them. Claude Code learns its character from its SessionStart hook, Codex from `voice_control register`; a character changed in the settings reaches Claude Code with its next hook and Codex with its next voice call, and an agent can switch itself with `voice_control set_character` when you ask (`list_characters` shows the list).
 
 ### Commands
 

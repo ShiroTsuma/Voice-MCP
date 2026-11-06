@@ -119,6 +119,12 @@ type Serve struct {
 	// Personas: sessions become their character (tone and voice); off keeps
 	// the names for dictation only.
 	Personas *bool `toml:"personas"`
+	// CharacterImmersion: how strongly characters steer their agents (1 light
+	// .. 4 role-play, preset.Immersion*); CharacterGuidance: every how many
+	// user messages an agent is reminded of its character (0: only at the
+	// start). A character's own value overrides them.
+	CharacterImmersion *int `toml:"character_immersion"`
+	CharacterGuidance  *int `toml:"character_guidance"`
 	// SpeakingPopup shows who speaks and what, in a small window in the corner,
 	// while an agent speaks (off by default).
 	SpeakingPopup *bool `toml:"speaking_popup"`
@@ -372,6 +378,12 @@ func (c *Config) merge(o *Config) {
 	}
 	if sv.Personas != nil {
 		c.Serve.Personas = sv.Personas
+	}
+	if sv.CharacterImmersion != nil {
+		c.Serve.CharacterImmersion = sv.CharacterImmersion
+	}
+	if sv.CharacterGuidance != nil {
+		c.Serve.CharacterGuidance = sv.CharacterGuidance
 	}
 	if sv.SpeakingPopup != nil {
 		c.Serve.SpeakingPopup = sv.SpeakingPopup

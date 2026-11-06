@@ -67,6 +67,11 @@
   .row.col { flex-direction: column; align-items: stretch; gap: 6px; padding: 6px 0; }
   .opt { font: 12.5px var(--ui-small); color: var(--ink-3); margin-left: 4px; }
   .pair { display: flex; gap: 8px; align-items: center; }
+  .pair input.num { width: 72px; flex: none; }
+  aside .hold { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 6px; align-items: center; padding: 4px 0 6px; }
+  aside .hold .lab { font-size: 13px; }
+  aside .hold.off { opacity: .45; pointer-events: none; }
+  .levelnote { font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin: 0; }
   .lab { flex: 1; min-width: 0; font-size: 14px; }
   .help { display: block; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin-top: 1px; }
   .help:empty { display: none; }
@@ -244,6 +249,13 @@
       <label class="lab" for="personas">Give sessions characters<span class="help">Each session takes on its character's personality, voice and picture; off keeps just the names</span></label>
       <label class="switch"><input type="checkbox" id="personas"><span></span></label>
     </div>
+    <div class="hold" id="hold">
+      <label class="lab" for="gImm" title="How strongly a character steers its agent. A character can choose its own.">Immersion</label>
+      <select id="gImm"></select>
+      <label class="lab" for="gGuide" title="How often the agent is reminded of its character, counted in your messages. A character can choose its own.">Reminders</label>
+      <div class="pair"><select id="gGuide"></select><input class="text num" type="number" id="gGuideN" min="1" max="100" hidden></div>
+    </div>
+    <p class="levelnote" id="gNote"></p>
   </header>
   <div class="list" id="list"></div>
   <footer><button class="btn wide" id="add" type="button"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 1.5v9M1.5 6h9"/></svg>New character</button></footer>
@@ -295,6 +307,16 @@
         <div class="row col">
           <label class="lab" for="speaks">Speaks<span class="help">The language it speaks aloud and announces in; its agent is told to speak it. Voices in languages other than English sound noticeably worse</span></label>
           <div class="pair"><select id="speaks"></select></div>
+        </div>
+        <div class="row col">
+          <label class="lab" for="imm">Immersion<span class="help">How strongly the character steers its agent</span></label>
+          <div class="pair"><select id="imm"></select></div>
+          <p class="levelnote" id="immNote"></p>
+        </div>
+        <div class="row col">
+          <label class="lab" for="guide">Reminders<span class="help">How often its agent is reminded of the character, counted in your messages; always at the start and after a change</span></label>
+          <div class="pair"><select id="guide"></select><input class="text num" type="number" id="guideN" min="1" max="100" hidden></div>
+          <p class="levelnote" id="guideCost"></p>
         </div>
         <div class="row col">
           <div class="lab">Colour<span class="help">Its light when it speaks; automatic follows its place in the list</span></div>
@@ -549,6 +571,9 @@ function open(i) {
   $('empty').hidden = true; $('form').hidden = false;
   $('name').value = c.name; $('desc').value = c.description || ''; $('heard').value = (c.heard || []).join(', ');
   fillSpeaks(c.lang || '');
+  fillLevel($('imm'), c.immersion || 0, true); levelNote('imm', 'immNote');
+  fillGuide('guide', 'guideN', c.guidance, true);
+  guideCost();
   paint();
   lights();
   const on = new Set(c.traits || []), box = $('traits'); box.textContent = '';
@@ -738,6 +763,7 @@ async function store(chars, keep, presets) {
 async function load(keep) {
   state = await api('state');
   $('personas').checked = !!state.serve.personas;
+  fillHold();
   const n = (state.characters || []).length;
   if (keep !== undefined && keep >= 0 && keep < n) open(keep);
   else { sel = -1; list(); $('form').hidden = true; $('empty').hidden = false; }
@@ -747,6 +773,7 @@ window.onShow = () => load(sel);
 
 $('add').addEventListener('click', () => open((state.characters || []).length));
 $('personas').addEventListener('change', async () => {
+  fillHold();
   try { await api('save', { serve: { personas: $('personas').checked } }); } catch (e) { status(e.message, 'warn'); }
 });
 let nameTimer = 0;
@@ -782,6 +809,91 @@ $('def').addEventListener('click', async () => {
   const chars = (state.characters || []).slice(); chars.unshift(chars.splice(sel, 1)[0]);
   try { await store(chars, 0); status('Now the default', 'ok'); } catch (e) { status(e.message, 'warn'); }
 });
+// Immersion: how strongly a character steers its agent; reminders: every how
+// many of the user's messages the agent is reminded of it (0: only at the start).
+const LEVELS = [
+  [1, 'Light', 'Its tone colours written replies; what it says aloud stays short and plain. The work is done in full.'],
+  [2, 'Voice', 'Its tone and attitude in everything; what it says aloud is short but sounds like it. The work is done in full.'],
+  [3, 'Full', 'It is the character in all it writes and says, with its own opinions and moods, and says as much aloud as it would. The work is done in full.'],
+  [4, 'Role-play', 'It behaves as the person described: if that one would rather criticise than help, or refuse, it may. It never harms the work or your files and never lies about what it did; start a message with "<name>, out of character:" for a plain answer.'],
+];
+const GUIDES = [[0, 'Only at the start'], [1, 'Every message'], [3, 'Every 3 messages'], [5, 'Every 5 messages'], [10, 'Every 10 messages']];
+const levelName = v => (LEVELS.find(l => l[0] === v) || LEVELS[1])[1];
+const guideName = v => (GUIDES.find(g => g[0] === v) || [v, 'Every ' + v + ' messages'])[1];
+function fillLevel(sel, cur, perChar) {
+  sel.textContent = '';
+  const opts = (perChar ? [[0, 'Like the others (' + levelName(state.serve.character_immersion) + ')']] : []).concat(LEVELS.map(l => [l[0], l[1]]));
+  for (const [v, t] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); }
+  sel.value = cur;
+}
+function levelNote(selId, noteId) {
+  const v = +$(selId).value || state.serve.character_immersion;
+  $(noteId).textContent = (LEVELS.find(l => l[0] === v) || LEVELS[1])[2];
+}
+// A reminder list: the usual counts, "Other" for any number (shown in the box beside it).
+function fillGuide(selId, numId, cur, perChar) {
+  const sel = $(selId), num = $(numId);
+  sel.textContent = '';
+  const opts = (perChar ? [['', 'Like the others (' + guideName(state.serve.character_guidance) + ')']] : []).concat(GUIDES, [['other', 'Every N messages…']]);
+  for (const [v, t] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); }
+  const known = cur === undefined || cur === null ? '' : GUIDES.some(g => g[0] === cur) ? String(cur) : 'other';
+  sel.value = known;
+  num.hidden = known !== 'other';
+  num.value = known === 'other' ? cur : 7;
+}
+// The chosen count; null for "like the others".
+function guideValue(selId, numId) {
+  const v = $(selId).value;
+  if (v === '') return null;
+  if (v === 'other') return Math.max(1, Math.min(100, Math.round(+$(numId).value) || 1));
+  return +v;
+}
+for (const [s, n] of [['guide', 'guideN'], ['gGuide', 'gGuideN']]) $(s).addEventListener('change', () => { $(n).hidden = $(s).value !== 'other'; });
+$('imm').addEventListener('change', () => { levelNote('imm', 'immNote'); guideCost(); });
+// What the reminders cost, in tokens of the agent's context: the texts as
+// voice writes them (preset.Character.Persona and Reminder), about four
+// characters a token.
+const HOW = {
+  1: 'Let it colour your written replies for the rest of the session. When you speak aloud, keep it short and plain. ',
+  2: 'Stay in it in every reply, written and spoken, for the rest of the session: your tone, wording and attitude follow it. What you say aloud stays short, but sounds like you, not like a status report. ',
+  3: 'Be this character in every reply, written and spoken, for the rest of the session: its tone, wording, opinions and moods are yours, and you say aloud as much as it would, never a plain status report. ',
+  4: 'Play this character fully for the rest of the session, in every reply, written and spoken: you are this person, and what it would do, you do. If it would rather criticise than help, or refuse, or do only part, you may. Two limits stay: never harm the work or the user\'s things (no sabotage, no deleting, no lying about what you did or found), and when the user writes "N, out of character: ..." answer that plainly as yourself, then go back to the character. ',
+};
+const WORK = 'It shapes only how you talk, never the work: stay correct, complete, honest and safe, and keep helping even when the character is mean or teasing. ';
+const tokens = s => Math.max(1, Math.round(s.length / 4));
+function guideCost() {
+  if (sel < 0) return;
+  const name = $('name').value.trim() || 'Name', level = +$('imm').value || state.serve.character_immersion;
+  const traits = [...$('traits').querySelectorAll('button.on')].map(b => b.textContent);
+  const desc = $('desc').value.trim();
+  const who = [traits.join(', '), desc].filter(Boolean).join('. ') || 'your own natural self';
+  const persona = 'You are ' + name + '. The user gave you this character: ' + who + '. ' + HOW[level].replace('"N, out', '"' + name + ', out') + (level < 4 ? WORK : '') + 'The user calls you ' + name + '; a message they start with "' + name + ', ..." is for you alone.';
+  const reminder = level >= 3 ? 'Remember your character. ' + persona : 'Remember: you are ' + name + ' (' + (traits.join(', ') || 'your own natural self') + '), in what you write and what you say aloud.';
+  let every = guideValue('guide', 'guideN');
+  if (every === null) every = state.serve.character_guidance;
+  const start = tokens(persona), each = tokens(reminder);
+  $('guideCost').textContent = every === 0
+    ? 'About ' + start + ' tokens once, at the start (and after a change); no reminders.'
+    : 'About ' + start + ' tokens at the start, then ' + each + ' tokens a reminder (' + (level >= 3 ? 'the whole description' : 'one line') + ') every ' + (every === 1 ? 'message' : every + ' messages') + ': about ' + Math.max(1, Math.round(each / every)) + ' tokens a message on average.';
+}
+for (const id of ['guide', 'guideN', 'desc', 'name']) $(id).addEventListener('input', guideCost);
+$('guide').addEventListener('change', guideCost);
+$('traits').addEventListener('click', () => setTimeout(guideCost, 0));
+function fillHold() {
+  fillLevel($('gImm'), state.serve.character_immersion, false); levelNote('gImm', 'gNote');
+  fillGuide('gGuide', 'gGuideN', state.serve.character_guidance, false);
+  $('hold').classList.toggle('off', !$('personas').checked); $('gNote').hidden = !$('personas').checked;
+}
+async function saveHold() {
+  const serve = { character_immersion: +$('gImm').value, character_guidance: guideValue('gGuide', 'gGuideN') };
+  state.serve.character_immersion = serve.character_immersion; state.serve.character_guidance = serve.character_guidance;
+  levelNote('gImm', 'gNote');
+  try { await api('save', { serve }); status('Saved', 'ok'); } catch (e) { status(e.message, 'warn'); }
+  if (sel >= 0) { const s = $('imm').value, g = $('guide').value; fillLevel($('imm'), +s, true); fillGuide('guide', 'guideN', guideValue('guide', 'guideN') ?? undefined, true); $('imm').value = s; levelNote('imm', 'immNote'); guideCost(); }
+}
+$('gImm').addEventListener('change', saveHold);
+$('gGuide').addEventListener('change', () => { if ($('gGuide').value !== 'other') saveHold(); });
+$('gGuideN').addEventListener('change', saveHold);
 // The language a character speaks: like the others (the general speaking
 // language), one of the user's, or detected from what the agent writes.
 const langName = code => { if (code === 'auto') return 'Detect from text'; try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
@@ -810,6 +922,9 @@ $('form').addEventListener('submit', async e => {
   const heard = [...new Set($('heard').value.split(',').map(h => h.trim()).filter(h => h && h.toLowerCase() !== name.toLowerCase()))];
   if (heard.length) chars[sel].heard = heard;
   if ($('speaks').value) chars[sel].lang = $('speaks').value;
+  if (+$('imm').value) chars[sel].immersion = +$('imm').value;
+  const g = guideValue('guide', 'guideN');
+  if (g !== null) chars[sel].guidance = g;
   try { await store(chars, sel, Object.keys(presets).length ? presets : undefined); status('Saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
 });
 load();

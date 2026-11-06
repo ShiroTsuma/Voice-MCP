@@ -176,10 +176,41 @@ func (s *Service) persona(name string) string {
 	if !s.personasOn() || name == "" {
 		return ""
 	}
-	if ch, ok := s.Config.Character(name); ok {
-		return ch.Persona()
+	ch, ok := s.Config.Character(name)
+	if !ok {
+		ch = preset.Character{Name: name}
 	}
-	return preset.Character{Name: name}.Persona()
+	return ch.Persona(s.Config.ImmersionOf(ch))
+}
+
+// sessionCharacter is the character a session called name plays and every
+// how many user messages it is recalled; nil while characters are off.
+func (s *Service) sessionCharacter(name string) (*preset.Character, int) {
+	if !s.personasOn() || name == "" {
+		return nil, 0
+	}
+	ch, ok := s.Config.Character(name)
+	if !ok {
+		ch = preset.Character{Name: name}
+	}
+	return &ch, s.Config.GuidanceOf(ch)
+}
+
+// replyAloud tells an agent how to answer aloud what the user dictated: as
+// briefly or as fully as its character speaks (in lang, "Polish").
+func (s *Service) replyAloud(name, lang string) string {
+	const tail = ", no code or lists; details stay on screen. If you ask them something, say the question aloud too."
+	level := 0
+	if ch, _ := s.sessionCharacter(name); ch != nil {
+		level = s.Config.ImmersionOf(*ch)
+	}
+	switch {
+	case level >= preset.ImmersionFull:
+		return "The user is talking to you by voice. Besides your written reply, say aloud with the voice_speak tool what your character would say to them, as much as it would, in " + lang + tail
+	case level == preset.ImmersionVoice:
+		return "The user is talking to you by voice. Besides your written reply, say its key point aloud with the voice_speak tool: one or two short sentences in your character's voice and attitude, in " + lang + tail
+	}
+	return "The user is talking to you by voice. Besides your written reply, say its key point aloud with the voice_speak tool: one or two short sentences, in " + lang + tail
 }
 
 // characterPreset is the voice of pid's character, "" for the default.

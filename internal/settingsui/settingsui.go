@@ -374,6 +374,12 @@ func merge(s *settings.Settings, in settings.Settings) {
 	}
 	setF(&s.Serve.DictateOverlayScale, in.Serve.DictateOverlayScale)
 	setB(&s.Serve.Personas, in.Serve.Personas)
+	if in.Serve.CharacterImmersion != nil {
+		s.Serve.CharacterImmersion = in.Serve.CharacterImmersion
+	}
+	if in.Serve.CharacterGuidance != nil {
+		s.Serve.CharacterGuidance = in.Serve.CharacterGuidance
+	}
 	setB(&s.Serve.SpeakingPopup, in.Serve.SpeakingPopup)
 	setF(&s.Serve.PopupLinger, in.Serve.PopupLinger)
 	set(&s.Serve.ReaderAppear, in.Serve.ReaderAppear)

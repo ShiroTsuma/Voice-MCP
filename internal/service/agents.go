@@ -65,6 +65,7 @@ type agentSeen struct {
 	theme    string    // the reading window's theme for this session (set_theme); empty uses the user's
 	told     string    // the character whose persona the agent last received
 	toldLang string    // the language its voice speaks, as the agent last heard it
+	asked    int       // the user's messages since its character was last recalled
 	custom   bool      // the name is the user's own, not one from the character list
 	session  string    // Claude Code's session id, from its hooks
 	modAt    time.Time // the last time its Claude Code mod asked for messages
@@ -334,6 +335,11 @@ type AgentResult struct {
 	// write in"); LangNote tells the agent so, at the start and after it changed.
 	SpeaksIn string `json:"speaks_in,omitempty"`
 	LangNote string `json:"lang_note,omitempty"`
+	// Reminder recalls the character, every so many of the user's messages
+	// (character guidance). ReplyAloud says how to answer aloud a message the
+	// user dictated, as strongly as the character steers (character immersion).
+	Reminder   string `json:"reminder,omitempty"`
+	ReplyAloud string `json:"reply_aloud,omitempty"`
 }
 
 // Speaking styles of a session (voice_control set_style).
@@ -432,6 +438,15 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 	if !sub && (a.Start || a.Event == "busy") {
 		res.Persona, res.Changed = s.personaFor(st, a.Start)
 	}
+	if res.Persona != "" {
+		st.asked = 0
+	} else if !sub && a.Event == "busy" && strings.TrimSpace(a.Prompt) != "" {
+		// A message of the user's (UserPromptSubmit): the character is recalled every so many.
+		st.asked++
+		if ch, every := s.sessionCharacter(st.name); ch != nil && every > 0 && st.asked >= every {
+			res.Reminder, st.asked = ch.Reminder(s.Config.ImmersionOf(*ch)), 0
+		}
+	}
 	report := func() {}
 	if len(queued) > 0 {
 		report = ag.changed(true) // the overlay shows it arriving
@@ -440,6 +455,9 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 	ag.mu.Unlock()
 	report()
 	res.SpeaksIn = SpeaksIn(s.sessionLang(a.PID))
+	if res.VoiceReply {
+		res.ReplyAloud = s.replyAloud(st.name, res.SpeaksIn)
+	}
 	if !sub && (a.Start || a.Event == "busy") {
 		res.LangNote = s.takeLangNote(a.PID, a.Start)
 	}

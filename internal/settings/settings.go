@@ -62,8 +62,10 @@ type Character struct {
 	Preset      string   `toml:"preset" json:"preset"`
 	Image       string   `toml:"image,omitempty" json:"image,omitempty"` // picture file in the avatars folder
 	Color       string   `toml:"color,omitempty" json:"color,omitempty"`
-	Heard       []string `toml:"heard,omitempty" json:"heard,omitempty"` // spellings recognition gives the name
-	Lang        string   `toml:"lang,omitempty" json:"lang,omitempty"`   // the language it speaks; empty: the general one
+	Heard       []string `toml:"heard,omitempty" json:"heard,omitempty"`         // spellings recognition gives the name
+	Lang        string   `toml:"lang,omitempty" json:"lang,omitempty"`           // the language it speaks; empty: the general one
+	Immersion   int      `toml:"immersion,omitempty" json:"immersion,omitempty"` // how strongly it steers; 0: the general one
+	Guidance    *int     `toml:"guidance,omitempty" json:"guidance,omitempty"`   // reminded every N user messages; unset: the general one
 }
 
 type Serve struct {
@@ -80,6 +82,8 @@ type Serve struct {
 	CornerSpeaking      *bool    `toml:"corner_speaking,omitempty" json:"corner_speaking,omitempty"`
 	DictateOverlayScale *float64 `toml:"dictate_overlay_scale,omitempty" json:"dictate_overlay_scale,omitempty"`
 	Personas            *bool    `toml:"personas,omitempty" json:"personas,omitempty"`
+	CharacterImmersion  *int     `toml:"character_immersion,omitempty" json:"character_immersion,omitempty"`
+	CharacterGuidance   *int     `toml:"character_guidance,omitempty" json:"character_guidance,omitempty"`
 	SpeakingPopup       *bool    `toml:"speaking_popup,omitempty" json:"speaking_popup,omitempty"`
 	PopupDictation      *bool    `toml:"popup_dictation,omitempty" json:"popup_dictation,omitempty"`
 	PopupLinger         *float64 `toml:"popup_linger,omitempty" json:"popup_linger,omitempty"`
