@@ -51,6 +51,11 @@
   .list b { display: block; font: 600 14px/1.3 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .list small { display: block; font: 12px/1.35 var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .list .item.draft b { color: var(--ink-2); font-weight: 400; }
+  /* Dragged to a new place in the order: where it lands shows as a line. */
+  .list .item[draggable="true"] { cursor: grab; }
+  .list .item.dragging { opacity: .4; }
+  .list .item.before { box-shadow: inset 0 2px 0 var(--ink-2); }
+  .list .item.after { box-shadow: inset 0 -2px 0 var(--ink-2); }
   .list .def { font: 11.5px var(--ui-small); color: var(--ink-3); }
   .list:focus-visible { outline-offset: -2px; }
   aside footer { padding: 10px 12px 12px; border-top: 1px solid var(--rule); }
@@ -554,8 +559,26 @@ function list() {
     who.append(b, sm);
     it.append(th, who);
     if (!draft && i === 0) { const d = document.createElement('span'); d.className = 'def'; d.textContent = 'default'; d.title = 'Default: new sessions start with this one'; it.append(d); }
-    if (!draft && c.description) it.title = c.description;
-    if (!draft) it.addEventListener('click', () => open(i));
+    it.title = draft ? '' : (c.description ? c.description + '\n\n' : '') + 'Drag to change the order: new sessions take the first free character.';
+    if (!draft) {
+      it.addEventListener('click', () => open(i));
+      it.draggable = true;
+      it.dataset.i = i;
+      it.addEventListener('dragstart', e => { dragFrom = i; it.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.name); });
+      it.addEventListener('dragend', () => { dragFrom = -1; box.querySelectorAll('.item').forEach(x => x.classList.remove('dragging', 'before', 'after')); });
+      it.addEventListener('dragover', e => {
+        if (dragFrom < 0) return;
+        e.preventDefault();
+        const r = it.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+        box.querySelectorAll('.item').forEach(x => x.classList.remove('before', 'after'));
+        it.classList.add(after ? 'after' : 'before');
+      });
+      it.addEventListener('drop', e => {
+        e.preventDefault();
+        const r = it.getBoundingClientRect(), to = i + (e.clientY > r.top + r.height / 2 ? 1 : 0);
+        move(dragFrom, to);
+      });
+    }
     box.append(it);
   };
   chars.forEach((c, i) => row(c, i));
@@ -751,6 +774,21 @@ function addChip(box) {
     plus.replaceWith(input); input.focus();
   });
   return plus;
+}
+
+// Reorders the characters: from's one goes before the one now at to. The
+// order is the order new sessions take them in; the first is the default.
+let dragFrom = -1;
+async function move(from, to) {
+  const chars = (state.characters || []).slice();
+  if (from < 0 || from >= chars.length || to === from || to === from + 1) return;
+  const [c] = chars.splice(from, 1);
+  const at = to > from ? to - 1 : to;
+  chars.splice(at, 0, c);
+  // The open character stays open wherever it went; a new one being written stays last.
+  const shown = sel >= 0 && sel < chars.length ? (state.characters[sel] || {}).name : null;
+  const keep = shown === null ? undefined : chars.findIndex(x => x.name === shown);
+  try { await store(chars, keep); status('Order saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
 }
 
 async function store(chars, keep, presets) {

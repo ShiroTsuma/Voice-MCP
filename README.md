@@ -177,7 +177,7 @@ Then say "Mira, hello": it answers aloud, and its turns show in the transcript b
 
 ## Characters
 
-Sessions take their names from a list of characters (settings window → Characters). Each has a name, personality traits, an optional description in your own words, a voice, a colour for its light and an optional picture. **Also written as** lists the spellings speech recognition gives its name ("Alana" for Anna): a dictation that says one reaches that character, and the text shows the name. A new session takes the first character no other session uses; the first one (★) is the default.
+Sessions take their names from a list of characters (settings window → Characters). Each has a name, personality traits, an optional description in your own words, a voice, a colour for its light and an optional picture. **Also written as** lists the spellings speech recognition gives its name ("Alana" for Anna): a dictation that says one reaches that character, and the text shows the name. A new session takes the first character no other session uses; the first one (★) is the default. Drag characters in the list to change that order.
 
 Two settings decide how much of the character the agent shows, for all characters at the top of the Characters window and for one in its editor:
 
