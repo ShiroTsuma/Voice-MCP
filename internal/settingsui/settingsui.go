@@ -341,6 +341,7 @@ func merge(s *settings.Settings, in settings.Settings) {
 	}
 	set(&s.DefaultPreset, in.DefaultPreset)
 	set(&s.DefaultLang, in.DefaultLang)
+	set(&s.LanguageNotice, in.LanguageNotice)
 	setF(&s.Volume, in.Volume)
 	set(&s.Device, in.Device)
 	setF(&s.Serve.Duck, in.Serve.Duck)

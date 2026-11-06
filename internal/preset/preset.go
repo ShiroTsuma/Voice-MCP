@@ -42,6 +42,10 @@ type Config struct {
 	// them, and the windows say which voices and engines speak them. A later
 	// layer's list replaces it.
 	Languages []string `toml:"languages"`
+	// LanguageNotice is the language situation the user acknowledged in the
+	// settings window ("summaries" or "quality"); the window's warning stays
+	// up until it matches.
+	LanguageNotice string `toml:"language_notice"`
 	// Sidecar holds the settings of the GPU backends (sidecar/backends.json),
 	// such as qwen3's model size: [sidecar.qwen3] model = "...".
 	Sidecar map[string]map[string]string `toml:"sidecar"`
@@ -250,8 +254,13 @@ func Load(paths ...string) (*Config, error) {
 		cfg.merge(user)
 	}
 	// Languages are general; recognition reads them through Listen.
-	if len(cfg.Languages) == 0 {
+	if cfg.Languages == nil {
 		cfg.Languages = cfg.Listen.Languages
+	}
+	// Never chosen: the system's language and English. An empty list a
+	// layer saved ("none: any") stays empty.
+	if cfg.Languages == nil {
+		cfg.Languages = DefaultLanguages(systemLanguage())
 	}
 	cfg.Listen.Languages = cfg.Languages
 	// The GPU backends' engines come from sidecar/backends.json, with the
@@ -447,6 +456,9 @@ func (c *Config) merge(o *Config) {
 	}
 	if o.Languages != nil {
 		c.Languages = o.Languages
+	}
+	if o.LanguageNotice != "" {
+		c.LanguageNotice = o.LanguageNotice
 	}
 	for name, set := range o.Sidecar {
 		if c.Sidecar == nil {

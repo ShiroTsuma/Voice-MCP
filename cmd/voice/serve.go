@@ -357,6 +357,7 @@ func (b *backend) reload() (bool, error) {
 		defer b.sp.WarmVoices(voicePresets(next)) // turned on: load them now
 	}
 	cur.DefaultLang, cur.Volume, cur.Serve, cur.Hooks = next.DefaultLang, next.Volume, next.Serve, next.Hooks
+	cur.LanguageNotice = next.LanguageNotice
 	cur.Characters = next.Characters
 	// Compare with the active preset too: voice_control set_preset switches it
 	// without touching default_preset, and the page shows the active one.
@@ -422,11 +423,13 @@ func (b *backend) state() map[string]any {
 			"dictate_hotkey": orNone(cfg.Serve.DictateHotkey), "dictate_submit": boolOr(cfg.Serve.DictateSubmit, false),
 			"dictate_target": cfg.Serve.DictateTarget, "dictate_feedback": cfg.Serve.DictateFeedback, "dictate_routing": boolOr(cfg.Serve.DictateRouting, false), "dictate_theme": cfg.Serve.DictateTheme, "dictate_overlay_scale": floatOr(cfg.Serve.DictateOverlayScale, 1.5), "personas": boolOr(cfg.Serve.Personas, false), "speaking_popup": boolOr(cfg.Serve.SpeakingPopup, false), "popup_linger": floatOr(cfg.Serve.PopupLinger, 8), "reader_appear": cfg.Serve.Appear(), "reader_hotkey": orNone(cfg.Serve.ReaderHotkey), "reader_theme": derefOr(cfg.Serve.ReaderTheme, ""), "reader_story_theme": derefOr(cfg.Serve.ReaderStoryTheme, ""), "popup_dictation": boolOr(cfg.Serve.PopupDictation, false), "voice_replies": boolOr(cfg.Serve.VoiceReplies, false),
 		},
-		"listen":     map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice, "words": cfg.Listen.Words},
-		"languages":  cfg.Languages,
-		"characters": cfg.Characters, // who sessions become; the settings window edits the list
-		"wordlists":  wordListsState(cfg),
-		"transcript": b.ctl.agents.Transcript(), // what voice said and what the user dictated, oldest first
+		"listen":    map[string]any{"model": cfg.Listen.Model, "input_device": cfg.Listen.InputDevice, "words": cfg.Listen.Words},
+		"languages": cfg.Languages,
+		// The language warning the user acknowledged, so the window hides it.
+		"language_notice": cfg.LanguageNotice,
+		"characters":      cfg.Characters, // who sessions become; the settings window edits the list
+		"wordlists":       wordListsState(cfg),
+		"transcript":      b.ctl.agents.Transcript(), // what voice said and what the user dictated, oldest first
 		"hooks": map[string]any{
 			"enabled": boolOr(cfg.Hooks.Enabled, true), "summary": boolOr(cfg.Hooks.Summary, true),
 			"announce_project": boolOr(cfg.Hooks.AnnounceProject, true), "preset": cfg.Hooks.Preset,

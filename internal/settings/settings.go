@@ -31,6 +31,9 @@ type Settings struct {
 	Presets map[string]*Preset `toml:"presets,omitempty" json:"presets,omitempty"`
 	// Languages the user speaks; replaces config.toml's list when set.
 	Languages *[]string `toml:"languages,omitempty" json:"languages,omitempty"`
+	// LanguageNotice: the language situation whose warning the user
+	// acknowledged ("summaries" or "quality").
+	LanguageNotice *string `toml:"language_notice,omitempty" json:"language_notice,omitempty"`
 	// Sidecar holds the GPU backends' chosen options, such as qwen3's model
 	// size ([sidecar.qwen3] model = "...").
 	Sidecar map[string]map[string]string `toml:"sidecar,omitempty" json:"sidecar,omitempty"`

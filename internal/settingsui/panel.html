@@ -209,6 +209,12 @@
   main { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; border-top: 1px solid var(--rule); }
   .notes { margin: 10px 20px 0; padding: 8px 12px; border-radius: 6px; background: var(--field); font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); white-space: pre-line; }
   .notes:empty { display: none; }
+  /* The language warning: on top until acknowledged, in its section always. */
+  .langwarn { margin: 10px 20px 0; padding: 10px 12px; border-radius: 6px; background: var(--field); border-left: 3px solid oklch(78% 0.13 75); font: 12.5px/1.45 var(--ui-small); color: var(--ink); }
+  .langwarn p { margin: 0 0 8px; }
+  .langwarn label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); cursor: pointer; }
+  .langwarn[hidden] { display: none; }
+  .langnote { font: 12.5px/1.45 var(--ui-small); color: var(--ink-2); border-left: 3px solid oklch(78% 0.13 75); padding-left: 10px; margin: 0; }
   .groups { padding-bottom: 6px; }
   .g { transition: background .3s var(--ease); }
   .g + .g { border-top: 1px solid var(--rule); }
@@ -510,6 +516,10 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
 
   <main>
     <div class="notes" id="notes"></div>
+    <div class="langwarn" id="langWarn" role="alert" hidden>
+      <p id="langWarnText"></p>
+      <label><input type="checkbox" id="langAck"> I understand, don't show this again</label>
+    </div>
     <iframe class="frame" data-s="characters" title="Characters"></iframe>
     <iframe class="frame" data-s="integrations" title="Integrations"></iframe>
 
@@ -769,6 +779,9 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
           <div class="more row">
             <label class="lab" for="lang">Speaking language<span class="help">When the agent does not say which</span></label>
             <select id="lang"></select>
+          </div>
+          <div class="more row col" id="langNoteRow" hidden>
+            <p class="langnote" id="langNote"></p>
           </div>
           <div class="more row">
             <label class="lab" for="unload">Free idle models after<span class="help">GPU voices too: their server stops and frees the graphics card; the next sentence loads it again</span></label>
@@ -1907,6 +1920,7 @@ function render(s) {
   hint();
   $('volume').value = s.volume; $('volumeVal').textContent = pct(s.volume); paintRange($('volume'));
   fillLang(s);
+  langWarning();
   fill($('device'), o.outputs.map(d => ({ value: d, label: d })), s.device || 'default', [{ value: 'default', label: 'System default' }]);
   fill($('mic'), o.inputs.map(d => ({ value: d, label: d })), s.listen.input_device || 'default', [{ value: 'default', label: 'System default' }]);
   const duck = s.serve.duck;
@@ -2045,7 +2059,7 @@ async function flush() {
   const body = pending; pending = {};
   try {
     const r = await api('save', body);
-    state = r.state; notes(r.state.notes); poll();
+    state = r.state; notes(r.state.notes); langWarning(); poll();
     if (r.restart) { $('restart').hidden = false; saved('Needs a restart', 'warn'); }
     else saved('Saved', 'ok');
   } catch (e) { saved(e.message, 'warn'); }
@@ -2180,6 +2194,29 @@ on('langs', 'click', e => {
   renderLangs(next);
   save({ languages: next });
 });
+// What the user should know about the languages they speak, or null: an
+// English voice skips replies in their other language ("summaries"), or a
+// voice speaking another language sounds worse ("quality").
+function langSituation(s) {
+  if (!s) return null;
+  const lang = s.default_lang || 'en';
+  const other = (s.languages || []).filter(l => l !== 'en');
+  if (lang === 'en') {
+    if (!other.length) return null;
+    const names = andList(other.map(langName)), or = other.length > 1 ? 'one of them' : langName(other[0]);
+    return { kind: 'summaries', text: 'Voices speak English. When an agent answers in ' + names + ', a finished turn is announced with a short English phrase ("All done…"), not in its own words. To hear its words, set Speaking language to ' + or + ' or Detect from text: voices in other languages sound noticeably worse than the English ones.' };
+  }
+  const what = lang === 'auto' ? 'Replies not in English are' : 'Replies are';
+  return { kind: 'quality', text: what + ' spoken by voices that sound noticeably worse than the English ones, and a voice with none for the language reads it as English. GPU voices such as Chatterbox speak more languages better: see Integrations.' };
+}
+function langWarning() {
+  const w = langSituation(state);
+  $('langNoteRow').hidden = !w;
+  $('langNote').textContent = w ? w.text : '';
+  $('langWarn').hidden = !w || state.language_notice === w.kind;
+  $('langWarnText').textContent = w ? w.text : '';
+  $('langAck').checked = false;
+}
 // The speaking language: one of the user's (English when they chose none),
 // or detected from the text.
 function fillLang(s) {
@@ -2191,6 +2228,13 @@ function fillLang(s) {
 on('tReset', 'click', () => retune(() => { tune = fromPreset(presetOf($('preset').value)); }));
 on('volume', 'input', () => { $('volumeVal').textContent = pct($('volume').value); paintRange($('volume')); save({ volume: +$('volume').value }, 350); });
 on('lang', 'change', () => save({ default_lang: $('lang').value }));
+on('langAck', 'change', () => {
+  const w = langSituation(state);
+  if (!w || !$('langAck').checked) return;
+  state.language_notice = w.kind;
+  langWarning();
+  save({ language_notice: w.kind });
+});
 on('device', 'change', () => save({ device: $('device').value }));
 on('mic', 'change', () => save({ listen: { input_device: $('mic').value } }));
 on('duckOn', 'change', () => { duckUI(); save({ serve: { duck: $('duckOn').checked ? +$('duck').value : 1 } }); });
