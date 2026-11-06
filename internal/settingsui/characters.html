@@ -113,7 +113,7 @@
   .btn.primary { min-width: 84px; background: var(--ink); color: var(--ground); }
   .btn.primary:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
   input.text, textarea { width: 100%; padding: 0 10px; user-select: text; cursor: text; }
-  textarea { display: block; height: 52px; min-height: 44px; padding: 8px 10px; resize: vertical; font: 13.5px/1.45 var(--ui); }
+  textarea { display: block; height: calc(3 * 1.45em + 16px); min-height: 44px; padding: 8px 10px; resize: vertical; font: 13.5px/1.45 var(--ui); }  /* about three lines */
   input.text:hover, textarea:hover { background-color: var(--field-hi); }
   input.text:focus, textarea:focus { background-color: var(--field); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
   ::placeholder { color: var(--ink-3); }
@@ -171,6 +171,7 @@
   .fold .inner { display: grid; row-gap: 14px; padding: 2px 14px 14px; }
   .fold .tuned { color: var(--ink-2); margin-left: auto; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .fold summary { min-width: 0; }
+  .fold summary b { white-space: nowrap; flex: none; }  /* the name stays on one line; the values give way */
   aside .fold { margin: 4px 0 6px; }
   aside .fold summary { padding: 8px 10px; font-size: 13px; }
   aside .fold .inner { row-gap: 0; padding: 0 10px 8px; }
@@ -270,7 +271,7 @@
       <label class="switch"><input type="checkbox" id="personas"><span></span></label>
     </div>
     <details class="tune fold" id="allFold">
-      <summary><b>All characters</b> <span class="tuned" id="allSum"></span></summary>
+      <summary><b>General behaviour</b> <span class="tuned" id="allSum"></span></summary>
       <div class="inner">
         <div class="hold" id="hold">
           <label class="lab" for="gImm">Immersion<span class="tip" tabindex="0" id="gImmTip">i</span></label>
@@ -622,6 +623,7 @@ function list() {
 
 function open(i) {
   const chars = state.characters || [];
+  const same = i === sel; // shown again (after Save): folds stay as the user left them
   sel = i;
   const c = chars[i] || { name: '', traits: [], description: '', preset: '', image: '' };
   image = c.image || '';
@@ -652,7 +654,8 @@ function open(i) {
   sp.value = tunedFrom ? tunedP.extends : (c.preset || '');
   tune = fromPreset(tunedFrom ? tunedP : presetOf(sp.value || state.default_preset));
   showTune();
-  $('tune').open = !!tunedFrom;
+  // Another character starts with Tune closed (its line says when the voice is tuned); Save keeps it as it was.
+  if (!same) $('tune').open = false;
   hint();
   $('del').hidden = i >= chars.length;
   $('def').hidden = i <= 0 || i >= chars.length;
@@ -986,6 +989,7 @@ const ALOUD_NOTE = {
 const WORK = 'It shapes only how you talk, never the work: stay correct, complete, honest and safe, and keep helping even when the character is mean or teasing. ';
 const tokens = s => Math.max(1, Math.round(s.length / 4));
 const REM_TIP = "How often its agent is reminded of the character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change.";
+var costShort = ''; // guideCost's figure, short, for the How it behaves line
 function guideCost() {
   if (sel < 0) return;
   const name = $('name').value.trim() || 'Name', level = +$('imm').value || state.serve.character_immersion;
@@ -997,10 +1001,13 @@ function guideCost() {
   const reminder = level >= 3 ? 'Remember your character. ' + persona : 'Remember: you are ' + name + ' (' + (traits.join(', ') || 'your own natural self') + '), in what you write and what you say aloud.';
   let every = guideValue('guide', 'guideN');
   if (every === null) every = state.serve.character_guidance;
-  const start = tokens(persona + note), each = tokens(reminder + note);
+  const start = tokens(persona + note), each = tokens(reminder + note), per = Math.max(1, Math.round(each / every));
   $('guideCost').textContent = every === 0
     ? '≈ ' + start + ' tokens once, at the start'
-    : '≈ ' + Math.max(1, Math.round(each / every)) + ' tokens per message you send (' + start + ' at the start)';
+    : '≈ ' + per + ' tokens per message you send (' + start + ' at the start)';
+  // What the character costs stays in sight on the closed How it behaves line too.
+  costShort = every === 0 ? '≈ ' + start + ' tokens at the start' : '≈ ' + per + ' tokens a message';
+  foldSums();
   $('guideTip').dataset.tip = REM_TIP + '\n\nA reminder here is ' + (level >= 3 ? 'the whole description' : 'one line with its name and traits') + (note ? ' and how much to say aloud' : '') +
     ', ≈ ' + each + ' tokens' + (level >= 3 ? ', since the character steers fully' : '') +
     (every === 0 ? '; with "Only at the start" none is sent.' : ', every ' + (every === 1 ? 'message you send' : every + ' of your messages') + '. The description at the start is ≈ ' + start + ' tokens.');
@@ -1021,7 +1028,7 @@ function foldSums() {
   if (sel < 0) return;
   // Each setting's "Like the others" value: Reminders' 0 is a choice of its own (only at the start).
   const own = [['speaks', 'speaks ', ''], ['imm', '', '0'], ['aloud', 'says ', '0'], ['guide', '', '']].filter(([id, , like]) => $(id).value !== like);
-  $('behaveSum').textContent = own.length ? own.map(([id, pre]) => pre + optText(id).toLowerCase()).join(' · ') : 'like the others';
+  $('behaveSum').textContent = (own.length ? own.map(([id, pre]) => pre + optText(id).toLowerCase()).join(' · ') : 'like the others') + (costShort ? ' · ' + costShort : '');
 }
 document.addEventListener('change', foldSums);
 document.addEventListener('input', e => { if (e.target.id === 'guideN' || e.target.id === 'gGuideN') foldSums(); });
