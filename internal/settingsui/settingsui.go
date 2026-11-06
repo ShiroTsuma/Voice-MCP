@@ -32,6 +32,9 @@ var charactersPage []byte
 //go:embed integrations.html
 var integrationsPage []byte
 
+//go:embed voices.html
+var voicesPage []byte
+
 //go:embed reader.html
 var readerPage []byte
 
@@ -111,6 +114,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	servePage("/settings", page)
 	servePage("/settings/characters", charactersPage)
 	servePage("/settings/integrations", integrationsPage)
+	servePage("/settings/voices", voicesPage)
 	servePage("/settings/reader", readerPage)
 	// Character pictures, by the names saveAvatar gives them.
 	mux.HandleFunc("/settings/avatar/", func(w http.ResponseWriter, r *http.Request) {

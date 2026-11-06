@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>voice · Voice design</title>
+<!--
+  Voice design: the voices the user made, designed from words or cloned from a recording, in
+  their own groups on the left; on the right the one picked, or a new one being made. In the
+  characters window's look, and with its controls, so the settings read as one app.
+-->
+<style>
+  :root {
+    --ground:   oklch(21.5% 0.003 260);
+    --sheet:    oklch(25% 0.003 260);
+    --field:    oklch(29.5% 0.003 260);  /* controls at rest */
+    --field-hi: oklch(34% 0.003 260);    /* under the pointer */
+    --rule:     oklch(30% 0.003 260);
+    --frame:    oklch(17% 0.003 260);    /* behind a face */
+    --ink:      oklch(94% 0.002 260);
+    --ink-2:    oklch(72% 0.003 260);
+    --ink-3:    oklch(54% 0.003 260);
+    --plain:    oklch(80% 0.004 260);
+
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ui-small: "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --ease: cubic-bezier(.3, .7, .2, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  html { background: var(--ground); }
+  body { margin: 0; display: flex; overflow: hidden; font: 14px/1.4 var(--ui); color: var(--ink); background: var(--ground); user-select: none; cursor: default; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* ── Rows, switches, fields: as in the flyout ─────────────── */
+  .row { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 5px 0; }
+  .row.col { flex-direction: column; align-items: stretch; gap: 6px; padding: 6px 0; }
+  .opt { font: 12.5px var(--ui-small); color: var(--ink-3); margin-left: 4px; }
+  .pair { display: flex; gap: 8px; align-items: center; }
+  .pair input.num { width: 72px; flex: none; }
+  aside .hold { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 4px; padding: 4px 0 6px; }
+  aside .hold .lab + *, aside .hold .levelnote { margin-bottom: 6px; }
+  aside .hold .lab { font-size: 13px; white-space: nowrap; }
+  aside .hold select { width: 100%; }
+  aside .hold.off { opacity: .45; pointer-events: none; }
+  .levelnote { font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin: 0; }
+  .lab { flex: 1; min-width: 0; font-size: 14px; }
+  .help { display: block; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin-top: 1px; }
+  .help:empty { display: none; }
+  /* [i]: the longer explanation, on hover or focus, in one box above the page so no panel clips it. */
+  .tip { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; border-radius: 50%; vertical-align: 1px;
+    box-shadow: inset 0 0 0 1.2px var(--ink-3); color: var(--ink-2); font: 600 10px/1 var(--ui-small); cursor: help; }
+  .tip:hover, .tip:focus-visible { color: var(--ink); box-shadow: inset 0 0 0 1.2px var(--ink-2); outline: none; }
+  #tipbox { position: fixed; z-index: 50; max-width: 320px; padding: 9px 11px; border-radius: 6px; background: var(--field-hi); color: var(--ink);
+    font: 12.5px/1.45 var(--ui-small); white-space: pre-line; box-shadow: 0 6px 24px rgb(0 0 0 / .35); pointer-events: none; }
+
+  .switch { position: relative; width: 36px; height: 20px; flex: none; cursor: pointer; }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .switch span { position: absolute; inset: 0; border-radius: 10px; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: background .2s, box-shadow .2s; pointer-events: none; }
+  .switch span::after { content: ""; position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-2); transition: transform .22s var(--ease), background .2s; }
+  .switch:hover span { box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+  .switch input:checked + span { background: var(--ink); box-shadow: none; }
+  .switch input:checked + span::after { transform: translateX(16px); background: var(--ground); }
+  .switch input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  select, .btn, input.text, textarea { border-radius: 6px; border: 0; background-color: var(--field); color: var(--ink); font-size: 13.5px; outline: none; transition: background-color .12s, box-shadow .12s; }
+  select, .btn, input.text { height: 32px; }
+  select { appearance: none; flex: 1; min-width: 0; padding: 0 28px 0 10px; text-overflow: ellipsis; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23b0b1b5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; }
+  option { background: var(--field); color: var(--ink); }
+  select:hover, .btn:hover { background-color: var(--field-hi); }
+  select:focus-visible, .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .btn { flex: none; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 600; }
+  .btn svg { width: 11px; height: 11px; flex: none; }
+  .btn.wide { width: 100%; }
+  .btn:disabled { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); cursor: default; }
+  .btn.primary { min-width: 84px; background: var(--ink); color: var(--ground); }
+  .btn.primary:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
+  input.text, textarea { width: 100%; padding: 0 10px; user-select: text; cursor: text; }
+  textarea { display: block; height: 52px; min-height: 44px; padding: 8px 10px; resize: vertical; font: 13.5px/1.45 var(--ui); }
+  input.text:hover, textarea:hover { background-color: var(--field-hi); }
+  input.text:focus, textarea:focus { background-color: var(--field); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+  ::placeholder { color: var(--ink-3); }
+  .seg { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
+  .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 5px; background: none; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .seg button:hover { color: var(--ink); background: var(--field-hi); }
+  .seg button.on { background: var(--ink); color: var(--ground); }
+  /* The page's own dialogs: the browser's would show voice's address and port. */
+  .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
+  .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 18px 14px; box-shadow: 0 12px 40px #0008; font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .vdlg-box p { margin: 0 0 14px; white-space: pre-wrap; }
+  .vdlg-row { display: flex; justify-content: flex-end; gap: 8px; }
+  .vdlg-btn { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  .vdlg-ok { background: color-mix(in oklab, var(--ink) 14%, var(--field)); }
+  /* A select's list, drawn by the page: the browser's own is light grey and out of place. */
+  .vmenu { position: fixed; z-index: 1001; overflow-y: auto; padding: 4px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px;
+    box-shadow: 0 10px 30px #0009; font: 13.5px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; scrollbar-width: thin; }
+  .vopt { position: relative; padding: 7px 10px 7px 26px; border-radius: 5px; color: var(--ink); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vopt.hl { background: var(--field-hi, var(--field)); }
+  .vopt.sel::before { content: ""; position: absolute; left: 10px; top: 50%; width: 8px; height: 4px; margin-top: -4px;
+    border: solid var(--ink); border-width: 0 0 1.6px 1.6px; transform: rotate(-45deg); }
+  .vopt[aria-disabled="true"] { color: var(--ink-3, var(--ink-2)); cursor: default; }
+  .vgrp { padding: 8px 10px 3px; font-size: 11.5px; color: var(--ink-3, var(--ink-2)); }
+
+  /* ── The voices, in the user's groups ─────────────────────── */
+  aside { width: 300px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--rule); }
+  aside header { padding: 18px 20px 6px; }
+  aside h1 { margin: 0 0 2px; font: 600 20px/1.3 var(--ui-display); letter-spacing: -.01em; }
+  .list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 8px; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; }
+  .grp { border-radius: 8px; padding-bottom: 2px; transition: background .12s, box-shadow .12s; }
+  .grp.over { background: color-mix(in oklab, var(--ink) 6%, transparent); box-shadow: inset 0 0 0 1px var(--ink-3); }
+  .ghead { display: flex; align-items: center; gap: 4px; min-height: 30px; padding: 4px 4px 2px 6px; }
+  .ghead .fold { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 2px 0; border: 0; background: none; text-align: left; color: var(--ink-2); }
+  .ghead .fold::before { content: ""; flex: none; width: 5px; height: 5px; margin: 0 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform .15s; }
+  .grp.shut .ghead .fold::before { transform: rotate(-45deg); }
+  .ghead b { font: 600 11.5px/1.3 var(--ui-small); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ghead .n { font: 11.5px var(--ui-small); color: var(--ink-3); }
+  .ghead .ico { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--ink-3); display: grid; place-items: center; opacity: 0; transition: opacity .12s; }
+  .ghead:hover .ico, .ghead .ico:focus-visible { opacity: 1; }
+  .ghead .ico:hover { background: var(--field); color: var(--ink); }
+  .ghead .ico svg { width: 12px; height: 12px; }
+  .ghead input.text { height: 26px; font-size: 13px; }
+  .grp.shut .items { display: none; }
+  .items .hint { padding: 6px 10px 8px 28px; font: 12px var(--ui-small); color: var(--ink-3); }
+  .item { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: center; padding: 6px 10px 6px 28px; border-radius: 6px; cursor: pointer; transition: background .12s; }
+  .item:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); }
+  .item.sel { background: var(--field); }
+  .item[draggable="true"] { cursor: grab; }
+  .item.dragging { opacity: .4; }
+  .item .who { min-width: 0; }
+  .item b { display: block; font: 600 13.5px/1.3 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item small { display: block; font: 12px/1.35 var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .use { font: 11.5px var(--ui-small); color: var(--ink-3); white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+  .item.new b { color: var(--ink-2); font-weight: 400; }
+  .flat .item { padding-left: 10px; }
+  aside footer { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--rule); }
+
+  /* ── The one open on the right ─────────────────────────────── */
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .empty { margin: auto; padding: 0 32px 40px; font: 13.5px/1.4 var(--ui); color: var(--ink-2); text-align: center; }
+  .empty p { margin: 0 0 14px; }
+  form { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; }
+  .fields { padding: 22px 36px 14px; max-width: 720px; }
+  h2 { margin: 0 0 4px; font: 600 18px/1.3 var(--ui-display); letter-spacing: -.01em; }
+  input.text.name { height: 40px; padding: 0 12px; font: 600 18px var(--ui-display); letter-spacing: -.01em; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 4px 0 6px; padding: 10px 12px; border-radius: 8px; background: color-mix(in oklab, var(--field) 45%, transparent); font-size: 13px; }
+  .facts dt { color: var(--ink-2); }
+  .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .drop { display: grid; place-items: center; gap: 8px; min-height: 92px; padding: 14px; border-radius: 8px; text-align: center;
+    box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--ink) 18%, transparent); color: var(--ink-2); font-size: 13px; transition: background .12s, box-shadow .12s; }
+  .drop.over { background: color-mix(in oklab, var(--ink) 6%, transparent); box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+  .drop b { color: var(--ink); font-weight: 600; }
+  .row.col > select { flex: none; } /* in a column, flex: 1 would squash it */
+  .btn.primary:disabled { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); }
+  .seg button:disabled { opacity: .4; cursor: not-allowed; }
+  .seg button:disabled:hover { background: none; color: var(--ink-2); }
+  .bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 36px; border-top: 1px solid var(--rule); }
+  .bar .grow { flex: 1; }
+  #status, #mstatus { min-width: 0; font: 12.5px var(--ui-small); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; }
+  #status.warn, #mstatus.warn { color: var(--ink); }
+  .btn.busy { position: relative; color: transparent !important; }
+  .btn.busy::after { content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ground); border-right-color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 720px) {
+    aside { width: 250px; }
+    .fields { padding: 18px 24px 14px; }
+    .bar { padding: 10px 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1>Voice design</h1>
+    <p class="help">Voices you made, in your groups<span class="tip" tabindex="0" data-tip="Every voice here is a preset: give it to a character or make it the default voice in Speaking. Drag a voice onto a group to move it; folded groups stay folded. Agents see the groups and descriptions too (voice_clone).">i</span></p>
+  </header>
+  <div class="list" id="list"></div>
+  <footer>
+    <button class="btn" id="add" type="button"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 1.5v9M1.5 6h9"/></svg>New voice</button>
+    <button class="btn" id="addGroup" type="button" title="A new group, to drag voices into">New group</button>
+  </footer>
+</aside>
+<main>
+  <div class="empty" id="empty"><p>Pick a voice on the left, or make a new one.</p></div>
+
+  <!-- A voice: its name, words about it, group, and what it is. -->
+  <form id="voice" hidden autocomplete="off">
+    <div class="scroll"><div class="fields">
+      <div class="row col">
+        <label class="lab" for="vName">Name<span class="tip" tabindex="0" data-tip="Lowercase letters, digits, - or _. It is also the voice's preset name: renaming it moves the characters, the default voice and the tunings that use it along.">i</span></label>
+        <input class="text name" type="text" id="vName" maxlength="40" spellcheck="false">
+      </div>
+      <div class="row col">
+        <label class="lab" for="vDesc">Description<span class="opt">optional</span><span class="help">What it is, or what it is for</span></label>
+        <textarea id="vDesc" maxlength="600"></textarea>
+      </div>
+      <div class="row col">
+        <label class="lab" for="vGroup">Group</label>
+        <select id="vGroup"></select>
+      </div>
+      <div class="row col">
+        <label class="lab" for="vSample">Hear it<span class="opt">optional text</span></label>
+        <div class="pair"><input class="text" type="text" id="vSample" maxlength="300" placeholder="Hi, this is how I sound now."><button class="btn" id="vHear" type="button"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3 1.5v9l7.5-4.5z"/></svg>Hear it</button></div>
+      </div>
+      <dl class="facts" id="vFacts"></dl>
+    </div></div>
+    <div class="bar">
+      <button class="btn" id="vDel" type="button">Delete</button>
+      <span class="grow"></span><span id="status"></span>
+      <button class="btn primary" id="vSave" type="submit">Save</button>
+    </div>
+  </form>
+
+  <!-- A new voice: from words, from the microphone, or from a sound file. -->
+  <form id="make" hidden autocomplete="off">
+    <div class="scroll"><div class="fields">
+      <h2>New voice</h2>
+      <div class="row">
+        <div class="lab">Make it from<span class="help" id="mFromHelp"></span></div>
+        <div class="seg" id="mFrom" role="group" aria-label="Make it from"><button type="button" data-v="design">Description</button><button type="button" data-v="record">Microphone</button><button type="button" data-v="file">Sound file</button></div>
+      </div>
+      <div class="row col">
+        <label class="lab" for="mName">Name<span class="help">Lowercase letters, digits, - or _</span></label>
+        <input class="text" type="text" id="mName" maxlength="40" spellcheck="false" placeholder="e.g. narrator-warm">
+      </div>
+      <div class="row col">
+        <label class="lab" for="mDesc" id="mDescLab"></label>
+        <textarea id="mDesc" maxlength="600"></textarea>
+      </div>
+      <div class="row col" data-for="design">
+        <label class="lab" for="mSample">Sample<span class="opt">optional</span><span class="tip" tabindex="0" data-tip="What the new voice reads once, about ten seconds. The voice keeps the tone of this reading, so write it the way the voice should sound: calm, excited, sarcastic. Empty: a neutral greeting.">i</span></label>
+        <input class="text" type="text" id="mSample" maxlength="400" placeholder="A few sentences in the voice's own mood">
+      </div>
+      <div class="row col" data-for="file">
+        <div class="lab">Recording<span class="tip" tabindex="0" data-tip="5 to 15 seconds of one clear speaker, no music: WAV, MP3, FLAC, OGG or M4A. Longer clips are cut. What it says is written down by speech recognition when the engine needs it.">i</span></div>
+        <div class="drop" id="mDrop"><span id="mDropText">Drop a sound file here</span><button class="btn" id="mPick" type="button">Choose a file…</button></div>
+        <input type="file" id="mFile" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden>
+      </div>
+      <div class="row" data-for="record">
+        <div class="lab">Length<span class="help">Read a few natural sentences after the ticks</span></div>
+        <div class="seg" id="mSecs" role="group" aria-label="Recording length"><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button><button type="button" data-v="20">20 s</button></div>
+      </div>
+      <div class="row col">
+        <label class="lab" for="mGroup">Group</label>
+        <select id="mGroup"></select>
+      </div>
+      <div class="row col">
+        <label class="lab" for="mEngine">Speaks with<span class="tip" tabindex="0" id="mEngineTip">i</span><span class="help" id="mEngineHelp"></span></label>
+        <select id="mEngine"></select>
+      </div>
+      <div class="row" data-for="record file">
+        <label class="lab" for="mRights">I may use this voice<span class="help">My own, or with the speaker's consent</span></label>
+        <label class="switch"><input type="checkbox" id="mRights"><span></span></label>
+      </div>
+    </div></div>
+    <div class="bar">
+      <button class="btn" id="mCancel" type="button">Cancel</button>
+      <span class="grow"></span><span id="mstatus"></span>
+      <button class="btn primary" id="mGo" type="submit"></button>
+    </div>
+  </form>
+</main>
+<script>
+// The page's own dialogs: the browser's confirm and alert would show voice's address and port.
+// dialog resolves true for ok; Esc, a click outside or cancel resolve false.
+function dialog(text, ok, cancel) {
+  return new Promise(done => {
+    const bg = document.createElement('div'); bg.className = 'vdlg';
+    const box = document.createElement('div'); box.className = 'vdlg-box'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
+    const p = document.createElement('p'); p.textContent = text;
+    const row = document.createElement('div'); row.className = 'vdlg-row';
+    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
+    const close = v => { bg.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    const mk = (label, v, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = () => close(v); row.append(b); return b; };
+    const no = cancel ? mk(cancel, false, 'vdlg-btn') : null;
+    const yes = mk(ok, true, 'vdlg-btn vdlg-ok');
+    box.append(p, row); bg.append(box);
+    bg.addEventListener('click', e => { if (e.target === bg) close(false); });
+    document.body.append(bg); document.addEventListener('keydown', key, true);
+    (no || yes).focus(); // a question starts on Cancel, so Enter never deletes by accident
+  });
+}
+const askYes = (text, ok = 'Delete') => dialog(text, ok, 'Cancel');
+const tell = text => dialog(text, 'OK');
+
+// A select's list drawn by the page in the window's own look; the select itself stays and keeps its
+// value, so the code that fills and reads it is unchanged. Arrow keys on a closed select still step.
+(() => {
+  let menu = null, owner = null, items = [], act = -1;
+  const close = () => { if (!menu) return; menu.remove(); menu = null; owner = null; removeEventListener('resize', close); };
+  const pick = i => {
+    const it = items[i]; if (!it || it.dis) return;
+    const sel = owner; close();
+    if (sel.value !== it.value) { sel.value = it.value; sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    sel.focus();
+  };
+  const mark = i => {
+    if (act >= 0 && items[act]) items[act].el.classList.remove('hl');
+    act = i;
+    if (items[i]) { items[i].el.classList.add('hl'); items[i].el.scrollIntoView({ block: 'nearest' }); }
+  };
+  const step = d => { let i = act; for (let n = 0; n < items.length; n++) { i = (i + d + items.length) % items.length; if (!items[i].dis) return mark(i); } };
+  function open(sel) {
+    close();
+    if (sel.disabled || !sel.options.length) return;
+    owner = sel; items = []; act = -1;
+    menu = document.createElement('div'); menu.className = 'vmenu'; menu.setAttribute('role', 'listbox');
+    const add = o => {
+      const el = document.createElement('div'); el.className = 'vopt'; el.setAttribute('role', 'option'); el.textContent = o.textContent;
+      if (o.disabled) el.setAttribute('aria-disabled', 'true');
+      if (o.selected) { el.classList.add('sel'); el.setAttribute('aria-selected', 'true'); }
+      const i = items.length; items.push({ el, value: o.value, dis: o.disabled });
+      el.addEventListener('mousemove', () => { if (act !== i && !o.disabled) mark(i); });
+      el.addEventListener('click', () => pick(i));
+      menu.append(el);
+    };
+    for (const c of sel.children) {
+      if (c.tagName === 'OPTGROUP') { const g = document.createElement('div'); g.className = 'vgrp'; g.textContent = c.label; menu.append(g); [...c.children].forEach(add); }
+      else if (c.tagName === 'OPTION') add(c);
+    }
+    document.body.append(menu);
+    const r = sel.getBoundingClientRect(), below = innerHeight - r.bottom - 8, above = r.top - 8;
+    const down = below >= Math.min(240, menu.scrollHeight) || below >= above;
+    menu.style.minWidth = r.width + 'px'; menu.style.maxWidth = Math.max(r.width, innerWidth - r.left - 8) + 'px';
+    menu.style.left = Math.max(4, Math.min(r.left, innerWidth - menu.offsetWidth - 4)) + 'px';
+    menu.style.maxHeight = Math.max(120, Math.min(320, down ? below : above)) + 'px';
+    if (down) menu.style.top = (r.bottom + 4) + 'px'; else menu.style.bottom = (innerHeight - r.top + 4) + 'px';
+    mark(Math.max(0, items.findIndex(it => it.el.classList.contains('sel'))));
+    addEventListener('resize', close);
+  }
+  // Open on a press of the select, or Space, Enter, Alt+Down and F4 on it.
+  document.addEventListener('mousedown', e => {
+    const sel = e.target.closest && e.target.closest('select');
+    if (sel && !sel.multiple && sel.size <= 1) { e.preventDefault(); sel.focus(); if (owner === sel) close(); else open(sel); return; }
+    if (menu && !menu.contains(e.target)) close();
+  }, true);
+  document.addEventListener('keydown', e => {
+    if (menu) {
+      const k = e.key;
+      if (k === 'ArrowDown' || k === 'ArrowUp') step(k === 'ArrowDown' ? 1 : -1);
+      else if (k === 'Home') { act = -1; step(1); } else if (k === 'End') { act = 0; step(-1); }
+      else if (k === 'Enter' || k === ' ') pick(act);
+      else if (k === 'Escape' || k === 'Tab') { const s = owner; close(); if (k === 'Escape') s.focus(); else return; }
+      else if (k.length === 1) { const i = items.findIndex((it, n) => n > act && !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); const j = i >= 0 ? i : items.findIndex(it => !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); if (j >= 0) mark(j); }
+      else return;
+      e.preventDefault(); e.stopPropagation(); return;
+    }
+    const sel = e.target.tagName === 'SELECT' ? e.target : null;
+    if (sel && !sel.multiple && (e.key === ' ' || e.key === 'Enter' || e.key === 'F4' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); open(sel); }
+  }, true);
+  document.addEventListener('scroll', e => { if (menu && !menu.contains(e.target)) close(); }, true);
+  addEventListener('blur', close);
+})();
+// [i]: its data-tip in a box under it, kept inside the window.
+const tipbox = document.createElement('div'); tipbox.id = 'tipbox'; tipbox.hidden = true; tipbox.setAttribute('role', 'tooltip'); document.body.append(tipbox);
+let tipFor = null;
+function showTip(t) {
+  tipFor = t;
+  tipbox.textContent = t.dataset.tip || ''; tipbox.hidden = !tipbox.textContent;
+  const r = t.getBoundingClientRect(), w = tipbox.offsetWidth, h = tipbox.offsetHeight;
+  tipbox.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - 12)) + 'px';
+  tipbox.style.top = (r.bottom + 6 + h > innerHeight - 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
+}
+document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('.tip'); if (t) showTip(t); });
+document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.tip')) tipbox.hidden = true; });
+document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('tip')) showTip(e.target); });
+document.addEventListener('focusout', () => { tipbox.hidden = true; });
+// Scrolling carries the box along with its [i].
+document.addEventListener('scroll', () => { if (!tipbox.hidden && tipFor) showTip(tipFor); }, true);
+// A click on [i] inside a label shows it, without opening the list.
+document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); showTip(e.target); } });
+const $ = id => document.getElementById(id);
+async function api(path, body) {
+  const r = await fetch('/settings/api/' + path, body === undefined ? {} :
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+const say = (id, text, warn) => { const s = $(id); s.textContent = text || ''; s.title = text || ''; s.classList.toggle('warn', !!warn); };
+const seg = (id, v) => $(id).querySelectorAll('button').forEach(b => { const on = b.dataset.v === String(v); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+const segValue = id => ($(id).querySelector('button.on') || {}).dataset?.v;
+const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+const validName = n => /^[a-z0-9][a-z0-9_-]{0,39}$/.test(n);
+// A name as typed, made into one a voice can have: "Narrator Warm" → "narrator-warm".
+const tidyName = s => s.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+
+let state = null, voices = [], groups = [], open = null, dragVoice = '', busy = false, pendingFile = null;
+const shutKey = 'voice.voiceGroupsShut';
+const shut = new Set((() => { try { return JSON.parse(localStorage.getItem(shutKey) || '[]'); } catch (e) { return []; } })());
+const saveShut = () => { try { localStorage.setItem(shutKey, JSON.stringify([...shut])); } catch (e) {} };
+
+// ── Loading ─────────────────────────────────────────────────
+// keep: the voice to show afterwards, "+new" for the new-voice form, null for none.
+async function load(keep) {
+  const [s, l] = await Promise.all([api('state'), api('clone', { action: 'list' })]);
+  state = s;
+  const cols = l.columns || [];
+  voices = (l.rows || []).map(row => Object.fromEntries(cols.map((c, i) => [c, row[i]])));
+  groups = l.groups || [];
+  fillGroups($('vGroup')); fillGroups($('mGroup')); fillEngines(); fromChanged();
+  if (keep === '+new') showMake();
+  else if (keep && voices.some(v => v.name === keep)) showVoice(keep);
+  else showNothing();
+}
+window.onShow = () => { if (!busy) load(open).catch(e => say('status', e.message, true)); };
+
+// Who speaks with each voice: characters whose voice it is (or a tuning of it), and the default voice.
+function users() {
+  const presets = (state && state.options && state.options.presets) || [];
+  const base = name => { for (let i = 0; i < 5; i++) { const p = presets.find(x => x.name === name); if (!p || !p.extends) break; name = p.extends; } return name; };
+  const out = {};
+  const add = (v, who) => { if (v) (out[v] = out[v] || []).push(who); };
+  for (const ch of (state && state.characters) || []) add(ch.preset && base(ch.preset), ch.name);
+  if (state && state.default_preset) add(base(state.default_preset), 'default voice');
+  return out;
+}
+const engines = () => (state && state.options && state.options.clone_engines) || [];
+const engineLabel = n => (engines().find(e => e.name === n) || {}).label || n;
+const design = () => (state && state.options && state.options.voice_design) || { ready: false, needs: 'Qwen3-TTS' };
+
+// ── The list ────────────────────────────────────────────────
+function list() {
+  const box = $('list'); box.textContent = '';
+  const who = users();
+  const item = v => {
+    const it = document.createElement('div'); it.className = 'item' + (v.name === open ? ' sel' : '');
+    it.innerHTML = '<div class="who"><b></b><small></small></div><span class="use"></span>';
+    it.querySelector('b').textContent = v.name;
+    const about = v.description || v.designed_from || '';
+    it.querySelector('small').textContent = about || engineLabel(v.engine) + (v.seconds ? ', ' + Math.round(v.seconds) + ' s' : '');
+    it.querySelector('.use').textContent = (who[v.name] || []).join(', ');
+    it.title = (about ? about + '\n\n' : '') + (groups.length ? 'Drag onto a group to move it.' : '');
+    it.addEventListener('click', () => showVoice(v.name));
+    it.draggable = true;
+    it.addEventListener('dragstart', e => { dragVoice = v.name; it.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', v.name); });
+    it.addEventListener('dragend', () => { dragVoice = ''; box.querySelectorAll('.dragging, .over').forEach(x => x.classList.remove('dragging', 'over')); });
+    return it;
+  };
+  if (open === '+new') {
+    const it = document.createElement('div'); it.className = 'item new sel';
+    it.innerHTML = '<div class="who"><b>New voice</b></div>';
+    box.append(it);
+  }
+  if (!groups.length) { // no groups yet: a plain list
+    const flat = document.createElement('div'); flat.className = 'flat';
+    voices.forEach(v => flat.append(item(v)));
+    if (!voices.length && open !== '+new') { const h = document.createElement('div'); h.className = 'empty'; h.textContent = 'No voices yet.'; flat.append(h); }
+    box.append(flat);
+    return;
+  }
+  const lower = s => (s || '').toLowerCase();
+  const section = (g, members) => {
+    const sec = document.createElement('div'); sec.className = 'grp' + (shut.has(g) ? ' shut' : '');
+    const hd = document.createElement('div'); hd.className = 'ghead';
+    const fold = document.createElement('button'); fold.type = 'button'; fold.className = 'fold';
+    fold.innerHTML = '<b></b><span class="n"></span>';
+    fold.querySelector('b').textContent = g || 'No group';
+    fold.querySelector('.n').textContent = members.length;
+    fold.setAttribute('aria-expanded', String(!shut.has(g)));
+    fold.addEventListener('click', () => {
+      const s = sec.classList.toggle('shut'); s ? shut.add(g) : shut.delete(g); saveShut();
+      fold.setAttribute('aria-expanded', String(!s));
+    });
+    hd.append(fold);
+    if (g) {
+      const ico = (label, path, fn) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'ico'; b.title = label; b.setAttribute('aria-label', label);
+        b.innerHTML = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="' + path + '"/></svg>';
+        b.addEventListener('click', fn); hd.append(b);
+      };
+      ico('Rename the group ' + g, 'M8 1.8l2.2 2.2L4.3 9.9 1.8 10.2l.3-2.5z', () => renameGroup(hd, g));
+      ico('Remove the group ' + g, 'M2.5 2.5l7 7M9.5 2.5l-7 7', async () => {
+        if (!(await askYes('Remove the group ' + g + '? Its voices stay, in No group.', 'Remove'))) return;
+        try { await api('clone', { action: 'remove_group', group: g }); await load(open); } catch (e) { tell(e.message); }
+      });
+    }
+    const items = document.createElement('div'); items.className = 'items';
+    members.forEach(v => items.append(item(v)));
+    if (!members.length) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = g ? 'Drag voices here' : 'Every voice is in a group'; items.append(h); }
+    sec.append(hd, items);
+    sec.addEventListener('dragover', e => {
+      if (!dragVoice) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      box.querySelectorAll('.grp.over').forEach(x => x !== sec && x.classList.remove('over'));
+      sec.classList.add('over');
+    });
+    sec.addEventListener('dragleave', e => { if (!sec.contains(e.relatedTarget)) sec.classList.remove('over'); });
+    sec.addEventListener('drop', async e => {
+      if (!dragVoice) return;
+      e.preventDefault(); sec.classList.remove('over');
+      const v = voices.find(x => x.name === dragVoice);
+      if (!v || lower(v.group) === lower(g)) return;
+      try { await api('clone', { action: 'group', name: v.name, group: g }); await load(open); } catch (err) { tell(err.message); }
+    });
+    return sec;
+  };
+  for (const g of groups) box.append(section(g, voices.filter(v => lower(v.group) === lower(g))));
+  box.append(section('', voices.filter(v => !v.group)));
+}
+
+// A group's title as a field: Enter or leaving it renames, Escape keeps the name.
+function renameGroup(hd, g) {
+  const fold = hd.querySelector('.fold');
+  if (hd.querySelector('input')) return;
+  const input = document.createElement('input'); input.className = 'text'; input.maxLength = 40; input.value = g;
+  input.setAttribute('aria-label', 'Name of the group ' + g);
+  fold.hidden = true; hd.querySelectorAll('.ico').forEach(b => b.hidden = true);
+  hd.prepend(input); input.focus(); input.select();
+  let done = false;
+  const finish = async keep => {
+    if (done) return; done = true;
+    const to = input.value.trim();
+    if (keep || !to || to === g) { input.remove(); fold.hidden = false; hd.querySelectorAll('.ico').forEach(b => b.hidden = false); return; }
+    if (shut.delete(g)) { shut.add(to); saveShut(); }
+    try { await api('clone', { action: 'rename_group', group: g, new_group: to }); } catch (e) { tell(e.message); }
+    await load(open);
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finish(false); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(true); } });
+  input.addEventListener('blur', () => finish(false));
+}
+$('addGroup').addEventListener('click', async () => {
+  let name = 'New group', n = 2;
+  while (groups.some(g => g.toLowerCase() === name.toLowerCase())) name = 'New group ' + n++;
+  try { await api('clone', { action: 'group', group: name }); } catch (e) { tell(e.message); return; }
+  shut.delete(name);
+  await load(open);
+  const hd = [...document.querySelectorAll('.ghead')].find(h => h.querySelector('.fold b').textContent === name);
+  if (hd) renameGroup(hd, name);
+});
+
+function fillGroups(sel) {
+  const keep = sel.value; sel.textContent = '';
+  for (const g of [''].concat(groups)) { const o = document.createElement('option'); o.value = g; o.textContent = g || 'No group'; sel.append(o); }
+  sel.value = groups.includes(keep) ? keep : '';
+}
+
+// ── A voice ─────────────────────────────────────────────────
+function showNothing() { open = null; $('voice').hidden = true; $('make').hidden = true; $('empty').hidden = false; list(); }
+function showVoice(name) {
+  const v = voices.find(x => x.name === name); if (!v) return showNothing();
+  if (open !== name) say('status', '');
+  open = name;
+  $('empty').hidden = true; $('make').hidden = true; $('voice').hidden = false;
+  $('vName').value = v.name;
+  $('vDesc').value = v.description || '';
+  $('vDesc').placeholder = 'e.g. warm narrator for bedtime stories';
+  fillGroups($('vGroup')); $('vGroup').value = v.group || '';
+  const who = users()[v.name] || [];
+  const facts = [
+    ['Made from', v.designed_from ? 'a description: “' + v.designed_from + '”' : 'a recording' + (v.source ? ' (' + v.source + ')' : '')],
+    ['Speaks with', engineLabel(v.engine) + (v.seconds ? ', from ' + Math.round(v.seconds) + ' s of speech' : '')],
+    ['Used by', who.length ? andList(who) : 'nobody yet; pick it for a character in Characters'],
+  ];
+  const dl = $('vFacts'); dl.textContent = '';
+  for (const [k, t] of facts) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = t; dl.append(dt, dd); }
+  list();
+}
+$('voice').addEventListener('submit', async e => {
+  e.preventDefault();
+  const v = voices.find(x => x.name === open); if (!v) return;
+  const to = $('vName').value.trim(), desc = $('vDesc').value.trim(), group = $('vGroup').value;
+  if (!validName(to)) { say('status', 'A voice name is 1-40 lowercase letters, digits, - or _', true); $('vName').focus(); return; }
+  if (to !== v.name && voices.some(x => x.name === to)) { say('status', 'Another voice has that name', true); $('vName').focus(); return; }
+  let now = v.name;
+  try {
+    if (to !== v.name) { await api('clone', { action: 'rename', name: v.name, new_name: to }); now = to; }
+    if (desc !== (v.description || '')) await api('clone', { action: 'describe', name: now, description: desc });
+    if (group !== (v.group || '')) await api('clone', { action: 'group', name: now, group });
+    await load(now);
+    say('status', now !== v.name ? 'Renamed; the characters using it follow' : 'Saved');
+  } catch (err) { await load(now).catch(() => {}); say('status', err.message, true); }
+});
+$('vName').addEventListener('input', () => { const p = $('vName').selectionStart, t = tidyName($('vName').value); if (t !== $('vName').value) { $('vName').value = t; $('vName').setSelectionRange(p, p); } });
+$('vHear').addEventListener('click', async () => {
+  const text = $('vSample').value.trim();
+  say('status', 'Playing ' + open + '…');
+  try { await api('clone', text ? { action: 'preview', name: open, text } : { action: 'preview', name: open }); say('status', ''); }
+  catch (e) { say('status', e.message, true); }
+});
+$('vDel').addEventListener('click', async () => {
+  const who = users()[open] || [];
+  const note = who.length ? ' ' + andList(who) + (who.length === 1 ? ' uses' : ' use') + ' it and will speak with the default voice instead.' : '';
+  if (!(await askYes('Delete the voice ' + open + '? Its recording goes too.' + note))) return;
+  try { await api('clone', { action: 'remove', name: open }); await load(null); } catch (e) { say('status', e.message, true); }
+});
+
+// ── A new voice ─────────────────────────────────────────────
+function showMake() {
+  open = '+new';
+  $('empty').hidden = true; $('voice').hidden = true; $('make').hidden = false;
+  if (!segValue('mFrom')) seg('mFrom', design().ready ? 'design' : 'record');
+  fromChanged(); list();
+  $('mName').focus();
+}
+$('add').addEventListener('click', showMake);
+$('mCancel').addEventListener('click', () => { if (!busy) showNothing(); });
+$('mName').addEventListener('input', () => { const p = $('mName').selectionStart, t = tidyName($('mName').value); if (t !== $('mName').value) { $('mName').value = t; $('mName').setSelectionRange(p, p); } });
+$('mFrom').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled || busy) return; seg('mFrom', b.dataset.v); fromChanged(true); });
+$('mSecs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) seg('mSecs', b.dataset.v); });
+seg('mSecs', '12');
+
+// The engines a voice can speak with, installed ones first; one not installed cannot be picked.
+function fillEngines() {
+  const sel = $('mEngine'), keep = sel.value; sel.textContent = '';
+  const list = engines();
+  for (const e of [...list.filter(x => x.ready), ...list.filter(x => !x.ready)]) {
+    const o = document.createElement('option'); o.value = e.name; o.textContent = e.label + (e.ready ? '' : ' — not installed'); o.disabled = !e.ready; sel.append(o);
+  }
+  const ok = n => list.some(e => e.name === n && e.ready);
+  sel.value = ok(keep) ? keep : (list.find(e => e.ready) || {}).name || '';
+  engineHelp();
+}
+const langWord = c => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(c) || c; } catch { return c; } };
+function engineHelp() {
+  const e = engines().find(x => x.name === $('mEngine').value);
+  const mine = (state && state.languages) || [];
+  const speaks = e && e.languages ? e.languages.filter(l => !mine.length || mine.includes(l)) : [];
+  const missing = e && e.languages ? mine.filter(l => !e.languages.includes(l)) : [];
+  $('mEngineHelp').textContent = !e ? 'Install a voice engine in Integrations' : (speaks.length ? 'Speaks ' + andList(speaks.map(langWord)) : 'None of your languages')
+    + (missing.length ? '; not ' + andList(missing.map(langWord)) : '');
+  $('mEngineTip').dataset.tip = e ? e.label + ': ' + e.note + '.' + (e.transcript ? ' It needs what the recording says; speech recognition writes it down.' : '')
+    + ' Engines are installed in Integrations, GPU voices.' : 'The engines are installed in Integrations.';
+}
+$('mEngine').addEventListener('change', engineHelp);
+
+// Description, Microphone or Sound file: which fields show, what the button does.
+let lastFrom = '';
+function fromChanged(byUser) {
+  const d = design(), btn = $('mFrom').querySelector('[data-v=design]');
+  btn.disabled = !d.ready;
+  btn.title = d.ready ? '' : 'Needs ' + d.needs + ': install it in Integrations, GPU voices';
+  if (!d.ready && segValue('mFrom') === 'design') seg('mFrom', 'record');
+  const from = segValue('mFrom') || 'record';
+  document.querySelectorAll('#make [data-for]').forEach(r => r.hidden = !r.dataset.for.split(' ').includes(from));
+  $('mFromHelp').textContent = from === 'design' ? 'Made up from words; no recording, no one\'s voice'
+    : from === 'record' ? 'Your own voice, from the microphone' : 'Someone\'s voice, from a recording'
+    ;
+  if (!d.ready) $('mFromHelp').textContent += ' · from a description needs ' + d.needs;
+  const lab = $('mDescLab');
+  lab.innerHTML = from === 'design'
+    ? 'The voice in words<span class="tip" tabindex="0" data-tip="Age, gender, timbre, pace, mood and accent, in English: &quot;a woman in her forties, smooth low alto, calm and dry, neutral American accent&quot;. Qwen3-TTS reads the sample once in that voice, and the engine below then speaks with it. It also becomes the voice&#39;s description.">i</span>'
+    : 'Description<span class="opt">optional</span><span class="help">What it is, or what it is for</span>';
+  $('mDesc').placeholder = from === 'design' ? 'e.g. a woman in her forties, smooth low alto, calm and dry, neutral American accent' : 'e.g. my own voice, for announcements';
+  // A designed voice speaks best with Qwen3-TTS, which made it: picked when switching to Description.
+  if (from === 'design' && lastFrom !== 'design' && engines().some(e => e.name === 'qwen3' && e.ready)) { $('mEngine').value = 'qwen3'; engineHelp(); }
+  lastFrom = from;
+  goLabel();
+  if (byUser) say('mstatus', '');
+}
+function goLabel() {
+  const from = segValue('mFrom');
+  $('mGo').textContent = from === 'design' ? 'Design' : from === 'record' ? (recording ? 'Stop' : 'Record') : 'Clone';
+  $('mGo').disabled = (busy && !recording) || (from === 'file' && !pendingFile);
+}
+
+// The file: dropped on the box or chosen.
+function takeFile(f) {
+  if (!f) return;
+  pendingFile = f;
+  $('mDropText').innerHTML = '<b></b> · ' + Math.max(1, Math.round(f.size / 1024)) + ' KB';
+  $('mDropText').querySelector('b').textContent = f.name;
+  if (!$('mName').value) $('mName').value = tidyName(f.name.replace(/\.[^.]+$/, ''));
+  goLabel();
+}
+$('mPick').addEventListener('click', () => $('mFile').click());
+$('mFile').addEventListener('change', e => { takeFile(e.target.files[0]); e.target.value = ''; });
+const drop = $('mDrop');
+drop.addEventListener('dragover', e => { if (dragVoice || !e.dataTransfer.types.includes('Files')) return; e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { drop.classList.remove('over'); if (!e.dataTransfer.files.length) return; e.preventDefault(); takeFile(e.dataTransfer.files[0]); });
+
+// While a voice is made: the button spins, and the line under says what voice waits for.
+let tick = 0, recording = false;
+function working(on, text) {
+  busy = on; $('mGo').classList.toggle('busy', on && !recording); goLabel();
+  ['mCancel', 'add'].forEach(id => $(id).disabled = on);
+  clearInterval(tick);
+  if (!on) return;
+  const t0 = Date.now();
+  say('mstatus', text);
+  tick = setInterval(async () => {
+    if (recording) return;
+    try {
+      const st = await api('status');
+      const l = st.loading;
+      say('mstatus', l ? 'Starting ' + engineLabel(l.engine) + ' on the graphics card… ' + Math.max(0, Math.round((Date.now() - Date.parse(l.since)) / 1000)) + ' s'
+        : text + ' ' + Math.round((Date.now() - t0) / 1000) + ' s');
+    } catch (e) {}
+  }, 1000);
+}
+$('make').addEventListener('submit', async e => {
+  e.preventDefault();
+  const from = segValue('mFrom');
+  if (from === 'record' && recording) { api('clone', { action: 'stop' }).catch(() => {}); return; } // Stop: clone what was recorded
+  if (busy) return;
+  const name = $('mName').value.trim(), desc = $('mDesc').value.trim(), group = $('mGroup').value, engine = $('mEngine').value;
+  const fail = (text, field) => { say('mstatus', text, true); if (field) $(field).focus(); };
+  if (!validName(name)) return fail('Give the voice a name: lowercase letters, digits, - or _', 'mName');
+  if (voices.some(v => v.name === name)) return fail('A voice called ' + name + ' exists; pick another name', 'mName');
+  if (!engine) return fail('Install a voice engine in Integrations first');
+  const a = { name, engine };
+  if (group) a.group = group;
+  if (desc) a.description = desc;
+  if (from === 'design') {
+    if (!design().ready) return fail('Designing a voice needs ' + design().needs + ': install it in Integrations');
+    if (!desc) return fail('Describe the voice in words first', 'mDesc');
+    if ($('mSample').value.trim()) a.text = $('mSample').value.trim();
+    working(true, 'Designing ' + name + '…');
+    try {
+      const r = await api('clone', { ...a, action: 'design' });
+      reset(); await load(name);
+      say('status', 'Its sample is playing. Keep it, or Delete it and try other words.' + (r.warning ? ' ' + r.warning : ''));
+    } catch (err) { say('mstatus', err.message, true); }
+    finally { working(false); }
+    return;
+  }
+  if (!$('mRights').checked) return fail('Confirm you may use this voice first', 'mRights');
+  a.rights_confirmed = true;
+  if (from === 'file') {
+    if (!pendingFile) return fail('Drop a sound file or choose one first');
+    working(true, 'Cloning ' + pendingFile.name + '…');
+    try {
+      const data = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(pendingFile); });
+      const ext = (pendingFile.name.match(/\.[a-z0-9]+$/i) || ['.wav'])[0];
+      const r = await api('clone', { ...a, action: 'add', file: data, ext });
+      reset(); await load(name);
+      say('status', 'Made from the file.' + [].concat(r.quality || [], r.warning || []).map(x => ' ' + x).join(''));
+    } catch (err) { say('mstatus', err.message, true); }
+    finally { working(false); }
+    return;
+  }
+  // The microphone: three ticks, then it records; the button stops it early.
+  const secs = +(segValue('mSecs') || 12), lead = 2100, t0 = Date.now();
+  recording = true; working(true, '');
+  const rec = setInterval(() => {
+    const ms = Date.now() - t0;
+    say('mstatus', ms < lead ? 'Get ready… it records after the ticks' : ms < lead + secs * 1000 ? 'Recording ' + Math.floor((ms - lead) / 1000) + ' / ' + secs + ' s · read aloud in your normal voice' : 'Cloning your voice…');
+  }, 200);
+  try {
+    const r = await api('clone', { ...a, action: 'record', seconds: secs });
+    reset(); await load(name);
+    say('status', 'Made from your recording.' + [].concat(r.quality || [], r.warning || []).map(x => ' ' + x).join(''));
+  } catch (err) { say('mstatus', err.message, true); }
+  finally { clearInterval(rec); recording = false; working(false); }
+});
+// After a voice is made, the form starts empty again; how it is made stays.
+function reset() {
+  ['mName', 'mDesc', 'mSample'].forEach(id => $(id).value = '');
+  $('mRights').checked = false; pendingFile = null; $('mDropText').textContent = 'Drop a sound file here'; say('mstatus', '');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && open === '+new' && !busy && !document.querySelector('.vdlg, .vmenu')) showNothing(); });
+
+load(null).catch(e => { $('empty').textContent = e.message; });
+</script>
+</body>
+</html>

@@ -131,10 +131,12 @@ func (b *backend) showCharacters() {
 			OnShow:     "onShow()",
 		})
 	})
-	b.panel().Hide()
+	// Shown before the flyout goes, so the focus passes from one to the other
+	// instead of to another app, which would leave this window behind it.
 	if err := charactersWin.Show(); err != nil {
 		logf("characters window: %v", err)
 	}
+	b.panel().Hide()
 }
 
 // The speaking popup: the top of the settings window on its own, in the
@@ -377,10 +379,12 @@ func (b *backend) showIntegrations() {
 			OnShow:     "onShow()",
 		})
 	})
-	b.panel().Hide()
+	// Shown before the flyout goes, so the focus passes from one to the other
+	// instead of to another app, which would leave this window behind it.
 	if err := integrationsWin.Show(); err != nil {
 		logf("integrations window: %v", err)
 	}
+	b.panel().Hide()
 }
 
 // The full settings window: every setting, characters and integrations,
@@ -413,10 +417,12 @@ func (b *backend) showSettings(section string) {
 			OnShow:     "onPanelShow()",
 		})
 	})
-	b.panel().Hide()
+	// Shown before the flyout goes, so the focus passes from one to the other
+	// instead of to another app, which would leave this window behind it.
 	if err := settingsWin.Show(); err != nil {
 		logf("settings window: %v", err)
 	}
+	b.panel().Hide()
 }
 
 // What engine voice waits for while its server starts and loads the model

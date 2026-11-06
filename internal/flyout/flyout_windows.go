@@ -86,6 +86,7 @@ const (
 	wsOverlappedWindow = 0x00CF0000
 	wsExAppWindow      = 0x00040000
 	hwndTopmost        = ^uintptr(0) // (HWND)-1
+	hwndNoTopmost      = ^uintptr(1) // (HWND)-2
 
 	// Per-monitor v2: the window gets real pixels and WM_DPICHANGED, so the
 	// page stays sharp at any scale.
@@ -533,6 +534,7 @@ func (w *Window) place(flags uintptr) {
 func (w *Window) centre(flags uintptr) {
 	if w.placed {
 		procShowWindow.Call(w.hwnd, swRestore)
+		w.raise()
 		return
 	}
 	w.placed = true
@@ -550,6 +552,17 @@ func (w *Window) centre(flags uintptr) {
 	x := work.Left + (work.Right-work.Left-width)/2
 	y := work.Top + (work.Bottom-work.Top-height)/2
 	procSetWindowPos.Call(w.hwnd, 0, uintptr(x), uintptr(y), uintptr(width), uintptr(height), flags|swpNoZOrder)
+}
+
+// raise puts an open normal window above the others even when Windows will
+// not hand this process the foreground (the flyout that asked for it has just
+// closed and the focus went elsewhere): for a moment it is topmost, then an
+// ordinary window again, at the top. Without it the window opened "behind"
+// and nothing seemed to happen.
+func (w *Window) raise() {
+	const keep = swpNoMove | swpNoSize | swpShowWindow
+	procSetWindowPos.Call(w.hwnd, hwndTopmost, 0, 0, 0, 0, keep)
+	procSetWindowPos.Call(w.hwnd, hwndNoTopmost, 0, 0, 0, 0, keep)
 }
 
 func (w *Window) hide() {

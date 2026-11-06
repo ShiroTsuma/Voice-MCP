@@ -806,7 +806,7 @@ func runLogged(cmd *exec.Cmd, log func(string)) error {
 	return err
 }
 
-// cloneEngines are the engines the Voice clone group offers, with whether
+// cloneEngines are the engines the Voice design page offers, with whether
 // each is installed (the Integrations window installs the others).
 func cloneEngines() []map[string]any {
 	model := func(name string) bool {
