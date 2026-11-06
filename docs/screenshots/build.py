@@ -26,9 +26,13 @@ for a in (state.get("agents") or []) + (status.get("agents") or []):
     private.update(x for x in (a.get("name"), a.get("project")) if x)
 for c in state.get("characters") or []:
     private.add(c.get("name") or "")
+# A cloned or designed voice is the user's: flagged "cloned" (its description
+# is the user's own words); older voices only said so in the description.
+cloned = lambda p: p.get("cloned") or (p.get("description") or "").startswith("Cloned voice")
 for p in state["options"].get("presets") or []:
-    if (p.get("description") or "").startswith("Cloned voice"):
+    if cloned(p):
         private.add(p["name"])
+        private.add(p.get("description") or "")
 private.update(state["options"].get("inputs") or [])
 private.update(state["options"].get("outputs") or [])
 private.add(state.get("listen", {}).get("input_device") or "")
@@ -36,7 +40,9 @@ if os.environ.get("USERNAME"):
     private.add("\\\\Users\\\\" + os.environ["USERNAME"])  # a home folder, as JSON writes it
 private.add(themes.get("dir") or "")
 
-SAMPLE = {"Anna", "Clara", "Rebekka", "Diana", "Fiona", "Greta", "narrator", "shop-api", "notes-app", "website"}
+# Sample names, and the project's own public name (its links name it; a
+# session working on voice itself has it as its project).
+SAMPLE = {"Anna", "Clara", "Rebekka", "Diana", "Fiona", "Greta", "narrator", "shop-api", "notes-app", "website", "Voice-MCP"}
 
 # The state: settings shape, sample people.
 state["version"] = os.environ.get("SHOT_VERSION") or state["version"].split("-dev")[0]
@@ -47,8 +53,10 @@ state["listen"]["input_device"] = "Microphone (USB Audio)"
 opts = state["options"]
 opts["inputs"] = ["Microphone (USB Audio)", "Headset Microphone"]
 opts["outputs"] = ["Speakers (Realtek Audio)", "Headphones"]
-opts["presets"] = [p for p in opts["presets"] if not (p.get("description") or "").startswith("Cloned voice")]
-opts["presets"].append({"description": "Cloned voice narrator (designed from a description)", "dsp": None, "engine": "qwen3", "name": "narrator", "pitch": 0, "speed": 1})
+opts["presets"] = [p for p in opts["presets"] if not cloned(p)
+                   # a tuning of the user's voice is theirs too
+                   and not any(c["name"] == p.get("extends") and cloned(c) for c in opts["presets"])]
+opts["presets"].append({"description": "Deep, warm storyteller (designed from a description)", "dsp": None, "engine": "qwen3", "name": "narrator", "pitch": 0, "speed": 1, "cloned": True})
 state["characters"] = [
     {"name": "Anna", "traits": ["calm", "witty"], "description": "Dry humour, gets to the point.", "preset": "calm-mature", "color": "#7fd1a8"},
     {"name": "Clara", "traits": ["cheerful", "enthusiastic"], "description": "Bright and quick; loves a clean diff.", "preset": "neutral", "color": "#8ab4f8"},
@@ -59,6 +67,7 @@ state["characters"] = [
 ]
 state["agents"] = []
 state["transcript"] = []
+state["gpu"] = None  # the GPU voices' memory names this PC's voices and the characters using them
 
 # Integrations: the real list, with this PC's paths, jobs and server made neutral.
 def neutral(s):
@@ -91,7 +100,9 @@ mock = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock.js"),
 mock = mock.replace("/*STATE*/null", json.dumps(state)).replace("/*INTEGRATIONS*/null", json.dumps(integ)).replace("/*THEMES*/null", json.dumps(themes))
 
 # Nothing about this PC may be in the pages' data.
-leaks = sorted(p for p in private if p and p not in SAMPLE and len(p) > 2 and p.lower() in mock.lower())
+# As whole words: a character called Vera is not in "several".
+shown = lambda p: re.search(r"(?<![A-Za-z0-9])" + re.escape(p) + r"(?![A-Za-z0-9])", mock, re.I)
+leaks = sorted(p for p in private if p and p not in SAMPLE and len(p) > 2 and shown(p))
 if leaks:
     sys.exit("private data would be shown: " + ", ".join(leaks))
 

@@ -403,6 +403,10 @@ func (b *backend) state() map[string]any {
 			if strings.HasPrefix(name, settings.TunedPrefix) {
 				p["extends"] = cfg.PresetExtends(name)
 			}
+			// A cloned or designed voice: the user's own, whatever its description says.
+			if def, ok := cfg.PresetDef(name); ok && core.IsClonePreset(def, name) {
+				p["cloned"] = true
+			}
 			presets = append(presets, p)
 		}
 	}
