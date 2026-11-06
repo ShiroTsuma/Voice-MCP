@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"voice/internal/audio"
@@ -56,6 +57,10 @@ type Request struct {
 	// (or empty) renders first when the script uses two or more GPU engines.
 	// SaveTo always renders first.
 	Mode string
+	// Turn joins this text to the owner's utterance of the same turn while
+	// it is queued or playing, as the next piece of one reply; a new turn,
+	// or speech without one, closes the owner's open turn. Plain text only.
+	Turn string
 	// Owner is the session that speaks (its agent's process ID), so one
 	// session's speech can be stopped without the others'; 0 is no session.
 	Owner uint32
@@ -86,6 +91,9 @@ type Ticket struct {
 	Note     string   // the default voice speaks because the preset's voice is gone
 	Voices   []string // the presets that will say it, in order
 	Done     <-chan Result
+	// Appended: the text joined an open turn's utterance (ID is that one's);
+	// Done is nil, the utterance's own caller holds it.
+	Appended bool
 }
 
 // Track is what became of one utterance: queued, rendering (its voice is
@@ -133,6 +141,11 @@ type item struct {
 	tags    *tagUse // what became of its tags and moods (play)
 	grouped bool    // rendered first, one engine at a time (Request.Mode)
 	owner   uint32  // Request.Owner
+	// A turn's utterance takes more text while open (Request.Turn): parts
+	// and text grow under Speaker.mu, grew wakes play to render them.
+	turn string
+	open bool
+	grew chan struct{}
 	// why is the reason it was cut off while playing (stopped, interrupted),
 	// set under Speaker.mu before its context is cancelled.
 	why error
@@ -145,6 +158,7 @@ type part struct {
 	preset preset.Resolved
 	pause  float64
 	mood   string
+	before float64 // silence before it: a break that opened a turn's next piece
 }
 
 type Speaker struct {
@@ -342,17 +356,43 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 		}
 		parts = append(parts, part{text: l.Text, preset: p, pause: l.Pause, mood: l.Mood})
 	}
-	s.nextID++
-	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead, grouped: s.renderFirst(req.Mode, req.SaveTo, parts),
-		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, owner: req.Owner, done: make(chan Result, 1)}
-	if req.Interrupt {
-		s.dropLocked(ErrInterrupted)
-	}
 	var voices []string
 	for _, p := range parts {
 		if !slices.Contains(voices, p.preset.Name) {
 			voices = append(voices, p.preset.Name)
 		}
+	}
+	// The next piece of a reply joins the utterance its turn opened, queued or
+	// playing: no new queue slot, no break between them. Any other speech of
+	// the owner closes its open turn first.
+	turn := req.Turn != "" && req.Owner != 0 && req.SaveTo == "" && len(req.Lines) == 0
+	if turn && !req.Interrupt {
+		if it := s.openTurnLocked(req.Owner); it != nil && it.turn == req.Turn && it.lang == lang {
+			parts[0].before = lead
+			it.parts = append(it.parts, parts...)
+			it.text += " " + text
+			for _, v := range voices {
+				if !slices.Contains(it.track.Voices, v) {
+					it.track.Voices = append(it.track.Voices, v)
+				}
+			}
+			select {
+			case it.grew <- struct{}{}:
+			default:
+			}
+			pos := slices.Index(s.queue, it) + 1 // 0 while it plays
+			return Ticket{ID: it.id, Position: pos, Note: note, Voices: voices, Appended: true}, nil
+		}
+	}
+	s.endTurnLocked(req.Owner)
+	s.nextID++
+	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead, grouped: s.renderFirst(req.Mode, req.SaveTo, parts),
+		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, owner: req.Owner, done: make(chan Result, 1)}
+	if turn && !it.grouped {
+		it.turn, it.open, it.grew = req.Turn, true, make(chan struct{}, 1)
+	}
+	if req.Interrupt {
+		s.dropLocked(ErrInterrupted)
 	}
 	it.track = &Track{ID: it.id, State: "queued", Voices: voices, Queued: time.Now()}
 	s.tracks = append(s.tracks, it.track)
@@ -449,8 +489,88 @@ func (s *Speaker) cutLocked(reason error) {
 	if s.current != nil && s.current.why == nil {
 		s.current.why = reason
 	}
+	if s.current != nil {
+		s.current.open = false // nothing joins speech that was cut off
+	}
 	if s.cancel != nil {
 		s.cancel()
+	}
+}
+
+// openTurnLocked is the owner's utterance whose turn still takes text,
+// queued or playing; nil when there is none. The caller holds s.mu.
+func (s *Speaker) openTurnLocked(owner uint32) *item {
+	if it := s.current; it != nil && it.open && it.owner == owner {
+		return it
+	}
+	for _, it := range s.queue {
+		if it.open && it.owner == owner {
+			return it
+		}
+	}
+	return nil
+}
+
+// endTurnLocked closes the owner's open turn: what it holds is said, and
+// nothing more joins it. The caller holds s.mu.
+func (s *Speaker) endTurnLocked(owner uint32) {
+	if owner == 0 {
+		return
+	}
+	for it := s.openTurnLocked(owner); it != nil; it = s.openTurnLocked(owner) {
+		it.open = false
+		select {
+		case it.grew <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// EndTurn closes the owner's open turn (Request.Turn): its reply is
+// complete, so voice stops waiting for more of it.
+func (s *Speaker) EndTurn(owner uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.endTurnLocked(owner)
+}
+
+// turnIdle is how long a turn waits for its next piece once everything in
+// it has been heard, before it ends by itself.
+var turnIdle = 2 * time.Second // a variable for tests
+
+// moreParts waits in play for the turn's parts after the first have of
+// them: what an append brought, or false once the turn has closed, ctx
+// ended, or turnIdle passed after all that was sent was heard (heard()).
+func (s *Speaker) moreParts(ctx context.Context, it *item, have int, heard func() bool) ([]part, bool) {
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	var quietSince time.Time
+	for {
+		s.mu.Lock()
+		if len(it.parts) > have {
+			more := slices.Clone(it.parts[have:])
+			s.mu.Unlock()
+			return more, true
+		}
+		if !it.open {
+			s.mu.Unlock()
+			return nil, false
+		}
+		if !quietSince.IsZero() && time.Since(quietSince) >= turnIdle {
+			it.open = false // ends by itself; a later piece starts a new utterance
+			s.mu.Unlock()
+			return nil, false
+		}
+		s.mu.Unlock()
+		select {
+		case <-it.grew:
+		case <-tick.C:
+			if quietSince.IsZero() && heard() {
+				quietSince = time.Now()
+			}
+		case <-ctx.Done():
+			return nil, false
+		}
 	}
 }
 
@@ -786,6 +906,7 @@ func (s *Speaker) loop() {
 		res := s.play(ctx, it) // calls audible before its first sound
 		s.mu.Lock()
 		cut := it.why != nil && ctx.Err() != nil // checked before the cancel below
+		it.open = false                          // said: what comes next starts anew
 		s.cancel()
 		s.current, s.cancel = nil, nil
 		if cut {
@@ -823,10 +944,18 @@ func (s *Speaker) audible() {
 }
 
 type rendered struct {
-	pcm []float32
-	err error
-	gap bool // a pause or an effect's tail between parts: no sentence of its own
+	pcm  []float32
+	err  error
+	gap  bool   // a pause or an effect's tail between parts: no sentence of its own
+	text string // the sentence it says, to place it in the text for Status
 }
+
+// What an engine's padding around a sentence is cut to, in seconds
+// (audio.TrimSilence): a short breath, the same with every engine.
+const (
+	sentenceLead = 0.05
+	sentenceTail = 0.25
+)
 
 func (s *Speaker) play(ctx context.Context, it *item) Result {
 	// Saving to a file plays nothing: no playback lock, chime or popup.
@@ -856,23 +985,32 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		pitch     float64
 		sentences []string
 	}
-	var vs []voiced
-	var sentences []string // all of them in order, for Status
-	for _, p := range it.parts {
+	voice := func(p part) (voiced, error) {
 		v := voiced{part: p, choice: p.preset.For(it.lang)}
 		var err error
 		if v.choice.Voice, err = resolveVoice(v.choice.Voice); err != nil {
-			return Result{Err: err}
+			return v, err
 		}
 		// Effects keep state across sentences; Resolve already validated them.
 		if v.effects, err = audio.ParseChain(p.preset.DSP, audio.DeviceRate); err != nil {
-			return Result{Err: err}
+			return v, err
 		}
 		// Pitch is shifted by playing the audio at a different rate. The engine
 		// speaks faster or slower by the same factor, so tempo stays as set.
 		v.pitch = math.Pow(2, v.choice.Pitch/12)
 		v.sentences = Split(p.text, minSentence)
-		sentences = append(sentences, v.sentences...)
+		return v, nil
+	}
+	// The parts so far: an open turn's grow while it plays (moreParts).
+	s.mu.Lock()
+	parts := slices.Clone(it.parts)
+	s.mu.Unlock()
+	var vs []voiced
+	for _, p := range parts {
+		v, err := voice(p)
+		if err != nil {
+			return Result{Err: err}
+		}
 		vs = append(vs, v)
 	}
 	first := vs[0]
@@ -923,6 +1061,9 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	// ready and has all of its playing time to get done; across a script's
 	// lines too, so the next voice is ready when its turn comes.
 	ch := make(chan rendered, batchSize)
+	// sent counts the pieces handed to the player (the renderer's own),
+	// played those it finished: equal, everything rendered has been heard.
+	sent, played := 0, atomic.Int64{}
 	// used names the engines that spoke, in order (one, or a scene's).
 	var used string
 	noteUsed := func(name string) {
@@ -938,20 +1079,24 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		put := func(r rendered) bool {
 			select {
 			case ch <- r:
+				sent++
 				return true
 			case <-ctx.Done():
 				return false
 			}
 		}
 		// renderPart renders one part sentence by sentence (or in batches),
-		// handing each piece to out, then its effects' tail; false when it
-		// stopped (an error went to out, or the context ended).
+		// handing each piece to out; false when it stopped (an error went to
+		// out, or the context ended). Its effects' tail is tail's.
 		renderPart := func(v *voiced, out func(rendered) bool) bool {
 			engines := v.choice.Engines
-			send := func(pcm []float32) bool {
+			send := func(pcm []float32, text string) bool {
+				// The quiet an engine pads a sentence with goes: the pause between
+				// sentences is voice's, the same for every engine.
+				pcm = audio.TrimSilence(pcm, audio.DeviceRate, sentenceLead, sentenceTail)
 				v.effects.Process(pcm)
 				audio.Gain(pcm, v.preset.Volume)
-				return out(rendered{pcm: pcm})
+				return out(rendered{pcm: pcm, text: text})
 			}
 			for k := 0; k < len(v.sentences); {
 				// An engine slower than its own speech (a GPU model) renders a few
@@ -962,8 +1107,8 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				if m := min(batchSize, len(v.sentences)-k); m > 1 && engines[0] == v.choice.Engines[0] {
 					if pcms, err := s.renderBatch(ctx, engines[0], v.pitch, it.lang, v.choice, v.sentences[k:k+m], v.mood, tu); err == nil {
 						noteUsed(engines[0])
-						for _, pcm := range pcms {
-							if !send(pcm) {
+						for j, pcm := range pcms {
+							if !send(pcm, v.sentences[k+j]) {
 								return false
 							}
 						}
@@ -981,17 +1126,18 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				// mid-line; later fallbacks remain for failures.
 				engines = rest
 				noteUsed(name)
-				if !send(pcm) {
+				if !send(pcm, v.sentences[k]) {
 					return false
 				}
 				k++
 			}
-			// The line's effects ring out before the next voice.
-			if tail := v.effects.Tail(); len(tail) > 0 {
-				audio.Gain(tail, v.preset.Volume)
-				if !out(rendered{pcm: tail, gap: true}) {
-					return false
-				}
+			return true
+		}
+		// tail: a part's effects ring out before the next voice.
+		tail := func(v *voiced, out func(rendered) bool) bool {
+			if t := v.effects.Tail(); len(t) > 0 {
+				audio.Gain(t, v.preset.Volume)
+				return out(rendered{pcm: t, gap: true})
 			}
 			return true
 		}
@@ -1005,20 +1151,51 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 			if gap == 0 && vs[n-1].preset.Name != vs[n].preset.Name {
 				gap = lineGap
 			}
-			return gap
+			return gap + vs[n].before
 		}
 
 		if !it.grouped {
 			if it.lead > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, it.lead), gap: true}) {
 				return
 			}
-			for n := range vs {
-				if g := gapBefore(n); g > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, g), gap: true}) {
-					return
+			n := 0
+			for {
+				for ; n < len(vs); n++ {
+					if n > 0 {
+						// A turn's next piece in the same voice carries on its effects,
+						// with no tail between: one utterance. Else the tail rings out.
+						if it.turn != "" && vs[n-1].preset.Name == vs[n].preset.Name {
+							vs[n].effects = vs[n-1].effects
+						} else if !tail(&vs[n-1], put) {
+							return
+						}
+					}
+					if g := gapBefore(n); g > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, g), gap: true}) {
+						return
+					}
+					if !renderPart(&vs[n], put) {
+						return
+					}
 				}
-				if !renderPart(&vs[n], put) {
-					return
+				if it.turn == "" {
+					break
 				}
+				// An open turn: the reply's next piece, rendered as it comes.
+				more, ok := s.moreParts(ctx, it, len(vs), func() bool { return played.Load() == int64(sent) })
+				if !ok {
+					break
+				}
+				for _, p := range more {
+					v, err := voice(p)
+					if err != nil {
+						put(rendered{err: err})
+						return
+					}
+					vs = append(vs, v)
+				}
+			}
+			if len(vs) > 0 {
+				tail(&vs[len(vs)-1], put)
 			}
 			return
 		}
@@ -1047,7 +1224,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 					results[n] = append(results[n], r)
 					return ctx.Err() == nil
 				}
-				if !renderPart(&vs[n], collect) {
+				if !renderPart(&vs[n], collect) || !tail(&vs[n], collect) {
 					return
 				}
 			}
@@ -1068,8 +1245,9 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		}
 	}()
 
-	// Where each sentence sits in the text, for Status.
-	runes, at, i := []rune(it.text), 0, 0
+	// Where each sentence sits in the text, for Status; an open turn's text
+	// grows as it plays.
+	at := 0
 	for r := range ch {
 		if r.err != nil {
 			return Result{Engine: used, Err: r.err}
@@ -1084,18 +1262,23 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		ready()
 		s.audible()
 		if !r.gap {
+			s.mu.Lock()
+			runes := []rune(it.text)
+			s.mu.Unlock()
+			at = min(at, len(runes))
 			from, to := at, len(runes)
-			if i < len(sentences) {
-				if k := strings.Index(string(runes[at:]), sentences[i]); k >= 0 {
+			if r.text != "" {
+				if k := strings.Index(string(runes[at:]), r.text); k >= 0 {
 					from = at + len([]rune(string(runes[at:])[:k]))
-					to = from + len([]rune(sentences[i]))
+					to = from + len([]rune(r.text))
 				}
-				i++
 			}
 			at = to
 			s.playing(it, from, to, r.pcm)
 		}
-		if err := s.out.Play(ctx, r.pcm); err != nil {
+		err := s.out.Play(ctx, r.pcm)
+		played.Add(1)
+		if err != nil {
 			return Result{Engine: used, Err: err}
 		}
 		if key != "" {

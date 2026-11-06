@@ -81,6 +81,23 @@ func (a *Agents) Record(l Line) {
 	}
 }
 
+// Grow adds a reply's next piece to the said line of utterance id, which
+// it joined (core.Request.Turn): one reply stays one line.
+func (a *Agents) Grow(id, text string) {
+	if a == nil || id == "" || strings.TrimSpace(text) == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for i := len(a.transcript) - 1; i >= 0; i-- {
+		if l := &a.transcript[i]; l.ID == id && l.Kind == "said" {
+			l.Text = strings.TrimSpace(l.Text + " " + text)
+			a.saveTranscriptLocked()
+			return
+		}
+	}
+}
+
 // Cut records that the said line of utterance id ended after its first
 // words of it were heard (core.Speaker.OnCut).
 func (a *Agents) Cut(id string, words int) {

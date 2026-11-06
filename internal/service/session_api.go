@@ -41,6 +41,7 @@ type SessionArgs struct {
 	Lang      string `json:"lang,omitempty"`
 	Interrupt bool   `json:"interrupt,omitempty"`
 	Voice     string `json:"voice,omitempty"`
+	Turn      string `json:"turn,omitempty"` // say: one reply in pieces (SpeakArgs.Turn)
 	// scene, as the MCP's voice_scene: the lines in their voices, where and
 	// when, how it is heard, or a file to render it into.
 	Lines  SpeakLines `json:"lines,omitempty"`
@@ -93,6 +94,13 @@ func (ag *Agents) sessionLocked(id string) (*agentSeen, uint32) {
 }
 
 // Session runs one session API action.
+// endTurn closes the session's open turn (say's turn), when voice speaks here.
+func (s *Service) endTurn(pid uint32) {
+	if s.Speaker != nil {
+		s.Speaker.EndTurn(pid)
+	}
+}
+
 // SessionActions are the Session API's actions; the daemon serves one route
 // per name, and Session takes no other, so an action added to Session without
 // a route fails its tests instead of answering 404.
@@ -153,6 +161,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 			out.Messages, st.queue = append(out.Messages, st.queue...), nil
 		case "", "idle":
 			st.busyAt = time.Time{}
+			defer s.endTurn(pid) // waiting for the user: its reply is complete
 			if len(st.queue) > 0 {
 				out.Messages, st.queue = append(out.Messages, st.queue...), nil
 				st.busyAt = time.Now() // the messages start a turn
@@ -176,7 +185,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 		if strings.TrimSpace(a.Text) == "" {
 			return nil, userErr("say needs text")
 		}
-		return s.Speak(ctx, SpeakArgs{Text: a.Text, Intent: a.Intent, Mood: a.Mood, Lang: a.Lang, Interrupt: a.Interrupt, Voice: a.Voice, PID: pid, Client: client, Project: project})
+		return s.Speak(ctx, SpeakArgs{Text: a.Text, Intent: a.Intent, Mood: a.Mood, Lang: a.Lang, Interrupt: a.Interrupt, Voice: a.Voice, Turn: a.Turn, PID: pid, Client: client, Project: project})
 	case "scene":
 		if len(a.Lines) == 0 {
 			return nil, userErr("scene needs lines")
@@ -219,6 +228,7 @@ func (s *Service) sessionEvent(ctx context.Context, a SessionArgs, pid uint32, c
 	switch a.Event {
 	case "done":
 		ev.Kind, ev.Intent = hooks.Done, core.IntentInfo
+		s.endTurn(pid) // the reply is complete: voice stops waiting for more of it
 		s.Agents.mu.Lock()
 		if st := s.Agents.seen[pid]; st != nil {
 			st.busyAt = time.Time{}

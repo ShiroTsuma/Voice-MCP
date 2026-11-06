@@ -77,6 +77,44 @@ func softClip(s float32) float32 {
 	return float32(math.Tanh(float64(s)))
 }
 
+// TrimSilence shortens the quiet an engine pads a sentence with, keeping at
+// most lead seconds before the first sound and tail seconds after the last,
+// so the pause between sentences is the same whatever the engine. Quiet is
+// below -40 dBFS over 10 ms; audio that is all quiet comes back as it was.
+func TrimSilence(pcm []float32, rate int, lead, tail float64) []float32 {
+	const threshold = 0.01
+	win := max(1, rate/100)
+	loud := func(i int) bool { // the window from sample i
+		var sum float64
+		n := 0
+		for _, s := range pcm[i:min(len(pcm), i+win)] {
+			sum += float64(s) * float64(s)
+			n++
+		}
+		return n > 0 && math.Sqrt(sum/float64(n)) >= threshold
+	}
+	first := -1
+	for i := 0; i < len(pcm); i += win {
+		if loud(i) {
+			first = i
+			break
+		}
+	}
+	if first < 0 {
+		return pcm
+	}
+	last := first
+	for i := (len(pcm) - 1) / win * win; i > first; i -= win {
+		if loud(i) {
+			last = i
+			break
+		}
+	}
+	from := max(0, first-int(lead*float64(rate)))
+	to := min(len(pcm), last+win+int(tail*float64(rate)))
+	return pcm[from:to]
+}
+
 // Silence returns d seconds of silence at rate.
 func Silence(rate int, seconds float64) []float32 {
 	return make([]float32, int(float64(rate)*seconds))

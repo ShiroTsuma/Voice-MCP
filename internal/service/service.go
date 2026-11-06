@@ -54,6 +54,9 @@ type SpeakArgs struct {
 	// Voice: for this call only, a character's name (its preset) or a
 	// preset's name; empty uses the session's character or the default.
 	Voice string `json:"voice,omitempty"`
+	// Turn: an id for one reply sent in pieces; a piece with the same turn
+	// joins the one before while it is queued or playing (core.Request.Turn).
+	Turn string `json:"turn,omitempty"`
 	// SaveTo: render into this file (an absolute .wav or .mp3 path) instead
 	// of saying it; the call returns once the file is written.
 	SaveTo string `json:"save_to,omitempty"`
@@ -412,7 +415,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: a.Intent, Lang: a.Lang, Interrupt: a.Interrupt,
-		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood, Mode: a.Mode, Owner: a.PID,
+		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood, Mode: a.Mode, Owner: a.PID, Turn: a.Turn,
 	})
 	if errors.Is(err, core.ErrMuted) {
 		return nil, userErr("muted by the user; stay silent until they unmute")
@@ -420,7 +423,11 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, UserError{err.Error()}
 	}
-	s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said, Scene: len(lines) > 0, Lines: s.scene(a, lines), Setting: a.Scene, Style: s.Agents.Style(a.PID)})
+	if t.Appended {
+		s.Agents.Grow(t.ID, said) // one reply, one transcript line
+	} else {
+		s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said, Scene: len(lines) > 0, Lines: s.scene(a, lines), Setting: a.Scene, Style: s.Agents.Style(a.PID)})
+	}
 	if a.Source != "hook" {
 		core.MarkAsked(a.PID) // its end-of-turn announcement and question reading stay quiet
 	}
@@ -429,8 +436,12 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if as := s.speakingAs(a); as != "" && len(a.Lines) == 0 {
 		who["as"] = as
 	}
-	if !a.Wait {
-		out := map[string]any{"id": t.ID, "state": "queued", "queue_position": t.Position}
+	if !a.Wait || t.Appended {
+		state := "queued"
+		if t.Appended {
+			state = "appended" // joined its turn's utterance; status follows that id
+		}
+		out := map[string]any{"id": t.ID, "state": state, "queue_position": t.Position}
 		maps.Copy(out, who)
 		if t.Note != "" {
 			out["voice_note"] = t.Note + ". Tell the user once."
