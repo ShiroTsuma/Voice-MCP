@@ -416,6 +416,7 @@ func (b *backend) applyFiles(keepActive bool) (bool, error) {
 		cur.DefaultPreset = next.DefaultPreset
 	}
 	b.ctl.apply()
+	b.ctl.agents.Wake() // a session waiting in poll gets its edited character now
 	return restart, nil
 }
 

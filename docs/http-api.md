@@ -41,10 +41,10 @@ Register again with the same `session` after voice restarts; it is harmless at a
 ### poll
 
 ```json
-{"session": "notes-3f2a", "state": "idle"}
+{"session": "notes-3f2a", "state": "idle", "wait": 25}
 ```
 
-Poll every second or two while your agent runs. A session that has not polled for 10 seconds counts as gone for dictation, and voice types what the user says into the foreground window instead.
+Poll again as soon as a poll answers, for as long as your agent runs. With `wait` (seconds, at most 30), voice holds the call while there is nothing to report and answers as soon as there is: a message, `interrupted`, a changed `persona` or `speech`. It answers with no messages when the wait ends, and an error if the session ended meanwhile. The session counts as present all through the wait. Without `wait` it answers at once; then poll every second or two. A session that has not polled for 10 seconds, and is not waiting in a poll, counts as gone for dictation, and voice types what the user says into the foreground window instead. Give your HTTP client a timeout longer than `wait`.
 
 - `"state": "idle"`: the agent waits for the user. `messages` are the user's next prompt; answer them. The turn they start counts as busy until you poll idle again or send `done`.
 - `"state": "busy"`: the agent is working. `messages` are what the user said meanwhile ("also check the tests"): take them into account in the running turn.

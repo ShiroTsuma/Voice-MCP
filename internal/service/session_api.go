@@ -27,13 +27,16 @@ type SessionArgs struct {
 	Project string `json:"project,omitempty"` // register: working directory name, for "my-project: ..."
 	Name    string `json:"name,omitempty"`    // register: what the user calls it; empty takes a character
 	State   string `json:"state,omitempty"`   // poll: idle (waiting for the user) or busy (working)
-	Text    string `json:"text,omitempty"`    // say: what to say; event: the agent's last message or question
-	Intent  string `json:"intent,omitempty"`  // say: info, question or attention
-	Event   string `json:"event,omitempty"`   // event: done, question or permission
-	Tool    string `json:"tool,omitempty"`    // event permission: the tool waiting for approval
-	Limit   Count  `json:"limit,omitempty"`   // transcript: how many lines
-	Of      string `json:"of,omitempty"`      // transcript: a session's name instead of this session
-	To      string `json:"to,omitempty"`      // send: the session to reach, by name
+	// poll: seconds to hold the call while there is nothing to report, for the
+	// first message, interruption or note (at most pollWaitMax); 0 answers now.
+	Wait   float64 `json:"wait,omitempty"`
+	Text   string  `json:"text,omitempty"`   // say: what to say; event: the agent's last message or question
+	Intent string  `json:"intent,omitempty"` // say: info, question or attention
+	Event  string  `json:"event,omitempty"`  // event: done, question or permission
+	Tool   string  `json:"tool,omitempty"`   // event permission: the tool waiting for approval
+	Limit  Count   `json:"limit,omitempty"`  // transcript: how many lines
+	Of     string  `json:"of,omitempty"`     // transcript: a session's name instead of this session
+	To     string  `json:"to,omitempty"`     // send: the session to reach, by name
 
 	// As the MCP's voice_speak: how a line is said, its language, whether it
 	// cuts in, and for this line only a character's or preset's voice.
@@ -157,35 +160,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 
 	switch a.Action {
 	case "poll":
-		ag.mu.Lock()
-		out := SessionResult{Name: st.name, Messages: []string{}}
-		switch a.State {
-		case "busy":
-			st.busyAt = time.Now()
-			out.Messages, st.queue = append(out.Messages, st.queue...), nil
-		case "", "idle":
-			st.busyAt = time.Time{}
-			defer s.endTurn(pid) // waiting for the user: its reply is complete
-			if len(st.queue) > 0 {
-				out.Messages, st.queue = append(out.Messages, st.queue...), nil
-				st.busyAt = time.Now() // the messages start a turn
-			}
-		default:
-			ag.mu.Unlock()
-			return nil, userErr("state is idle or busy, not %q", a.State)
-		}
-		out.VoiceReply = slices.ContainsFunc(out.Messages, func(m string) bool { return !FromAgent(m) }) && s.voiceReplies()
-		out.Interrupted, st.interrupted = st.interrupted, false
-		report := func() {}
-		if len(out.Messages) > 0 {
-			report = ag.changed(true)
-		}
-		ag.mu.Unlock()
-		report()
-		out.Persona, _ = s.takePersona(pid, false) // after the user changed its character
-		out.Speech = s.takeAloudNote(pid, false)   // after the user changed how much it says aloud
-		out.Others = ag.othersThan(pid)
-		return out, nil
+		return s.poll(ctx, a, st)
 	case "say":
 		if strings.TrimSpace(a.Text) == "" {
 			return nil, userErr("say needs text")
@@ -222,6 +197,98 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 		return ag.TranscriptFor(pid, "me", int(a.Limit)), nil
 	}
 	return nil, userErr("unknown action %q", a.Action)
+}
+
+// pollWaitMax caps a poll's wait: a call held much longer meets the timeouts
+// of HTTP clients and proxies, and an agent that wants longer polls again.
+var pollWaitMax = 30 * time.Second
+
+// poll answers a session's poll. With wait, while there is nothing to report
+// it holds the call until there is (a message, an interruption, a changed
+// character or Says aloud), the wait ends or the caller goes away, so an agent
+// hears the user at once without asking every second. The session counts as
+// reachable all the while.
+func (s *Service) poll(ctx context.Context, a SessionArgs, st *agentSeen) (any, error) {
+	if a.State != "" && a.State != "idle" && a.State != "busy" {
+		return nil, userErr("state is idle or busy, not %q", a.State)
+	}
+	if a.Wait < 0 {
+		return nil, userErr("wait is seconds to wait, not %v", a.Wait)
+	}
+	ag := s.Agents
+	wait := min(time.Duration(a.Wait*float64(time.Second)), pollWaitMax)
+	if wait > 0 {
+		ag.mu.Lock()
+		st.waiting++
+		ag.mu.Unlock()
+		defer func() {
+			ag.mu.Lock()
+			st.waiting--
+			st.modAt = time.Now() // reachable until its next poll, as after any poll
+			ag.mu.Unlock()
+		}()
+	}
+	end := time.Now().Add(wait)
+	for {
+		ag.mu.Lock()
+		woke := ag.wakerLocked() // taken before looking, so no news slips in between
+		ag.mu.Unlock()
+		out, err := s.pollOnce(a)
+		left := time.Until(end)
+		if err != nil || out.news() || left <= 0 {
+			return out, err
+		}
+		timer := time.NewTimer(left)
+		select {
+		case <-woke:
+			timer.Stop()
+		case <-ctx.Done():
+			timer.Stop()
+			return out, nil
+		case <-timer.C:
+			return out, nil
+		}
+	}
+}
+
+// news is whether a poll has anything for the agent.
+func (r SessionResult) news() bool {
+	return len(r.Messages) > 0 || r.Interrupted || r.Persona != "" || r.Speech != ""
+}
+
+// pollOnce looks once: it takes the session's messages and notes.
+func (s *Service) pollOnce(a SessionArgs) (SessionResult, error) {
+	ag := s.Agents
+	ag.mu.Lock()
+	st, pid := ag.sessionLocked(a.Session)
+	if st == nil {
+		ag.mu.Unlock()
+		return SessionResult{}, userErr("session %q ended", a.Session)
+	}
+	out := SessionResult{Name: st.name, Messages: []string{}}
+	if a.State == "busy" {
+		st.busyAt = time.Now()
+		out.Messages, st.queue = append(out.Messages, st.queue...), nil
+	} else {
+		st.busyAt = time.Time{}
+		defer s.endTurn(pid) // waiting for the user: its reply is complete
+		if len(st.queue) > 0 {
+			out.Messages, st.queue = append(out.Messages, st.queue...), nil
+			st.busyAt = time.Now() // the messages start a turn
+		}
+	}
+	out.VoiceReply = slices.ContainsFunc(out.Messages, func(m string) bool { return !FromAgent(m) }) && s.voiceReplies()
+	out.Interrupted, st.interrupted = st.interrupted, false
+	report := func() {}
+	if len(out.Messages) > 0 {
+		report = ag.changed(true)
+	}
+	ag.mu.Unlock()
+	report()
+	out.Persona, _ = s.takePersona(pid, false) // after the user changed its character
+	out.Speech = s.takeAloudNote(pid, false)   // after the user changed how much it says aloud
+	out.Others = ag.othersThan(pid)
+	return out, nil
 }
 
 // sessionEvent announces a turn's end, a question or a permission prompt the

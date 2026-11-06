@@ -35,6 +35,33 @@ type Agents struct {
 	sends      map[[2]uint32][]time.Time // recent messages between two sessions (send)
 	path       string                    // where sessions are saved (Load); empty keeps them in memory
 	dirty      bool                      // something worth saving changed
+	wake       chan struct{}             // closed to send waiting polls to look again (Wake)
+}
+
+// Wake sends every poll waiting for news to look again: something one may
+// report changed, such as a character in the settings.
+func (a *Agents) Wake() {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	a.wakeLocked()
+	a.mu.Unlock()
+}
+
+func (a *Agents) wakeLocked() {
+	if a.wake != nil {
+		close(a.wake)
+		a.wake = nil
+	}
+}
+
+// wakerLocked is closed at the next Wake.
+func (a *Agents) wakerLocked() <-chan struct{} {
+	if a.wake == nil {
+		a.wake = make(chan struct{})
+	}
+	return a.wake
 }
 
 // changed reports the queues to OnChange; the caller holds the lock and
@@ -58,6 +85,7 @@ type agentSeen struct {
 	at      time.Time // last activity of any kind
 	busyAt  time.Time // last sign of a running turn; zero when idle
 	queue   []string  // dictated while busy, for its next hook
+	waiting int       // Session API polls holding their call for news (wait)
 
 	start    int64 // process start time and executable, to recognise it after a restart
 	exe      string
@@ -141,6 +169,7 @@ func (a *Agents) SetName(pid uint32, name string) string {
 		}
 		s.name, s.custom = name, !a.listed(name)
 		a.dirty = true
+		a.wakeLocked() // a new character for a waiting poll to give
 	}
 	a.saveLocked()
 	return s.name
@@ -232,6 +261,7 @@ func (a *Agents) Interrupted(pids ...uint32) {
 			st.interrupted = true
 		}
 	}
+	a.wakeLocked()
 }
 
 // Forget drops pid, e.g. after its process ended.
@@ -244,6 +274,7 @@ func (a *Agents) Forget(pid uint32) {
 		delete(a.seen, pid)
 		a.dirty = true
 		a.saveLocked()
+		a.wakeLocked() // its waiting poll answers that it ended
 	}
 	a.mu.Unlock()
 }
@@ -295,6 +326,7 @@ func (a *Agents) Enqueue(pid uint32, text string) {
 	a.mu.Lock()
 	s := a.get(pid, "", "")
 	s.queue = append(s.queue, text)
+	a.wakeLocked()
 	report := a.changed(false)
 	a.mu.Unlock()
 	report()

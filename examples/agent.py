@@ -128,14 +128,17 @@ def main():
     history = []
     try:
         while True:
-            got = voice.call("poll", session=session, state="idle")
+            # wait: voice holds the call until the user says something (or 25 s pass).
+            asked = time.time()
+            got = voice.call("poll", session=session, state="idle", wait=25)
             if got.get("persona"):
                 persona = got["persona"]
             if got.get("speech"):  # the user changed how much is said aloud; back to short says "keep it short"
                 speech = "" if "keep it short" in got["speech"] else got["speech"]
             others = got.get("others", others)
             if not got["messages"]:
-                time.sleep(1)
+                if time.time() - asked < 1:
+                    time.sleep(1)  # a voice older than wait answers at once
                 continue
             heard = " ".join(got["messages"])
             print(f"heard: {heard}", flush=True)

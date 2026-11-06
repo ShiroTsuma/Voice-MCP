@@ -104,7 +104,7 @@ func (a *Agents) HasMod(pid uint32) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	s := a.seen[pid]
-	return s != nil && !s.modAt.IsZero() && time.Since(s.modAt) < modFor
+	return s != nil && (s.waiting > 0 || !s.modAt.IsZero() && time.Since(s.modAt) < modFor)
 }
 
 // CodexThread is the Codex session (thread) id pid's hooks reported, or ""

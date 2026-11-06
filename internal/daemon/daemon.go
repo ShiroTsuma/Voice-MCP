@@ -175,7 +175,10 @@ func Serve(ctx context.Context, api service.API, infoPath, version, exe string, 
 	if extra != nil {
 		extra(mux, info)
 	}
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	// Calls end with the server: a poll waiting for news answers at shutdown
+	// instead of holding it up.
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return ctx }}
 	if err := writeInfo(infoPath, info); err != nil {
 		ln.Close()
 		return err
