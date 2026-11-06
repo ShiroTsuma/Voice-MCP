@@ -63,6 +63,7 @@ type agentSeen struct {
 	style    string    // how it speaks: "" (short) or "narrative"
 	theme    string    // the reading window's theme for this session (set_theme); empty uses the user's
 	told     string    // the character whose persona the agent last received
+	toldLang string    // the language its voice speaks, as the agent last heard it
 	custom   bool      // the name is the user's own, not one from the character list
 	session  string    // Claude Code's session id, from its hooks
 	modAt    time.Time // the last time its Claude Code mod asked for messages
@@ -328,6 +329,10 @@ type AgentResult struct {
 	// Style is how the session speaks: empty (short) or "narrative", where
 	// speech is the content (a story, a scene) and the whole reply is said.
 	Style string `json:"style,omitempty"`
+	// SpeaksIn is the language to speak aloud in ("Polish", "the language you
+	// write in"); LangNote tells the agent so, at the start and after it changed.
+	SpeaksIn string `json:"speaks_in,omitempty"`
+	LangNote string `json:"lang_note,omitempty"`
 }
 
 // Speaking styles of a session (voice_control set_style).
@@ -433,6 +438,10 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 	ag.saveLocked()
 	ag.mu.Unlock()
 	report()
+	res.SpeaksIn = SpeaksIn(s.sessionLang(a.PID))
+	if !sub && (a.Start || a.Event == "busy") {
+		res.LangNote = s.takeLangNote(a.PID, a.Start)
+	}
 	return res, nil
 }
 

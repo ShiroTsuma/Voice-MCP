@@ -18,10 +18,9 @@ enabled = true
 skip_after_speech = 20  # seconds: the agent just spoke for itself
 min_turn_seconds = 30   # Claude Stop: stay quiet after quick replies
 
-[hooks.phrases]
-permission = ["I need your permission for something.", "Could you approve this for me?", "Quick approval needed, when you have a moment."]
-input = ["I'm waiting for you.", "Whenever you're ready, I'm here.", "Your turn."]
-done = ["All done. Take a look when you can.", "Finished. Come have a look.", "I'm done here."]
+# What announcements say comes from the phrases files, one per language
+# (internal/hooks/phrases, or your own in the data folder's phrases folder);
+# a [hooks.phrases] table here replaces a kind in every language.
 
 # The background process (voice serve) that owns audio and models.
 [serve]

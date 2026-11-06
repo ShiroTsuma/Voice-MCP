@@ -17,6 +17,9 @@ type Character struct {
 	// Heard are spellings speech recognition gives the name ("Alana" for
 	// Anna): a dictation addressed so reaches this character's session.
 	Heard []string `toml:"heard,omitempty" json:"heard,omitempty"`
+	// Lang is the language it speaks aloud (en, pl, ..., auto); empty uses
+	// the general one (default_lang).
+	Lang string `toml:"lang,omitempty" json:"lang,omitempty"`
 }
 
 // HeardFor is the spellings of a character's name, by its name; none for a

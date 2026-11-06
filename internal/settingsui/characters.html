@@ -293,6 +293,10 @@
           </details>
         </div>
         <div class="row col">
+          <label class="lab" for="speaks">Speaks<span class="help">The language it speaks aloud and announces in; its agent is told to speak it. Voices in languages other than English sound noticeably worse</span></label>
+          <select id="speaks"></select>
+        </div>
+        <div class="row col">
           <div class="lab">Colour<span class="help">Its light when it speaks; automatic follows its place in the list</span></div>
           <div class="lights" id="lights" role="group" aria-label="Colour"></div>
         </div>
@@ -544,6 +548,7 @@ function open(i) {
   color = c.color || '';
   $('empty').hidden = true; $('form').hidden = false;
   $('name').value = c.name; $('desc').value = c.description || ''; $('heard').value = (c.heard || []).join(', ');
+  fillSpeaks(c.lang || '');
   paint();
   lights();
   const on = new Set(c.traits || []), box = $('traits'); box.textContent = '';
@@ -777,6 +782,18 @@ $('def').addEventListener('click', async () => {
   const chars = (state.characters || []).slice(); chars.unshift(chars.splice(sel, 1)[0]);
   try { await store(chars, 0); status('Now the default', 'ok'); } catch (e) { status(e.message, 'warn'); }
 });
+// The language a character speaks: like the others (the general speaking
+// language), one of the user's, or detected from what the agent writes.
+const langName = code => { if (code === 'auto') return 'Detect from text'; try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
+function fillSpeaks(cur) {
+  const general = state.default_lang || 'en';
+  const codes = [...new Set([...(state.languages && state.languages.length ? state.languages : ['en']), ...(cur && cur !== 'auto' ? [cur] : [])])];
+  const sel = $('speaks'); sel.textContent = '';
+  for (const [v, t] of [['', 'Like the others (' + langName(general) + ')'], ...codes.map(c => [c, langName(c)]), ['auto', langName('auto')]]) {
+    const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o);
+  }
+  sel.value = cur;
+}
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
   const name = $('name').value.trim(), chars = (state.characters || []).slice();
@@ -792,6 +809,7 @@ $('form').addEventListener('submit', async e => {
   if (color) chars[sel].color = color;
   const heard = [...new Set($('heard').value.split(',').map(h => h.trim()).filter(h => h && h.toLowerCase() !== name.toLowerCase()))];
   if (heard.length) chars[sel].heard = heard;
+  if ($('speaks').value) chars[sel].lang = $('speaks').value;
   try { await store(chars, sel, Object.keys(presets).length ? presets : undefined); status('Saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
 });
 load();

@@ -26,7 +26,7 @@ Speak when:
 - you need the user's decision, approval or input (intent "question"),
 - something needs attention now, such as a failure that blocks you (intent "attention").
 
-Keep each utterance to one or two short, natural sentences, in English (the voices are English even when the conversation is not). Say what happened and what you need; details stay on screen. Never read out code, paths, URLs, logs or lists. Do not narrate routine steps, and do not repeat yourself. voice_speak returns at once while audio plays in the background: its answer says queued, not heard. To know whether the user heard it (before saying it was said, or when it matters), call voice_control status with its id.
+Keep each utterance to one or two short, natural sentences, in the language register tells you your voice speaks (English unless it says otherwise, even when the conversation is not). Say what happened and what you need; details stay on screen. Never read out code, paths, URLs, logs or lists. Do not narrate routine steps, and do not repeat yourself. voice_speak returns at once while audio plays in the background: its answer says queued, not heard. To know whether the user heard it (before saying it was said, or when it matters), call voice_control status with its id.
 
 At the start of a session call voice_control with action "register" once: it says nothing, lets the user dictate to you with their voice hotkey (their words then arrive as their own message) and tells you the name the user calls you by ("Annie, ..."); tell the user that name when they ask who you are. If the user wants to call you something else, register again with that name. When the answer gives you a character, become it for the rest of the session in every reply, written and spoken, as it describes; when the user asks for another character, call set_character. A "note" in any voice result saying your character changed applies from then on.
 
@@ -50,8 +50,8 @@ var (
 				"description": "info: a status update; question: you are waiting for the user; attention: something needs them now. question and attention play a short chime first.",
 			},
 			"lang": map[string]any{
-				"type": "string", "enum": []string{"en", "pl", "auto"},
-				"description": "Language of text. Omit to use the configured default (English). Other languages sound much worse.",
+				"type":        "string",
+				"description": "Language of text: en, pl, ... or auto. Omit to use the language your voice speaks (register tells you which). Languages other than English sound much worse.",
 			},
 			"interrupt": map[string]any{"type": "boolean", "default": false, "description": "Cut off what is playing and drop the queue. Only for urgent messages."},
 			"voice":     map[string]any{"type": "string", "description": "Only when the user asks for a particular voice: a character's name (from voice_control list_characters) or a preset's name (list_presets), for this call only. Omit to speak as yourself."},
@@ -92,7 +92,7 @@ var (
 				"type": "string", "enum": []string{"auto", "play", "render"}, "default": "auto",
 				"description": "play: heard while it renders (starts soonest); render: rendered first, one engine at a time, then heard as one recording (no gaps, and GPU models are not swapped line by line; it starts later); auto: render when the scene uses two or more GPU engines (voice_control list_presets), else play.",
 			},
-			"lang": map[string]any{"type": "string", "enum": []string{"en", "pl", "auto"}, "description": "Language of the lines. Omit for the configured default (English)."},
+			"lang": map[string]any{"type": "string", "description": "Language of the lines: en, pl, ... or auto. Omit for the language your voice speaks."},
 		},
 		"additionalProperties": false,
 	}

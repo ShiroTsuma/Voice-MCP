@@ -21,6 +21,7 @@ import (
 	"voice/internal/daemon"
 	"voice/internal/engine"
 	"voice/internal/engine/httpengine"
+	"voice/internal/hooks"
 	"voice/internal/inject"
 	"voice/internal/listen"
 	"voice/internal/preset"
@@ -138,6 +139,11 @@ func runServe(args []string) error {
 	// user's extra words or languages in the data folder.
 	for _, err := range service.LoadAddressing(filepath.Join(core.DataDir(), "addressing")) {
 		logf("addressing words: %v", err)
+	}
+	// What announcements say, in each language: voice's own phrases and the
+	// user's in the data folder.
+	for _, err := range hooks.LoadPhrases(filepath.Join(core.DataDir(), "phrases")) {
+		logf("announcement phrases: %v", err)
 	}
 	ctl := startExtras(ctx, cfg, sp, l, agents)
 	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device}

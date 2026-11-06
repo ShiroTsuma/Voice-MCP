@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -118,11 +119,53 @@ func TestCodexContinuesWhenTheGoalStartsAnotherTurn(t *testing.T) {
 }
 
 func TestQuestionDialogIsAnnouncedAsAQuestion(t *testing.T) {
-	got, _ := Compose(preset.Hooks{}, Event{Kind: Permission, Tool: "AskUserQuestion"}, "en")
+	got, _ := Compose(preset.Hooks{}, Event{Kind: Permission, Tool: "AskUserQuestion"}, "en", "en")
 	if got != "I have a question for you." {
 		t.Fatalf("%q", got)
 	}
-	if got, _ := Compose(preset.Hooks{}, Event{Kind: Permission, Tool: "Bash"}, "en"); got != "I need your permission to use Bash." {
+	if got, _ := Compose(preset.Hooks{}, Event{Kind: Permission, Tool: "Bash"}, "en", "en"); got != "I need your permission to use Bash." {
 		t.Fatalf("%q", got)
+	}
+}
+
+// Phrases come in the voice's language; a summary in it is said, one in
+// another gives way to a phrase; a language without phrases falls back to
+// English; [hooks.phrases] replaces a kind in every language.
+func TestPhrasesFollowTheVoicesLanguage(t *testing.T) {
+	h := preset.Hooks{}
+	if got, _ := Compose(h, Event{Kind: Permission, Tool: "Bash"}, "pl", "pl"); got != "Potrzebuję zgody na Bash." {
+		t.Fatalf("pl permission: %q", got)
+	}
+	if got, _ := Compose(h, Event{Kind: Done, Summary: "Dodałam ostrzeżenie o języku w ustawieniach i wszystko działa."}, "pl", "pl"); !strings.Contains(got, "ostrzeżenie") {
+		t.Fatalf("pl summary: %q", got)
+	}
+	got, cacheable := Compose(h, Event{Kind: Done, Summary: "I added the language warning to the settings and it works."}, "pl", "pl")
+	if !cacheable || strings.Contains(got, "warning") || !slices.Contains(phrases["pl"][Done], got) {
+		t.Fatalf("English summary for a Polish voice: %q", got)
+	}
+	if got, _ := Compose(h, Event{Kind: Input}, "de", "de"); !slices.Contains(phrases["en"][Input], got) {
+		t.Fatalf("no German phrases: %q", got)
+	}
+	h.Phrases = map[string][]string{Input: {"Hej!"}}
+	if got, _ := Compose(h, Event{Kind: Input}, "pl", "pl"); got != "Hej!" {
+		t.Fatalf("config phrase: %q", got)
+	}
+}
+
+// A file in the user's folder adds a language.
+func TestUserPhrases(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "de.json"), []byte(`{"input": ["Du bist dran."]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer LoadPhrases("")
+	if errs := LoadPhrases(dir); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if got := Phrase(preset.Hooks{}, Input, "de", ""); got != "Du bist dran." {
+		t.Fatalf("%q", got)
+	}
+	if got := Phrase(preset.Hooks{}, Done, "de", ""); !slices.Contains(phrases["en"][Done], got) {
+		t.Fatalf("German without done: %q", got)
 	}
 }

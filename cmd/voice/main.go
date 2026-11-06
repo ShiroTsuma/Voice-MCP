@@ -533,10 +533,6 @@ func runHook(args []string) error {
 	if skip := seconds(h.SkipAfterSpeech); min(core.SinceLastSpoke(), core.SinceAsked(agent)) < skip {
 		return quiet("the agent spoke recently")
 	}
-	text, cacheable := hooks.Compose(h, ev, cfg.DefaultLang)
-	if text == "" {
-		return quiet("no phrase for " + ev.Kind)
-	}
 	presetName := h.Preset
 	if presetName == "" {
 		presetName = os.Getenv("VOICE_PRESET")
@@ -544,11 +540,19 @@ func runHook(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	// Queue and return: the background process speaks while the client goes on.
-	_, err = newClient(*cfgPath).Speak(ctx, service.SpeakArgs{Text: text, Intent: ev.Intent, Preset: presetName, Cache: cacheable, Client: ev.Client, PID: agent, Project: ev.Project, Source: "hook"})
+	// It composes what to say, in the language the session's voice speaks.
+	res, err := newClient(*cfgPath).Speak(ctx, service.SpeakArgs{Announce: &ev, Intent: ev.Intent, Preset: presetName, Client: ev.Client, PID: agent, Project: ev.Project, Source: "hook"})
 	if err != nil {
 		return quiet(err.Error())
 	}
-	return quiet("saying: " + text)
+	m, _ := res.(map[string]any)
+	if said, _ := m["said"].(string); said != "" {
+		return quiet("saying: " + said)
+	}
+	if why, _ := m["quiet"].(string); why != "" {
+		return quiet(why)
+	}
+	return quiet("announced")
 }
 
 // runMCP serves MCP on stdio as a thin front end: speech, listening and

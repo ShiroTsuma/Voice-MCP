@@ -1,0 +1,8 @@
+{
+  "about": "What voice says for agent events, in English. A file named for another language (pl.json, de.json) says them in that language; one in the data folder's phrases folder adds a language or replaces a list. {tool} is the tool waiting for approval.",
+  "done": ["All done. Take a look when you can.", "Finished. Come have a look.", "I'm done here."],
+  "input": ["I'm waiting for you.", "Whenever you're ready, I'm here.", "Your turn."],
+  "permission": ["I need your permission for something.", "Could you approve this for me?", "Quick approval needed, when you have a moment."],
+  "permission_tool": ["I need your permission to use {tool}."],
+  "question": ["I have a question for you."]
+}

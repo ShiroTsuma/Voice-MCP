@@ -1,0 +1,8 @@
+{
+  "about": "What voice says for agent events, in Polish (see en.json).",
+  "done": ["Gotowe. Zerknij, kiedy możesz.", "Skończone, zajrzyj.", "Zrobione."],
+  "input": ["Czekam na ciebie.", "Jestem, kiedy będziesz gotowy.", "Twoja kolej."],
+  "permission": ["Potrzebuję twojej zgody.", "Możesz to zatwierdzić?", "Szybka zgoda, kiedy znajdziesz chwilę."],
+  "permission_tool": ["Potrzebuję zgody na {tool}."],
+  "question": ["Mam do ciebie pytanie."]
+}

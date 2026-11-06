@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,7 +19,7 @@ import (
 	"voice/internal/preset"
 )
 
-// Kinds of events, matching the keys of [hooks.phrases].
+// Kinds of events, matching the keys of the phrases files and [hooks.phrases].
 const (
 	Permission = "permission"
 	Input      = "input"
@@ -169,24 +168,16 @@ func readTranscript(path string) (start time.Time, lastText string, ok bool) {
 	return start, lastText, !start.IsZero()
 }
 
-// Phrase picks one configured phrase for the event at random, so repeated
-// notifications do not sound canned.
-func Phrase(h preset.Hooks, kind string) string {
-	list := h.Phrases[kind]
-	if len(list) == 0 {
-		return ""
-	}
-	return list[rand.IntN(len(list))]
-}
-
 // maxSentence keeps each sentence of a spoken summary short.
 const maxSentence = 160
 
 // Compose builds what to say. With summaries on, a finished turn is told in
 // the agent's own words (its last sentences, or its first), provided they are in
-// lang; otherwise, and for other events, a configured phrase is used. The
-// project name goes in front so several sessions can be told apart.
-func Compose(h preset.Hooks, ev Event, lang string) (text string, cacheable bool) {
+// lang, the language the voice speaks; otherwise, and for other events, a
+// phrase in phraseLang is used ("auto" speaks either, so lang names the
+// phrases' language apart). The project name goes in front so several
+// sessions can be told apart.
+func Compose(h preset.Hooks, ev Event, lang, phraseLang string) (text string, cacheable bool) {
 	message := ""
 	if ev.Kind == Done && (h.Summary == nil || *h.Summary) {
 		message = summarize(ev.Summary, lang, h.SummaryLength(), h.SummaryPart() == "start")
@@ -194,13 +185,13 @@ func Compose(h preset.Hooks, ev Event, lang string) (text string, cacheable bool
 	switch {
 	case ev.Kind == Permission && ev.Tool == "AskUserQuestion":
 		// Claude Code reports its question dialog as a permission prompt.
-		message = "I have a question for you."
+		message = Phrase(h, Question, phraseLang, "")
 	case ev.Kind == Permission && ev.Tool != "" && (h.Summary == nil || *h.Summary):
-		message = "I need your permission to use " + ev.Tool + "."
+		message = Phrase(h, PermissionTool, phraseLang, ev.Tool)
 	}
 	cacheable = message == ""
 	if message == "" {
-		message = Phrase(h, ev.Kind)
+		message = Phrase(h, ev.Kind, phraseLang, "")
 	}
 	if message == "" {
 		return "", false

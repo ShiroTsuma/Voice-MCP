@@ -12,9 +12,10 @@ The voice MCP is the agent's mouth and ears on the user's machine.
 - Speak at moments that matter: a long task finished (`intent: info`), you
   need a decision or approval (`question`), or something blocks you now
   (`attention`). Not for routine progress.
-- One or two short, natural sentences in English, even when the
-  conversation is in another language; the voices are English. Pass
-  `lang: "pl"` only when the user asks for Polish speech.
+- One or two short, natural sentences in the language `register` names
+  for your voice (English unless it says otherwise), even when the
+  conversation is in another language. Omit `lang`: voice uses your voice's
+  language. A note in a voice result says when it changes.
 - Never read code, paths, URLs, logs or lists aloud. The screen has details.
 - The call returns at once; audio plays in the background. Client hooks
   already announce permission prompts and finished turns, so do not repeat

@@ -226,7 +226,8 @@ func (s *Service) sessionEvent(ctx context.Context, a SessionArgs, pid uint32, c
 	case core.SinceAsked(pid) < 30*time.Second:
 		return quiet("the agent spoke for itself")
 	}
-	text, cacheable := hooks.Compose(h, ev, s.Config.DefaultLang)
+	lang := s.sessionLang(pid)
+	text, cacheable := hooks.Compose(h, ev, lang, s.phraseLang(lang))
 	if ev.Kind == hooks.Input && strings.TrimSpace(a.Text) != "" {
 		text, cacheable = strings.TrimSpace(a.Text), false // the question itself
 		if project != "" && (h.AnnounceProject == nil || *h.AnnounceProject) {
@@ -236,7 +237,7 @@ func (s *Service) sessionEvent(ctx context.Context, a SessionArgs, pid uint32, c
 	if text == "" {
 		return quiet("no phrase for " + a.Event)
 	}
-	if _, err := s.Speak(ctx, SpeakArgs{Text: text, Intent: ev.Intent, Cache: cacheable, PID: pid, Client: client, Project: project, Source: "hook"}); err != nil {
+	if _, err := s.Speak(ctx, SpeakArgs{Text: text, Intent: ev.Intent, Lang: lang, Cache: cacheable, PID: pid, Client: client, Project: project, Source: "hook"}); err != nil {
 		return nil, err
 	}
 	return map[string]any{"said": text}, nil

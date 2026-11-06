@@ -34,7 +34,9 @@
 # codex = "narrator"
 
 # `voice hook claude` (Claude Code Notification/Stop hooks) and
-# `voice hook codex` (Codex notify) announce events with these phrases.
+# `voice hook codex` (Codex notify) announce events. What they say comes from
+# the phrases files, one per language (add yours in the data folder's phrases
+# folder); [hooks.phrases] replaces a kind in every language.
 # [hooks]
 # enabled = true
 # preset = ""              # empty: VOICE_PRESET or default_preset

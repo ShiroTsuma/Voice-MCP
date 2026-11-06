@@ -411,7 +411,7 @@ Characters are `[[characters]]` in `config.toml`: `name`, `traits = [...]`, `des
 - `voice_listen(prompt, wait_seconds, max_seconds)` optionally asks aloud, then records until the user pauses and returns `{"text","lang","seconds"}`. The microphone is open only during the call, between two chimes, and no voice process speaks meanwhile.
 - `voice_clone(action: record|add|design|list|preview|set_transcript|remove, ...)` creates a voice from the microphone (`record`, `seconds`) or a clip (`add`); both refuse without `rights_confirmed=true`, which the agent may only pass after the user confirms they may use that voice. `design` makes a new voice from a description (Qwen3-TTS).
 
-Server instructions tell agents to speak rarely and briefly, in English.
+Server instructions tell agents to speak rarely and briefly, in the language their voice speaks: `register` names it (English unless the settings or the session's character say otherwise), and a note in a later result says when it changed.
 
 ### Registering by hand
 
@@ -462,7 +462,9 @@ Presets combine an engine, voice, speed, pitch, effects and per-language overrid
 | `system` | Windows SAPI, no downloads |
 | `<name>` | one per cloned voice, by its name (earlier versions called it `clone-<name>`, which still works) |
 
-English is the default language (`default_lang`); a preset can give another language its own engine or voice (`lang.<code>`), used only when a request asks for that language.
+English is the default language (`default_lang`, Speaking language in the settings); a character can speak another one (Speaks, in the Characters window), and a preset can give a language its own engine or voice (`lang.<code>`). A session speaks, and is announced, in its character's language or the general one. Voices in other languages than English sound noticeably worse, which the settings window says when it matters.
+
+Announcements (a turn finished, a question, a permission prompt) say the agent's own words when they are in the voice's language, else a phrase in that language. The phrases come from one JSON file per language, built in for English and Polish; a file of your own in the data folder's `phrases` folder (`de.json`, or `pl.json` to replace a list) adds a language. Keys: `done`, `input`, `permission`, `permission_tool` (`{tool}` is the tool), `question`; a language without a key falls back to English. `[hooks.phrases]` in `config.toml` replaces a kind in every language.
 
 Engine types: `sherpa` (Kokoro, Piper/VITS, Pocket, ZipVoice in process), `http` (sidecar or any server speaking its protocol), `exec` (any program that writes WAV; `{ref}` and `{ref_text}` placeholders for cloning) and `sapi`.
 

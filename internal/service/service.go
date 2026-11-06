@@ -23,6 +23,7 @@ import (
 	"voice/internal/core"
 	"voice/internal/engine"
 	"voice/internal/engine/httpengine"
+	"voice/internal/hooks"
 	"voice/internal/listen"
 	"voice/internal/preset"
 	"voice/sidecar"
@@ -55,10 +56,13 @@ type SpeakArgs struct {
 	Voice string `json:"voice,omitempty"`
 	// SaveTo: render into this file (an absolute .wav or .mp3 path) instead
 	// of saying it; the call returns once the file is written.
-	SaveTo  string `json:"save_to,omitempty"`
-	Client  string `json:"client,omitempty"`  // claude, codex, ...: picks [clients] preset
-	PID     uint32 `json:"pid,omitempty"`     // the agent's process, for dictation
-	Project string `json:"project,omitempty"` // its working directory name, for routing
+	SaveTo string `json:"save_to,omitempty"`
+	// Announce: an agent event to announce (a hook's) instead of Text; what
+	// is said is composed here, in the language the session's voice speaks.
+	Announce *hooks.Event `json:"announce,omitempty"`
+	Client   string       `json:"client,omitempty"`  // claude, codex, ...: picks [clients] preset
+	PID      uint32       `json:"pid,omitempty"`     // the agent's process, for dictation
+	Project  string       `json:"project,omitempty"` // its working directory name, for routing
 }
 
 type ControlArgs struct {
@@ -374,6 +378,16 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if s.Agents.NoSpeech(a.PID) {
 		return nil, userErr("muted by the user for this session; stay silent until they unmute it")
 	}
+	if a.Lang == "" {
+		a.Lang = s.speakLang(a)
+	}
+	if a.Announce != nil {
+		a.Text, a.Cache = hooks.Compose(s.Config.Hooks, *a.Announce, a.Lang, s.phraseLang(a.Lang))
+		a.Announce = nil
+		if a.Text == "" {
+			return map[string]any{"said": "", "quiet": "no phrase for this event"}, nil
+		}
+	}
 	preset, err := s.speakPreset(a)
 	if err != nil {
 		return nil, err
@@ -411,8 +425,20 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 		if t.Note != "" {
 			out["voice_note"] = t.Note + ". Tell the user once."
 		}
+		var notes []string
 		if persona, changed := s.takePersona(a.PID, false); changed {
-			out["note"] = "The user changed your character. From now on: " + persona
+			notes = append(notes, "The user changed your character. From now on: "+persona)
+		}
+		if a.Source != "hook" {
+			if l := s.takeLangNote(a.PID, false); l != "" {
+				notes = append(notes, l)
+			}
+		}
+		if len(notes) > 0 {
+			out["note"] = strings.Join(notes, " ")
+		}
+		if a.Source == "hook" {
+			out["said"] = a.Text
 		}
 		return out, nil
 	}
@@ -451,7 +477,7 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		if persona, _ := s.takePersona(a.PID, true); persona != "" {
 			out += ". Your character: " + persona
 		}
-		return out, nil
+		return out + ". " + s.takeLangNote(a.PID, true), nil
 	case "set_character":
 		// The agent takes another character from the list, e.g. when the user asks.
 		if a.PID == 0 {
@@ -473,7 +499,7 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		if persona == "" {
 			return fmt.Sprintf("the user calls you %s now; characters are switched off in the settings, so keep your usual tone", name), nil
 		}
-		return "From now on: " + persona, nil
+		return "From now on: " + persona + " " + s.takeLangNote(a.PID, true), nil
 	case "transcript":
 		return s.Agents.TranscriptFor(a.PID, a.Session, int(a.Limit)), nil
 	case "list_characters":

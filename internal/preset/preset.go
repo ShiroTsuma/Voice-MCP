@@ -76,7 +76,7 @@ type Hooks struct {
 	Preset           string              `toml:"preset"`            // empty: VOICE_PRESET or default_preset
 	SkipAfterSpeech  *float64            `toml:"skip_after_speech"` // seconds; the agent just spoke
 	MinTurnSeconds   *float64            `toml:"min_turn_seconds"`  // Claude Stop: only after longer turns
-	Phrases          map[string][]string `toml:"phrases"`           // permission | input | done
+	Phrases          map[string][]string `toml:"phrases"`           // permission | input | done ...: replaces the phrases files' list in every language
 	Summary          *bool               `toml:"summary"`           // say what the agent finished, in its words
 	SummarySentences int                 `toml:"summary_sentences"` // how many sentences of it (default 2)
 	SummaryFrom      string              `toml:"summary_from"`      // "end" (default): its last sentences; "start": its first
@@ -434,6 +434,9 @@ func (c *Config) merge(o *Config) {
 		c.Hooks.MinTurnSeconds = h.MinTurnSeconds
 	}
 	for k, v := range h.Phrases {
+		if c.Hooks.Phrases == nil {
+			c.Hooks.Phrases = map[string][]string{}
+		}
 		c.Hooks.Phrases[k] = v
 	}
 	if h.Summary != nil {
