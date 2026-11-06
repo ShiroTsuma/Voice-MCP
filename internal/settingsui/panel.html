@@ -356,7 +356,7 @@
   input.text:focus-visible { box-shadow: 0 0 0 2px var(--ink-3, #666); }
   .clones:empty { display: none; }
   .clones { display: grid; gap: 2px; margin: 2px 0 8px; }
-  .clones .cl { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; min-height: 34px; }
+  .clones .cl { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 6px; min-height: 34px; }
   .clones .cl b { font-weight: 600; }
   .clones .cl small { display: block; color: var(--ink-2); font-size: 12px; }
   .clones .cl .btn { height: 28px; padding: 0 10px; font-weight: 500; }
@@ -380,6 +380,12 @@
   .clones .cl[draggable="true"] { cursor: grab; }
   .clones .cl.dragging { opacity: .4; }
   .clones .clbody > .cl { padding-left: 13px; }
+  .clones .cl .about { display: block; color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .clones .cl > span { min-width: 0; }
+  .clones .cl .btn.icon { width: 28px; padding: 0; justify-content: center; }
+  .clones .cledit { display: grid; gap: 6px; padding: 4px 0 10px 13px; }
+  .clones .cledit .acts { display: flex; gap: 6px; justify-content: flex-end; }
+  .clones .cledit .acts .btn { height: 28px; padding: 0 12px; }
   /* The GPU voices' memory: under its setting, and for a while at the bottom after a voice choice. */
   .gpuview { padding: 0 0 6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
   .gpuview p, #gpuToast p { margin: 4px 0; }
@@ -403,6 +409,9 @@
     opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .2s, transform .2s var(--ease); }
   #gpuToast.on { opacity: 1; transform: none; pointer-events: auto; }
   #gpuToast .gpulead { color: var(--ink); font-weight: 600; }
+  .cm-off { display: none !important; }
+  textarea.text { height: auto; min-height: 52px; padding: 7px 10px; line-height: 1.4; resize: vertical; font-family: inherit; }
+  .cloneacts.cm-design { grid-template-columns: 1fr; }
   .cloneacts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .cloneacts .btn { justify-content: center; }
   .cloneacts .btn.primary { background: var(--ink); color: var(--ground); }
@@ -616,26 +625,45 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Voice clone</span><span class="sum" id="sumClone"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
           <div class="clones" id="clones"></div>
+          <div class="row">
+            <div class="lab">New voice<span class="help" id="cloneModeHelp">Clone someone from a recording</span></div>
+            <div class="seg" id="cloneMode"><button type="button" data-v="clone">Recording</button><button type="button" data-v="design">Description</button></div>
+          </div>
           <div class="row col">
-            <label class="lab" for="cloneName">Name</label>
+            <label class="lab" for="cloneName">Name<span class="help">Lowercase letters, digits, - or _</span></label>
             <input class="text" id="cloneName" type="text" maxlength="40" spellcheck="false" autocomplete="off">
           </div>
           <div class="row col">
+            <label class="lab" for="cloneDesc" id="cloneDescLab">Description<span class="help" id="cloneDescHelp">Optional: what the voice is for</span></label>
+            <textarea class="text" id="cloneDesc" rows="2" maxlength="600" spellcheck="true"></textarea>
+          </div>
+          <div class="row col cm-design cm-off">
+            <label class="lab" for="cloneSample">Sample<span class="help">Optional: what it reads once, about ten seconds; its tone carries into the voice</span></label>
+            <input class="text" id="cloneSample" type="text" maxlength="400" autocomplete="off">
+          </div>
+          <div class="row col">
+            <label class="lab" for="cloneGroupSel">Group</label>
+            <select id="cloneGroupSel"></select>
+          </div>
+          <div class="row col cm-clone">
             <label class="lab" for="cloneEngine">Engine<span class="help" id="cloneEngineHint"></span></label>
             <select id="cloneEngine"></select>
           </div>
-          <div class="row">
+          <div class="row cm-clone">
             <label class="lab" for="cloneRights">I have the right to use this voice<span class="help">My own, or with the speaker's consent</span></label>
             <label class="switch"><input type="checkbox" id="cloneRights"><span></span></label>
           </div>
-          <div class="row">
+          <div class="row cm-clone">
             <div class="lab">Recording length</div>
             <div class="seg" id="cloneSecs"><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button><button type="button" data-v="20">20 s</button></div>
           </div>
-          <div class="row cloneacts">
+          <div class="row cloneacts cm-clone">
             <button class="btn" id="cloneRecord" type="button">Record</button>
             <button class="btn" id="cloneFile" type="button">Use a file…</button>
             <input type="file" id="cloneInput" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden>
+          </div>
+          <div class="row cloneacts cm-design cm-off">
+            <button class="btn" id="cloneDesign" type="button">Design the voice</button>
           </div>
           <p class="help" id="cloneMsg"></p>
         </div></div>
@@ -1823,6 +1851,7 @@ async function loadClones() {
     cloneGroups = r.groups || [];
   } catch (e) { clones = []; cloneGroups = []; }
   drawClones();
+  fillCloneGroups();
   if (state) summaries();
 }
 // Who speaks with each cloned voice: the characters whose voice is it, or a
@@ -1859,12 +1888,18 @@ function drawClones() {
   const users = cloneUsers();
   const row = c => {
     const d = document.createElement('div'); d.className = 'cl';
-    d.innerHTML = '<span><b></b><small></small></span>';
+    d.innerHTML = '<span><b></b><span class="about"></span><small></small></span>';
     d.querySelector('b').textContent = c.name;
+    const about = c.description || c.designed_from || '';
+    d.querySelector('.about').textContent = about;
+    if (!about) d.querySelector('.about').remove();
     const who = users[c.name];
     d.querySelector('small').textContent = [who ? andList(who) : '', c.seconds ? Math.round(c.seconds) + ' s' : '', c.engine].filter(Boolean).join(' · ');
-    d.title = (c.designed_from ? c.designed_from + '\n\n' : '') + 'Drag onto a group to move it there.';
+    d.title = (about ? about + '\n\n' : '') + 'Drag onto a group to move it there.';
     d.draggable = true;
+    const edit = document.createElement('button'); edit.className = 'btn icon'; edit.type = 'button'; edit.textContent = '✎';
+    edit.title = 'Rename or describe ' + c.name; edit.setAttribute('aria-label', edit.title);
+    edit.addEventListener('click', () => editVoice(d, c));
     d.addEventListener('dragstart', e => { dragVoice = c.name; d.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.name); });
     d.addEventListener('dragend', () => { dragVoice = ''; box.querySelectorAll('.dragging, .over').forEach(x => x.classList.remove('dragging', 'over')); });
     const hear = document.createElement('button'); hear.className = 'btn'; hear.type = 'button'; hear.textContent = 'Hear it';
@@ -1874,10 +1909,10 @@ function drawClones() {
       if (rm.dataset.sure) cloneAct({ action: 'remove', name: c.name }, 'Removing ' + c.name + '…');
       else { rm.dataset.sure = '1'; rm.textContent = 'Remove ' + c.name + '?'; setTimeout(() => { delete rm.dataset.sure; rm.textContent = 'Remove'; }, 3000); }
     });
-    d.append(hear, rm);
+    d.append(edit, hear, rm);
     return d;
   };
-  const icon = (text, label) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'icon'; b.textContent = text; b.title = label; b.setAttribute('aria-label', label); return b; };
+  const icon =(text, label) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'icon'; b.textContent = text; b.title = label; b.setAttribute('aria-label', label); return b; };
   // group: a group's name, or '' for the voices in no group.
   const section = (group, list) => {
     const sec = document.createElement('div'); sec.className = 'clsec' + (shutGroups.has(group) ? ' shut' : '');
@@ -1915,7 +1950,8 @@ function drawClones() {
     });
     sec.addEventListener('dragleave', e => { if (!sec.contains(e.relatedTarget)) sec.classList.remove('over'); });
     sec.addEventListener('drop', e => {
-      e.preventDefault(); sec.classList.remove('over');
+      if (!dragVoice) return; // a sound file dropped here is for cloning (the section's handler)
+      e.preventDefault(); e.stopPropagation(); sec.classList.remove('over');
       const voice = dragVoice || e.dataTransfer.getData('text/plain');
       const c = clones.find(x => x.name === voice);
       if (!c || (c.group || '') === group) return;
@@ -1938,6 +1974,37 @@ function drawClones() {
   for (const g of cloneGroups) box.append(section(g, clones.filter(c => lower(c.group) === lower(g))));
   const loose = clones.filter(c => !c.group);
   if (loose.length || cloneGroups.length) box.append(section('', loose));
+}
+// Opens a voice's name and description for editing under its row; Save renames
+// it (the characters using it follow) and stores the description.
+function editVoice(rowEl, c) {
+  const open = rowEl.nextElementSibling;
+  if (open && open.classList.contains('cledit')) { open.remove(); return; }
+  const box = document.createElement('div'); box.className = 'cledit';
+  box.innerHTML = '<input class="text" type="text" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Name">' +
+    '<textarea class="text" rows="2" maxlength="600" placeholder="What the voice is, or what it is for" aria-label="Description"></textarea>' +
+    '<div class="acts"><button class="btn" type="button" data-a="cancel">Cancel</button><button class="btn" type="button" data-a="save">Save</button></div>';
+  const [name, desc] = [box.querySelector('input'), box.querySelector('textarea')];
+  name.value = c.name;
+  desc.value = c.description || c.designed_from || '';
+  box.querySelector('[data-a=cancel]').addEventListener('click', () => box.remove());
+  box.querySelector('[data-a=save]').addEventListener('click', async () => {
+    const to = name.value.trim(), text = desc.value.trim();
+    if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(to)) { cloneMsg('A voice name is 1-40 lowercase letters, digits, - or _.', true); name.focus(); return; }
+    try {
+      let now = c.name;
+      if (to !== c.name) { await api('clone', { action: 'rename', name: c.name, new_name: to }); now = to; }
+      if (text !== (c.description || c.designed_from || '')) await api('clone', { action: 'describe', name: now, description: text });
+      cloneMsg(now !== c.name ? 'Renamed ' + c.name + ' to ' + now + '; the characters using it follow.' : 'Saved ' + now + '.');
+      await loadClones(); render(await api('state'));
+    } catch (e) { cloneMsg(e.message, true); }
+  });
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); box.remove(); }
+    else if (e.key === 'Enter' && e.target === name) { e.preventDefault(); box.querySelector('[data-a=save]').click(); }
+  });
+  rowEl.after(box);
+  name.focus(); name.select();
 }
 // Turns a section's title into a field: Enter or leaving it renames the group, Escape keeps the name.
 function renameGroup(hd, group) {
@@ -2005,7 +2072,7 @@ function cloneArgs() {
   const engine = $('cloneEngine').value;
   const e = ((state && state.options.clone_engines) || []).find(x => x.name === engine);
   if (e && !e.ready) { cloneMsg(e.label + ' is not installed: install it in Integrations, or pick another engine.', true); return null; }
-  return engine ? { name, rights_confirmed: true, engine } : { name, rights_confirmed: true };
+  return { name, rights_confirmed: true, ...(engine ? { engine } : {}), ...cloneExtras() };
 }
 // The clone engines, installed ones first; the hint says what the chosen one speaks.
 function fillCloneEngines(s) {
@@ -2038,13 +2105,62 @@ function wireClone() {
   });
   on('cloneFile', 'click', () => { if (cloneArgs()) $('cloneInput').click(); });
   on('cloneInput', 'change', e => { cloneFrom(e.target.files[0]); e.target.value = ''; });
+  // A sound file dropped on the section is cloned; a voice dragged between groups is not a file.
   const cloneGroup = $('cloneGroup');
-  cloneGroup.addEventListener('dragover', e => { e.preventDefault(); cloneGroup.classList.add('drop'); });
+  cloneGroup.addEventListener('dragover', e => { if (dragVoice) return; e.preventDefault(); cloneGroup.classList.add('drop'); });
   cloneGroup.addEventListener('dragleave', () => cloneGroup.classList.remove('drop'));
-  cloneGroup.addEventListener('drop', e => { e.preventDefault(); cloneGroup.classList.remove('drop'); cloneFrom(e.dataTransfer.files[0]); });
+  cloneGroup.addEventListener('drop', e => {
+    cloneGroup.classList.remove('drop');
+    if (dragVoice || !e.dataTransfer.files.length) return;
+    e.preventDefault(); cloneFrom(e.dataTransfer.files[0]);
+  });
   onSeg('cloneSecs', () => {});
+  onSeg('cloneMode', cloneMode);
   on('cloneEngine', 'change', cloneEngineHint);
+  on('cloneDesign', 'click', designVoice);
   seg('cloneSecs', '12');
+  seg('cloneMode', 'clone');
+  cloneMode();
+}
+// Recording or Description: which rows the new voice's form shows.
+function cloneMode() {
+  const design = segValue('cloneMode') === 'design';
+  document.querySelectorAll('.cm-clone').forEach(x => x.classList.toggle('cm-off', design));
+  document.querySelectorAll('.cm-design').forEach(x => x.classList.toggle('cm-off', !design));
+  $('cloneModeHelp').textContent = design ? 'Make one up from words, no recording (Qwen3-TTS)' : 'Clone someone from a recording';
+  $('cloneDescHelp').textContent = design ? 'The voice in words: age, timbre, pace, mood, accent. English works best' : 'Optional: what the voice is for';
+  $('cloneDesc').placeholder = design ? 'A woman in her forties, smooth low alto, calm and dry, neutral American accent' : '';
+}
+// The groups a new voice can go in, keeping the choice.
+function fillCloneGroups() {
+  const sel = $('cloneGroupSel'), keep = sel.value;
+  sel.textContent = '';
+  for (const g of [''].concat(cloneGroups)) { const o = document.createElement('option'); o.value = g; o.textContent = g || 'No group'; sel.append(o); }
+  sel.value = cloneGroups.includes(keep) ? keep : '';
+}
+// What every new voice takes from the form besides its source: its description and group.
+function cloneExtras() {
+  const x = {}, desc = $('cloneDesc').value.trim(), group = $('cloneGroupSel').value;
+  if (desc) x.description = desc;
+  if (group) x.group = group;
+  return x;
+}
+async function designVoice() {
+  if (cloneBusy) return;
+  const name = $('cloneName').value.trim(), desc = $('cloneDesc').value.trim(), sample = $('cloneSample').value.trim();
+  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(name)) { cloneMsg('Give the voice a name: 1-40 lowercase letters, digits, - or _.', true); $('cloneName').focus(); return; }
+  if (!desc) { cloneMsg('Describe the voice in words first.', true); $('cloneDesc').focus(); return; }
+  const a = { action: 'design', name, ...cloneExtras() };
+  if (sample) a.text = sample;
+  cloneBusy = true; $('cloneDesign').disabled = true;
+  cloneMsg('Designing ' + name + '… the first time loads the design model, which takes a while.');
+  try {
+    const r = await api('clone', a);
+    cloneMsg('Made ' + name + (r.group ? ' in ' + r.group : '') + '; its sample is playing. Keep it, or Remove it and describe it again.' + (r.warning ? ' ' + r.warning : ''));
+    $('cloneName').value = ''; $('cloneSample').value = '';
+    await loadClones(); render(await api('state'));
+  } catch (e) { cloneMsg(e.message, true); }
+  finally { cloneBusy = false; $('cloneDesign').disabled = false; }
 }
 
 // [i]: its data-tip in a box under it (above, near the bottom), kept inside the window.

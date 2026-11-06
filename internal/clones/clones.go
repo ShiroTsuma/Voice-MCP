@@ -57,7 +57,10 @@ type Profile struct {
 	Designed string `toml:"designed,omitempty"`
 	// Group is the user's group the voice is filed in ("D&D", "ASMR"); empty:
 	// none. groups.toml keeps the groups' order, empty ones too.
-	Group        string `toml:"group,omitempty"`
+	Group string `toml:"group,omitempty"`
+	// Description is the user's own words about the voice ("warm narrator for
+	// stories"); a designed voice without one is described by Designed.
+	Description  string `toml:"description,omitempty"`
 	PromptPath   string `toml:"-"` // Prompt as a full path, when there is one
 	OriginalPath string `toml:"-"`
 }
@@ -101,7 +104,7 @@ func Add(name, src, text, engineName, rights string, replace bool) (Profile, err
 		Engine: engineName, Rights: rights, Duration: math.Round(float64(len(pcm))/refRate*10) / 10,
 	}
 	if old, err := Get(name); err == nil {
-		p.Group = old.Group // a replaced voice stays in its group
+		p.Group, p.Description = old.Group, old.Description // a replaced voice keeps its group and description
 	}
 	stage := dir(name) + ".new"
 	os.RemoveAll(stage)
@@ -195,6 +198,45 @@ func SetDesigned(name, description string) error {
 	}
 	p.Designed = strings.TrimSpace(description)
 	return writeMeta(p)
+}
+
+// About is what the voice is, in words: the user's description, else the one
+// it was designed from.
+func (p Profile) About() string {
+	if p.Description != "" {
+		return p.Description
+	}
+	return p.Designed
+}
+
+// SetDescription stores the user's description of a voice; empty clears it.
+func SetDescription(name, text string) error {
+	p, err := Get(name)
+	if err != nil {
+		return err
+	}
+	p.Description = strings.Join(strings.Fields(text), " ")
+	return writeMeta(p)
+}
+
+// Rename gives a voice another name: its folder moves, everything in it stays.
+func Rename(old, name string) (Profile, error) {
+	if err := ValidName(name); err != nil {
+		return Profile{}, err
+	}
+	if _, err := Get(old); err != nil {
+		return Profile{}, err
+	}
+	if old == name {
+		return Get(name)
+	}
+	if _, err := os.Stat(dir(name)); err == nil {
+		return Profile{}, fmt.Errorf("a voice called %q exists; pick another name", name)
+	}
+	if err := os.Rename(dir(old), dir(name)); err != nil {
+		return Profile{}, err
+	}
+	return Get(name)
 }
 
 // writeMeta stores p's voice.toml.

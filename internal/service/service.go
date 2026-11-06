@@ -132,6 +132,7 @@ type CloneArgs struct {
 	// file the new voice there), or the group to rename or remove.
 	Group    string `json:"group,omitempty"`
 	NewGroup string `json:"new_group,omitempty"` // rename_group: the group's new name
+	NewName  string `json:"new_name,omitempty"`  // rename: the voice's new name
 }
 
 // designEngine makes voices from a description (sidecar/backends.json).
@@ -189,6 +190,9 @@ type Service struct {
 	// DeliverTo passes a message to one agent the way dictation reaches it,
 	// never by typing into another window; ok is false when it took none.
 	DeliverTo func(pid uint32, text string) (report string, ok bool)
+	// RenamePreset makes the stored settings that name the voice preset old
+	// (characters, the default voice) name new, and applies them; nil skips it.
+	RenamePreset func(old, new string) error
 
 	recMu   sync.Mutex
 	recStop chan struct{} // closed by the clone action stop: the recording ends early
@@ -762,6 +766,16 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		} else if p.Group != "" {
 			out["group"] = p.Group
 		}
+		// add/record: the user's words about the voice (design's description
+		// is what it was designed from, stored apart).
+		if d := strings.TrimSpace(a.Description); d != "" {
+			if err := clones.SetDescription(p.Name, d); err == nil {
+				if q, err := clones.Get(p.Name); err == nil {
+					p = q
+					s.Config.SetPreset(core.ClonePresetName(p.Name), core.ClonePreset(p))
+				}
+			}
+		}
 		if NeedsTranscript(p.Engine) && p.Text == "" {
 			out["warning"] = p.Engine + " needs a transcript; call set_transcript"
 		}
@@ -857,9 +871,9 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 	case "list":
 		rows := [][]any{}
 		for _, p := range clones.List() {
-			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Group, p.Engine, p.Duration, p.Text != "", p.Source, p.Designed})
+			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Group, p.Description, p.Engine, p.Duration, p.Text != "", p.Source, p.Designed})
 		}
-		return map[string]any{"columns": []string{"name", "preset", "group", "engine", "seconds", "transcript", "source", "designed_from"}, "rows": rows,
+		return map[string]any{"columns": []string{"name", "preset", "group", "description", "engine", "seconds", "transcript", "source", "designed_from"}, "rows": rows,
 			"groups": clones.Groups()}, nil
 	case "preview":
 		if err := need("name"); err != nil {
@@ -894,6 +908,54 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		}
 		s.Config.DeletePreset(name)
 		return "removed " + a.Name, nil
+	case "describe":
+		// The user's description of a voice; it is also its preset's description.
+		if err := need("name"); err != nil {
+			return nil, err
+		}
+		if err := clones.SetDescription(a.Name, a.Description); err != nil {
+			return nil, UserError{err.Error()}
+		}
+		p, err := clones.Get(a.Name)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		s.Config.SetPreset(core.ClonePresetName(p.Name), core.ClonePreset(p))
+		if p.Description == "" {
+			return a.Name + " has no description now", nil
+		}
+		return "described " + a.Name, nil
+	case "rename":
+		if err := need("name"); err != nil {
+			return nil, err
+		}
+		to := strings.TrimSpace(a.NewName)
+		if to == "" {
+			return nil, userErr("rename needs new_name")
+		}
+		if to == a.Name {
+			return a.Name + " keeps its name", nil
+		}
+		if core.ClonePresetTaken(s.Config, to) {
+			return nil, userErr("%q is already a voice preset; pick another name", to)
+		}
+		p, err := clones.Rename(a.Name, to)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		old, name := core.ClonePresetName(a.Name), core.ClonePresetName(p.Name)
+		s.Config.DeletePreset(old)
+		s.Config.SetPreset(name, core.ClonePreset(p))
+		if s.Speaker != nil && s.Speaker.Status().Preset == old {
+			s.Speaker.SetPreset(name)
+		}
+		out := map[string]any{"name": p.Name, "preset": name}
+		if s.RenamePreset != nil {
+			if err := s.RenamePreset(old, name); err != nil {
+				out["warning"] = "the characters and voices that used " + old + " were not updated: " + err.Error()
+			}
+		}
+		return out, nil
 	case "groups":
 		return cloneGroups(), nil
 	case "group":

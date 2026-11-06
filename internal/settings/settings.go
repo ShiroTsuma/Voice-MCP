@@ -54,6 +54,31 @@ type Preset struct {
 // TunedPrefix starts the names of the presets the windows tune.
 const TunedPrefix = "voice-"
 
+// RenamePreset makes everything in s that names the voice preset old name
+// name instead: the default voice, the announcements' voice, the characters'
+// voices and the tunings made from it. It reports whether anything changed.
+func RenamePreset(s *Settings, old, name string) bool {
+	changed := false
+	swap := func(p *string) {
+		if p != nil && *p == old {
+			*p, changed = name, true
+		}
+	}
+	swap(s.DefaultPreset)
+	swap(s.Hooks.Preset)
+	if s.Characters != nil {
+		for i := range *s.Characters {
+			swap(&(*s.Characters)[i].Preset)
+		}
+	}
+	for _, p := range s.Presets {
+		if p != nil {
+			swap(&p.Extends)
+		}
+	}
+	return changed
+}
+
 // Character is preset.Character in the settings file.
 type Character struct {
 	Name        string   `toml:"name" json:"name"`

@@ -191,6 +191,18 @@ func runServe(args []string) error {
 	}
 
 	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents, ListenView: ctl.agentListening}
+	// A renamed cloned voice: the characters and voices that named it follow.
+	svc.RenamePreset = func(old, name string) error {
+		changed := false
+		if err := settings.Update(settingsPath(b.cfgPath), func(s *settings.Settings) { changed = settings.RenamePreset(s, old, name) }); err != nil {
+			return err
+		}
+		if changed {
+			_, err := b.reload()
+			return err
+		}
+		return nil
+	}
 	var once sync.Once
 	extra := func(mux *http.ServeMux, info daemon.Info) {
 		b.info = info

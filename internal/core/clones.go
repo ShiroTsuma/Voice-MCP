@@ -31,8 +31,12 @@ func ClonePresetTaken(cfg *preset.Config, name string) bool {
 // neutral English voice takes over rather than going silent.
 func ClonePreset(p clones.Profile) preset.Preset {
 	chime := "soft"
+	about := "Cloned voice " + p.Name + " (from " + p.Source + ")"
+	if a := p.About(); a != "" {
+		about = a // the user's words say more than the file it came from
+	}
 	return preset.Preset{
-		Description: "Cloned voice " + p.Name + " (from " + p.Source + ")",
+		Description: about,
 		Engine:      p.Engine,
 		Voice:       preset.Voice{Voice: engine.Voice{Name: clonePrefix + p.Name}},
 		Chime:       &chime,

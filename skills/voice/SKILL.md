@@ -99,6 +99,10 @@ user asks for. `status` reports the active preset and the last error.
   `group` to `add`, `record` or `design`. `group` moves a voice, and
   `rename_group` and `remove_group` change groups only when the user asks;
   removing a group keeps its voices.
+- `describe` stores what a voice is for (`description`; `add` and `record`
+  take one too); `list` and `list_presets` show it, so read it when picking a
+  voice. `rename` (`new_name`) renames a voice when the user asks; the
+  characters that use it follow.
 
 ## Background process
 
