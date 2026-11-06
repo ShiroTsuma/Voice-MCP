@@ -182,7 +182,7 @@ Sessions take their names from a list of characters (settings window → Charact
 Two settings decide how much of the character the agent shows, for all characters at the top of the Characters window and for one in its editor:
 
 - **Immersion**, how strongly it steers: **Light** (its tone in written replies; speech short and plain), **Voice** (the default: its tone and attitude everywhere, speech short but in character), **Full** (it is the character in all it writes and says, with opinions and moods, and says as much aloud as it would), **Role-play** (it behaves as the person described: it may criticise instead of helping, or refuse; it never harms the work or your files and never lies about what it did, and a message starting "Clara, out of character: ..." gets a plain answer). Below Role-play the work is always done in full.
-- **Reminders**, how often the agent is reminded of its character, counted in your messages: only at the start, every message, every 3 (the default), 5, 10 or any number. A reminder is one line (name and traits), or the whole description at Full and Role-play; the editor shows what that costs in tokens. The whole description also goes out at the start and after a change.
+- **Reminders**, how often the agent is reminded of its character, counted in your messages: only at the start, every message, every 3 (the default), 5, 10 or any number. A reminder is one line (name and traits), or the whole description at Full and Role-play; the editor shows what that costs in tokens. The whole description also goes out at the start and with your next message after a change: another character, or this one edited (its traits, description or immersion), even in a session already running.
 
 With characters off, agents get none of this.
 

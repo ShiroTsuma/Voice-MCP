@@ -104,6 +104,16 @@ func TestPersonaReachesTheSessionOnceAndAfterAChange(t *testing.T) {
 	if !next.Changed || !strings.Contains(next.Persona, "teasing") {
 		t.Fatalf("change: %+v", next)
 	}
+	// The same character edited (its immersion, traits) reaches the session once too.
+	cfg.Characters[1].Immersion = preset.ImmersionLight
+	cfg.Characters[1].Traits = []string{"teasing", "sarcastic"}
+	edited := call(AgentArgs{PID: 5, Event: "busy"})
+	if !edited.Changed || edited.Persona != cfg.Characters[1].Persona(preset.ImmersionLight) {
+		t.Fatalf("edit: %+v", edited)
+	}
+	if again := call(AgentArgs{PID: 5, Event: "busy"}); again.Persona != "" {
+		t.Fatalf("edit told twice: %+v", again)
+	}
 	off := false
 	cfg.Serve.Personas = &off
 	if p := call(AgentArgs{PID: 6, Event: "idle", Start: true}); p.Persona != "" || p.Name != "Annie" {

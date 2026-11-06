@@ -64,6 +64,7 @@ type agentSeen struct {
 	style    string    // how it speaks: "" (short) or "narrative"
 	theme    string    // the reading window's theme for this session (set_theme); empty uses the user's
 	told     string    // the character whose persona the agent last received
+	toldText string    // that persona as it went out, so an edit to the character (immersion, traits) goes out too
 	toldLang string    // the language its voice speaks, as the agent last heard it
 	asked    int       // the user's messages since its character was last recalled
 	custom   bool      // the name is the user's own, not one from the character list
@@ -465,18 +466,17 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 }
 
 // personaFor is the persona st's agent is to receive now: at the start of a
-// session, or once after the user changed its character (changed). It is
-// recorded as told only when it goes out, so switching personas on later
-// still reaches running sessions. The caller holds the lock.
+// session, or once after the user changed its character (changed): another
+// character, or the same one edited (its immersion, traits or description).
+// It is recorded as told only when it goes out, so switching personas on
+// later still reaches running sessions. The caller holds the lock.
 func (s *Service) personaFor(st *agentSeen, start bool) (persona string, changed bool) {
-	if !start && st.told == st.name {
-		return "", false
-	}
-	if persona = s.persona(st.name); persona == "" {
+	persona = s.persona(st.name)
+	if persona == "" || !start && st.told == st.name && st.toldText == persona {
 		return "", false
 	}
 	changed = !start && st.told != ""
-	st.told = st.name
+	st.told, st.toldText = st.name, persona
 	s.Agents.dirty = true
 	return persona, changed
 }
