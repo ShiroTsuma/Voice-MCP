@@ -239,6 +239,12 @@
   .row.col .pair { display: flex; gap: 8px; align-items: center; }
   .lab { flex: 1; min-width: 0; font-size: 14px; }
   .help { display: block; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin-top: 1px; }
+  /* [i]: the longer explanation, on hover or focus, in one box above the page so no group clips it. */
+  .tip { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; border-radius: 50%; vertical-align: 1px;
+    box-shadow: inset 0 0 0 1.2px var(--ink-3); color: var(--ink-2); font: 600 10px/1 var(--ui-small); cursor: help; }
+  .tip:hover, .tip:focus-visible { color: var(--ink); box-shadow: inset 0 0 0 1.2px var(--ink-2); outline: none; }
+  #tipbox { position: fixed; z-index: 50; max-width: 320px; padding: 9px 11px; border-radius: 6px; background: var(--field-hi); color: var(--ink);
+    font: 12.5px/1.45 var(--ui-small); white-space: pre-line; box-shadow: 0 6px 24px rgb(0 0 0 / .35); pointer-events: none; }
   .sub { padding-left: 14px; margin-left: 2px; border-left: 1px solid var(--rule); }
 
   /* The transcript: what voice said and what you dictated, newest first. A line is who and the words, the time
@@ -535,7 +541,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Characters</span><span class="sum" id="sumCharacters"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
           <div class="row">
-            <label class="lab" for="personas">Give sessions characters<span class="help">Each session takes on its character's personality, voice and picture; off keeps just the names</span></label>
+            <label class="lab" for="personas">Give sessions characters<span class="tip" tabindex="0" data-tip="Each session takes on its character&#x27;s personality, voice and picture; how strongly, and how often its agent is reminded, is set in the Characters window. Off: sessions keep just their names for dictation, and agents behave as usual.">i</span><span class="help">Personality, voice and picture</span></label>
             <label class="switch"><input type="checkbox" id="personas"><span></span></label>
           </div>
           <div class="castlist" id="chars"></div>
@@ -567,7 +573,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="slider"><input type="range" id="volume" min="0" max="1.5" step="0.05" value="1"><span class="val" id="volumeVal"></span></div>
           </div>
           <div class="row">
-            <label class="lab" for="voiceReplies">Answer by voice<span class="help">When you dictate, the agent says its answer and its questions aloud</span></label>
+            <label class="lab" for="voiceReplies">Answer by voice<span class="tip" tabindex="0" data-tip="When you dictate, the agent says its answer and its questions aloud. How much it says follows its character&#x27;s Immersion (Characters window).">i</span><span class="help">The agent answers your dictation aloud</span></label>
             <label class="switch"><input type="checkbox" id="voiceReplies"><span></span></label>
           </div>
           <div class="more row">
@@ -623,7 +629,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <label class="switch"><input type="checkbox" id="hooks"><span></span></label>
           </div>
           <div class="more row">
-            <label class="lab" for="summary">Say what was finished<span class="help">In the agent's own words, when it answered in the voice's language</span></label>
+            <label class="lab" for="summary">Say what was finished<span class="tip" tabindex="0" data-tip="When the agent answered in the language its voice speaks (its character&#x27;s, or the Speaking language), its last sentences are said; otherwise a short phrase in that language, from the phrases files.">i</span><span class="help">In the agent's own words</span></label>
             <label class="switch"><input type="checkbox" id="summary"><span></span></label>
           </div>
           <div class="more row col sub" id="summaryRow">
@@ -631,7 +637,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="seg" id="summaryPart" role="group" aria-label="How much" style="align-self: flex-start"><button type="button" data-v="start:1">First</button><button type="button" data-v="end:1">Last</button><button type="button" data-v="end:2">Last 2</button><button type="button" data-v="end:3">Last 3</button></div>
           </div>
           <div class="more row">
-            <div class="lab">Codex goals<span class="help">A thread working toward a goal goes on by itself: wait before announcing its turn</span></div>
+            <div class="lab">Codex goals<span class="tip" tabindex="0" data-tip="A Codex thread working toward a goal goes on by itself: wait this long before announcing its turn, and stay quiet when it goes on.">i</span><span class="help">Wait before announcing</span></div>
             <div class="seg" id="goalWait" role="group" aria-label="Codex goals"><button type="button" data-v="0">Off</button><button type="button" data-v="3">3 s</button><button type="button" data-v="10">10 s</button></div>
           </div>
           <div class="more row">
@@ -639,7 +645,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <label class="switch"><input type="checkbox" id="project"><span></span></label>
           </div>
           <div class="more row">
-            <label class="lab" for="hookPreset">Announcement voice<span class="help">Who says that a session finished or needs you: each session in its own voice (its character's, or the default voice), or always the voice picked here</span></label>
+            <label class="lab" for="hookPreset">Announcement voice<span class="tip" tabindex="0" data-tip="Each session in its own voice (its character&#x27;s, or the default voice), or always the voice picked here. A session is announced in the language its voice speaks.">i</span><span class="help">Who says a session finished or needs you</span></label>
             <select id="hookPreset"></select>
           </div>
         </div></div>
@@ -649,11 +655,11 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
         <button class="head" type="button" aria-expanded="false"><span class="t"><span class="name">Dictation</span><span class="sum" id="sumDictation"></span></span><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></button>
         <div class="body"><div>
           <div class="row">
-            <label class="lab" for="dictateRouting">Pick the agent by name<span class="help">Start with a name, Claude, Codex or the project: "Clara, …". "Everyone, …" reaches all</span></label>
+            <label class="lab" for="dictateRouting">Pick the agent by name<span class="tip" tabindex="0" data-tip="Start a dictation with a name, Claude, Codex or the project: &quot;Clara, …&quot;. &quot;Everyone, …&quot; reaches all sessions. Without a name it goes to the session you heard last.">i</span><span class="help">"Clara, …" reaches Clara</span></label>
             <label class="switch"><input type="checkbox" id="dictateRouting"><span></span></label>
           </div>
           <div class="more row">
-            <label class="lab" for="dictateSay">Say what happened<span class="help">A short spoken line: sent, queued, or on the clipboard. The corner animation shows it too, see On screen</span></label>
+            <label class="lab" for="dictateSay">Say what happened<span class="tip" tabindex="0" data-tip="A short spoken line: sent, queued, or on the clipboard. The corner animation shows it too (On screen).">i</span><span class="help">A short spoken line after you send</span></label>
             <label class="switch"><input type="checkbox" id="dictateSay"><span></span></label>
           </div>
           <div class="more row col">
@@ -673,7 +679,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <select id="model"></select>
           </div>
           <div class="more row col">
-            <div class="lab">Word lists<span class="help">Terms recognition gets wrong, put right after it hears them. Character, session and project names are known already.</span></div>
+            <div class="lab">Word lists<span class="tip" tabindex="0" data-tip="Terms recognition gets wrong, put right after it hears them. Character, session and project names are known already. A list is on for the languages you speak until you turn it on or off.">i</span><span class="help">Terms put right after recognition</span></div>
             <div class="wls" id="wordLists"></div>
             <div class="pair">
               <button class="btn" id="wlImport" type="button">Import a list…</button>
@@ -682,7 +688,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             </div>
           </div>
           <div class="more row col">
-            <div class="lab">Your words<span class="help">The word as it should be written, and what recognition writes instead, separated by commas. Leave that empty to match by sound: Rebecca becomes Rebekka.</span></div>
+            <div class="lab">Your words<span class="tip" tabindex="0" data-tip="The word as it should be written, and what recognition writes instead, separated by commas. Leave that empty to match by sound: Rebecca becomes Rebekka.">i</span><span class="help">The word, then what recognition writes instead</span></div>
             <div class="wrows" id="myWords"></div>
             <div class="pair">
               <button class="btn" id="wordAdd" type="button">Add a word</button>
@@ -708,11 +714,11 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="seg" id="popupLinger" role="group" aria-label="Stays after"><button type="button" data-v="4">4 s</button><button type="button" data-v="8">8 s</button><button type="button" data-v="12">12 s</button></div>
           </div>
           <div class="more row">
-            <label class="lab" for="cornerDictate">Corner ring while you dictate<span class="help">The outer ring moves with your voice, then shows what happened to the message</span></label>
+            <label class="lab" for="cornerDictate">Corner ring while you dictate<span class="tip" tabindex="0" data-tip="The outer ring moves with your voice, then shows what happened to the message.">i</span><span class="help">Moves with your voice</span></label>
             <label class="switch"><input type="checkbox" id="cornerDictate"><span></span></label>
           </div>
           <div class="more row">
-            <label class="lab" for="cornerSpeak">Corner ring while an agent speaks<span class="help">A smaller ring inside moves with its voice, in its character's colour, when no popup or settings window shows who speaks</span></label>
+            <label class="lab" for="cornerSpeak">Corner ring while an agent speaks<span class="tip" tabindex="0" data-tip="A smaller ring inside moves with the agent&#x27;s voice, in its character&#x27;s colour, when no popup or settings window shows who speaks.">i</span><span class="help">In its character's colour</span></label>
             <label class="switch"><input type="checkbox" id="cornerSpeak"><span></span></label>
           </div>
           <div class="more row" id="lookRow">
@@ -724,7 +730,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <div class="seg" id="overlayScale" role="group" aria-label="Size"><button type="button" data-v="1">100%</button><button type="button" data-v="1.5">150%</button><button type="button" data-v="2">200%</button></div>
           </div>
           <div class="more row">
-            <div class="lab">Words appear<span class="help">In the reading window: one by one as they are said, or the whole message at once with the word being said marked</span></div>
+            <div class="lab">Words appear<span class="tip" tabindex="0" data-tip="One by one as they are said, or the whole message at once with the word being said marked.">i</span><span class="help">In the reading window</span></div>
             <div class="seg" id="readerAppear" role="group" aria-label="Words appear"><button type="button" data-v="words">As said</button><button type="button" data-v="block">At once</button></div>
           </div>
           <div class="more row col" id="themeRow">
@@ -732,7 +738,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <select id="readerTheme"></select>
           </div>
           <div class="more row col">
-            <label class="lab" for="readerStoryTheme">Story theme<span class="help">When the reading window shows one session that tells a story; same as above when not set</span></label>
+            <label class="lab" for="readerStoryTheme">Story theme<span class="tip" tabindex="0" data-tip="The reading window&#x27;s theme when it shows one session that tells a story; the theme above when not set.">i</span><span class="help">For a session telling a story</span></label>
             <select id="readerStoryTheme"></select>
           </div>
         </div></div>
@@ -755,7 +761,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <button class="key" id="dictateKey" type="button" title="Click, then press the keys. Esc cancels, Backspace turns it off."></button>
           </div>
           <div class="row">
-            <div class="lab">Reading window key<span class="help">Shows a large window with the transcript to read and scroll back, and hides it again. It opens only with this key</span></div>
+            <div class="lab">Reading window key<span class="tip" tabindex="0" data-tip="Shows a large window with the transcript to read and scroll back, and hides it again. It opens only with this key.">i</span><span class="help">Shows and hides the reading window</span></div>
             <button class="key" id="readerKey" type="button"></button>
           </div>
         </div></div>
@@ -773,26 +779,26 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <select id="mic"></select>
           </div>
           <div class="more row col">
-            <span class="lab" id="langsLab">Languages you speak<span class="help">Speech recognition keeps to these, so a short sentence is not taken for another language, and Integrations and Voice clone say which voices speak them. None: any.</span></span>
+            <span class="lab" id="langsLab">Languages you speak<span class="tip" tabindex="0" data-tip="Speech recognition keeps to these, so a short sentence is not taken for another language. Integrations and Voice clone say which voices speak them. None: any language.">i</span><span class="help">Recognition keeps to these</span></span>
             <div class="seg langs" id="langs" role="group" aria-labelledby="langsLab"></div>
           </div>
           <div class="more row">
-            <label class="lab" for="lang">Speaking language<span class="help">When the agent does not say which</span></label>
+            <label class="lab" for="lang">Speaking language<span class="tip" tabindex="0" data-tip="The language agents speak aloud and are announced in, and are told to speak. A character&#x27;s Speaks (Characters window) overrides it. Detect from text: each line in the language it is written in. Voices in languages other than English sound noticeably worse.">i</span><span class="help">Characters can choose their own</span></label>
             <select id="lang"></select>
           </div>
           <div class="more row col" id="langNoteRow" hidden>
             <p class="langnote" id="langNote"></p>
           </div>
           <div class="more row">
-            <label class="lab" for="unload">Free idle models after<span class="help">GPU voices too: their server stops and frees the graphics card; the next sentence loads it again</span></label>
+            <label class="lab" for="unload">Free idle models after<span class="tip" tabindex="0" data-tip="Models not used for this long are freed. GPU voices too: their server stops and frees the graphics card; the next sentence loads it again.">i</span><span class="help">GPU voices too</span></label>
             <select id="unload"><option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="1h">1 hour</option><option value="0">Never</option></select>
           </div>
           <div class="more row">
-            <label class="lab" for="preload">Load the characters' voices at start<span class="help">Their models load when voice starts, so even the first sentence is not late</span></label>
+            <label class="lab" for="preload">Load the characters' voices at start<span class="tip" tabindex="0" data-tip="Their models load when voice starts, so even the first sentence is not late. Takes memory, and GPU memory for GPU voices.">i</span><span class="help">So the first sentence is not late</span></label>
             <label class="switch"><input type="checkbox" id="preload"><span></span></label>
           </div>
           <div class="more row">
-            <label class="lab" for="gpuBudget">Graphics memory for voices<span class="help">How much the GPU voices may take at once; past it, the one used least recently is freed first</span></label>
+            <label class="lab" for="gpuBudget">Graphics memory for voices<span class="tip" tabindex="0" data-tip="How much the GPU voices may take of the graphics card at once; past it, the one used least recently is freed first.">i</span><span class="help">What GPU voices may take at once</span></label>
             <select id="gpuBudget"><option value="off">No limit</option><option value="one">One voice at a time</option></select>
           </div>
           <div class="more gpuview" id="gpuView" aria-live="polite"></div>
@@ -1627,10 +1633,10 @@ if (fullMode) {
         const lab = row.querySelector('.lab');
         if (!lab) continue;
         const copy = lab.cloneNode(true);
-        copy.querySelectorAll('.help').forEach(h => h.remove());
+        copy.querySelectorAll('.help, .tip').forEach(h => h.remove());
         const name = copy.textContent.trim();
         if (!name) continue;
-        const help = [...lab.querySelectorAll('.help')].map(h => h.textContent).join(' ');
+        const help = [...lab.querySelectorAll('.help')].map(h => h.textContent).concat([...lab.querySelectorAll('.tip')].map(t => t.dataset.tip)).join(' ');
         index.push({ section: s, row, name, hay: plain(name + ' ' + help + ' ' + s.title) });
       }
     } else {
@@ -1902,6 +1908,25 @@ function wireClone() {
   on('cloneEngine', 'change', cloneEngineHint);
   seg('cloneSecs', '12');
 }
+
+// [i]: its data-tip in a box under it (above, near the bottom), kept inside the window.
+const tipbox = document.createElement('div'); tipbox.id = 'tipbox'; tipbox.hidden = true; tipbox.setAttribute('role', 'tooltip'); document.body.append(tipbox);
+let tipFor = null;
+function showTip(t) {
+  tipFor = t;
+  tipbox.textContent = t.dataset.tip || ''; tipbox.hidden = !tipbox.textContent;
+  const r = t.getBoundingClientRect(), w = tipbox.offsetWidth, h = tipbox.offsetHeight;
+  tipbox.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - 12)) + 'px';
+  tipbox.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+}
+document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('.tip'); if (t) showTip(t); });
+document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.tip')) tipbox.hidden = true; });
+document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('tip')) showTip(e.target); });
+document.addEventListener('focusout', () => { tipbox.hidden = true; });
+// Scrolling carries the box along with its [i].
+document.addEventListener('scroll', () => { if (!tipbox.hidden && tipFor) showTip(tipFor); }, true);
+// A click on [i] inside a label shows it, without flipping the switch it labels.
+document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); e.stopPropagation(); showTip(e.target); } }, true);
 
 // ── Settings ──────────────────────────────────────────────────
 function render(s) {
@@ -2204,15 +2229,16 @@ function langSituation(s) {
   if (lang === 'en') {
     if (!other.length) return null;
     const names = andList(other.map(langName)), or = other.length > 1 ? 'one of them' : langName(other[0]);
-    return { kind: 'summaries', text: 'Voices speak English. When an agent answers in ' + names + ', a finished turn is announced with a short English phrase ("All done…"), not in its own words. To hear its words, set Speaking language to ' + or + ' or Detect from text: voices in other languages sound noticeably worse than the English ones.' };
+    return { kind: 'summaries', short: 'English voice: replies in ' + names + ' get a short phrase', text: 'Voices speak English. When an agent answers in ' + names + ', a finished turn is announced with a short English phrase ("All done…"), not in its own words. To hear its words, set Speaking language to ' + or + ' or Detect from text: voices in other languages sound noticeably worse than the English ones.' };
   }
   const what = lang === 'auto' ? 'Replies not in English are' : 'Replies are';
-  return { kind: 'quality', text: what + ' spoken by voices that sound noticeably worse than the English ones, and a voice with none for the language reads it as English. GPU voices such as Chatterbox speak more languages better: see Integrations.' };
+  return { kind: 'quality', short: 'Other languages than English sound noticeably worse', text: what + ' spoken by voices that sound noticeably worse than the English ones, and a voice with none for the language reads it as English. GPU voices such as Chatterbox speak more languages better: see Integrations.' };
 }
 function langWarning() {
   const w = langSituation(state);
   $('langNoteRow').hidden = !w;
-  $('langNote').textContent = w ? w.text : '';
+  $('langNote').textContent = w ? w.short : '';
+  if (w) { const t = document.createElement('span'); t.className = 'tip'; t.tabIndex = 0; t.dataset.tip = w.text; t.textContent = 'i'; $('langNote').append(t); }
   $('langWarn').hidden = !w || state.language_notice === w.kind;
   $('langWarnText').textContent = w ? w.text : '';
   $('langAck').checked = false;

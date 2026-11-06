@@ -945,7 +945,9 @@ $('gGuide').addEventListener('change', () => { if ($('gGuide').value !== 'other'
 $('gGuideN').addEventListener('change', saveHold);
 // [i]: its data-tip in a box under it, kept inside the window.
 const tipbox = document.createElement('div'); tipbox.id = 'tipbox'; tipbox.hidden = true; tipbox.setAttribute('role', 'tooltip'); document.body.append(tipbox);
+let tipFor = null;
 function showTip(t) {
+  tipFor = t;
   tipbox.textContent = t.dataset.tip || ''; tipbox.hidden = !tipbox.textContent;
   const r = t.getBoundingClientRect(), w = tipbox.offsetWidth, h = tipbox.offsetHeight;
   tipbox.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - 12)) + 'px';
@@ -955,6 +957,8 @@ document.addEventListener('mouseover', e => { const t = e.target.closest && e.ta
 document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.tip')) tipbox.hidden = true; });
 document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('tip')) showTip(e.target); });
 document.addEventListener('focusout', () => { tipbox.hidden = true; });
+// Scrolling carries the box along with its [i].
+document.addEventListener('scroll', () => { if (!tipbox.hidden && tipFor) showTip(tipFor); }, true);
 // A click on [i] inside a label shows it, without opening the list.
 document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); showTip(e.target); } });
 // The language a character speaks: like the others (the general speaking
