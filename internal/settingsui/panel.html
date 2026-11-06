@@ -936,7 +936,17 @@ const YOU = 'var(--you)', PLAIN = 'var(--plain)';
 const chars = () => (state && state.characters) || [];
 const charOf = name => name ? chars().find(c => (c.name || '').toLowerCase() === String(name).toLowerCase()) : null;
 const colourOfChar = c => c.color || PALETTE[Math.max(0, chars().indexOf(c)) % PALETTE.length];
-const colourOf = name => { const c = charOf(name); return c ? colourOfChar(c) : PLAIN; };
+// What a session's name looks like: its character, or, for a name no character has (one removed while
+// the session ran, or a name given by hand), a face of its own: the shape of a voice seeded by the name,
+// in a light the name picks, so it never shows as a bare dot and stays the same for that name.
+const faceOf = name => {
+  if (!name) return null;
+  const c = charOf(name);
+  if (c) return c;
+  const h = [...String(name).toLowerCase()].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  return { name: String(name), color: PALETTE[h % PALETTE.length], unknown: true };
+};
+const colourOf = name => { const c = faceOf(name); return c ? colourOfChar(c) : PLAIN; };
 const personasOn = () => !!(state && state.serve && state.serve.personas);
 const sessionAt = pid => sessions.findIndex(s => s.pid === pid);
 const sessionOf = pid => sessions.find(s => s.pid === pid);
@@ -1015,9 +1025,9 @@ function thumb(c, w, h) {
   paintFace(t, c);
   return t;
 }
-// The small mark of a name: the face if it is a character, else the dot of its light (yours is pale).
+// The small mark of a name: its face (a character's, or the one its name gives), else, for you, your pale dot.
 function mark(name, size, you) {
-  const c = !you && charOf(name);
+  const c = !you && faceOf(name);
   if (c) return thumb(c, size, size);
   const d = document.createElement('i'); d.className = 'dot';
   d.style.setProperty('--c', you ? YOU : PLAIN);
@@ -1148,12 +1158,12 @@ function flare() { if (!still.matches && indexOfKey(L.owner) >= 0) win.animate([
 // character at all is the light alone.
 let portraitKey, portraitSig, portraitIdx = -1;
 function showPortrait(key, name) {
-  const c = key && key !== 'voice' ? charOf(name) : null;
+  const c = key && key !== 'voice' && key !== 'you' ? faceOf(name) : null;
   const sig = key + '|' + (c ? c.name + '|' + (c.image || '') + '|' + colourOfChar(c) : '');
   if (portraitSig === sig) return;
   const box = $('portrait'), idx = indexOfKey(key);
   const p = document.createElement('div'); p.className = 'p' + (c ? '' : ' none');
-  p.title = !key ? '' : c ? c.name : key === 'voice' ? 'The default voice, no character' : (name || 'This session') + ' plays no character';
+  p.title = !key ? '' : c ? c.name + (c.unknown ? ', no character' : '') : key === 'voice' ? 'The default voice, no character' : (name || 'This session') + ' plays no character';
   const pool = document.createElement('div'); pool.className = 'pool'; p.append(pool);
   if (c) { const pic = document.createElement('div'); pic.className = 'pic'; const img = document.createElement('i'); img.className = 'img'; paintFace(img, c, true); pic.append(img); p.append(pic); }
   const dir = portraitSig === undefined || idx < 0 || portraitIdx < 0 ? 0 : Math.sign(idx - portraitIdx);
@@ -1383,7 +1393,7 @@ function makeTile(pid) {
   return tile;
 }
 function updateTile(tile, a, gi, one) {
-  const c = charOf(a.name), colour = colourOf(a.name), key = 'pid:' + a.pid;
+  const c = faceOf(a.name), colour = colourOf(a.name), key = 'pid:' + a.pid;
   const live = a.pid === livePid(), floor = live || key === L.owner || key === L.toward && L.owner === 'you';
   // The room for words: a full tile less its padding, or beside the face for a lone tile.
   const avail = one ? gi.w - 12 - (personasOn() ? ONE_W + 10 : 0) : gi.w - 20;
@@ -1401,7 +1411,7 @@ function updateTile(tile, a, gi, one) {
   tile.title = a.name + ', ' + where + ', ' + full + '. Right-click to change the character';
   const face = tile.querySelector('.face');
   face.classList.toggle('none', !c);
-  face.setAttribute('aria-label', (gi.small ? a.name + ', ' + where + ', ' + full + '. ' : '') + (c ? a.name + (c.image ? "'s picture" : '') : a.name + ' plays no character') + ': change character');
+  face.setAttribute('aria-label', (gi.small ? a.name + ', ' + where + ', ' + full + '. ' : '') + (c && !c.unknown ? a.name + (c.image ? "'s picture" : '') : a.name + ' plays no character') + ': change character');
   face.title = '';
   const pk = c ? c.name + '|' + (c.image || '') + '|' + colour : '';
   if (face.dataset.pic !== pk) {
