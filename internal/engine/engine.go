@@ -48,6 +48,9 @@ type Batcher interface {
 // and waits until it is ready.
 type Warmer interface {
 	Warm(ctx context.Context) error
+	// Touch tells a running server it was just used, so it does not unload
+	// for being idle; false when it does not run (nothing is started).
+	Touch(ctx context.Context) bool
 }
 
 // ErrNoCloning is returned by engines that cannot use a reference clip.

@@ -108,6 +108,7 @@ var (
 			},
 			"preset":    map[string]any{"type": "string", "description": "Preset name for set_preset, from list_presets."},
 			"name":      map[string]any{"type": "string", "description": "register: a name the user calls this session by when dictating (one word, e.g. one the user asked for). Omit to keep the one voice gave you."},
+			"keep_warm": map[string]any{"type": "boolean", "description": "register: keep this session's voice loaded while it runs, so a GPU voice never starts cold (it holds graphics memory meanwhile). Only when the user asks for it, e.g. for a role-play spoken throughout."},
 			"character": map[string]any{"type": "string", "description": "set_character: the character's name, from list_characters (name works too)."},
 			"session":   map[string]any{"type": "string", "description": "transcript: only lines of this session, by its name or character (\"Rebekka\"), or \"me\" for this session; omit for every session."},
 			"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "default": 20, "description": "transcript: how many of the newest lines."},

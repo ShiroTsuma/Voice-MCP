@@ -7,6 +7,8 @@ GET  /health      {"backend", "ready", "clones", "options"}
 GET  /voices      [{"name", "lang", "gender"}]
 POST /shutdown    exits, so voice can start it with other options (a model size)
 POST /idle        {"seconds"}: exit after this long without synthesis (0: stay)
+POST /touch       counts as a request, so the idle time starts again (a session
+                  asked voice to keep its voice loaded); synthesizes nothing
 POST /synthesize_batch  as /synthesize with "texts" (a list) instead of "text" ->
                   {"audio": [base64 WAV, ...]}: one voice, several sentences
                   generated together (backends with synthesize_batch: qwen3)
@@ -123,6 +125,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(400, {"error": f"bad idle: {e}"})
                 return
             print(f"voice_sidecar idle time now {Handler.idle:.0f} s", file=sys.stderr, flush=True)
+            self.reply(200, {"idle": Handler.idle})
+            return
+        if self.path == "/touch":  # last_request was set above
             self.reply(200, {"idle": Handler.idle})
             return
         if self.path == "/shutdown":

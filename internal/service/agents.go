@@ -104,6 +104,37 @@ type agentSeen struct {
 	// interrupted: the user started dictating over its speech; the next
 	// Session API poll says so and clears it. Not saved: a restart ends it.
 	interrupted bool
+	// keepWarm: register asked voice to keep this session's GPU voice
+	// loaded while it lives. Not saved: the session registers again.
+	keepWarm bool
+}
+
+// SetKeepWarm records whether pid wants its voice kept loaded.
+func (a *Agents) SetKeepWarm(pid uint32, on bool) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	if st := a.seen[pid]; st != nil {
+		st.keepWarm = on
+	}
+	a.mu.Unlock()
+}
+
+// KeepWarm lists the sessions that want their voice kept loaded.
+func (a *Agents) KeepWarm() []uint32 {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var out []uint32
+	for pid, st := range a.seen {
+		if st.keepWarm {
+			out = append(out, pid)
+		}
+	}
+	return out
 }
 
 // Names given to sessions, short and far apart for a speech recognizer, in

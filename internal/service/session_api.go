@@ -26,7 +26,9 @@ type SessionArgs struct {
 	Client  string `json:"client,omitempty"`  // register: the agent program's name
 	Project string `json:"project,omitempty"` // register: working directory name, for "my-project: ..."
 	Name    string `json:"name,omitempty"`    // register: what the user calls it; empty takes a character
-	State   string `json:"state,omitempty"`   // poll: idle (waiting for the user) or busy (working)
+	// register: keep this session's GPU voice loaded while it runs (ControlArgs.KeepWarm)
+	KeepWarm bool   `json:"keep_warm,omitempty"`
+	State    string `json:"state,omitempty"` // poll: idle (waiting for the user) or busy (working)
 	// poll: seconds to hold the call while there is nothing to report, for the
 	// first message, interruption or note (at most pollWaitMax); 0 answers now.
 	Wait   float64 `json:"wait,omitempty"`
@@ -75,6 +77,9 @@ type SessionResult struct {
 	// Speech says how much of each reply to say aloud, when the user wants
 	// more than a sentence or two: at register, and once after it changed.
 	Speech string `json:"speech,omitempty"`
+	// Warm answers register's keep_warm: which voice voice keeps loaded, or
+	// why there is nothing to keep on this PC.
+	Warm string `json:"warm,omitempty"`
 }
 
 // othersThan lists the names of the sessions other than pid.
@@ -139,7 +144,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 			name = ag.SetName(a.PID, a.Name)
 		}
 		persona, _ := s.takePersona(a.PID, true)
-		return SessionResult{Name: name, Persona: persona, Messages: []string{}, Others: ag.othersThan(a.PID), Speech: s.takeAloudNote(a.PID, true)}, nil
+		return SessionResult{Name: name, Persona: persona, Messages: []string{}, Others: ag.othersThan(a.PID), Speech: s.takeAloudNote(a.PID, true), Warm: s.setKeepWarm(a.PID, a.KeepWarm)}, nil
 	}
 
 	ag.mu.Lock()

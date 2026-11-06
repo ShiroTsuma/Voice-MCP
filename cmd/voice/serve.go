@@ -204,6 +204,7 @@ func runServe(args []string) error {
 	}
 
 	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents, ListenView: ctl.agentListening}
+	go svc.KeepWarmLoop(ctx) // voices of sessions registered with keep_warm
 	// A renamed cloned voice: the characters and voices that named it follow.
 	svc.RenamePreset = func(old, name string) error {
 		changed := false

@@ -33,8 +33,9 @@ A session is one conversation of your agent, named by an id you choose (`"sessio
 | `client` | your program's name, shown in the settings window (default `agent`) |
 | `project` | its working folder's name: the user can dictate "notes: …" to reach it |
 | `name` | what the user calls it ("Mira, …"); without it the session takes the next free character |
+| `keep_warm` | `true` keeps the session's voice loaded while it runs, so its next line never waits for a GPU voice to load again (tens of seconds) after the idle time. Opt-in: a loaded GPU voice holds graphics memory the whole time. It can still be freed to make room for another GPU voice within the memory budget, and then loads again when the session speaks. Register again without it to stop. |
 
-Answer: `{"name": "Mira", "persona": "…", "messages": [], "others": ["Tobias", "Zofia"]}`. `others` are the other sessions' names, which `send` takes. `persona`, when present, is the character the user gave the session (with **Give sessions characters** on): put it in your system prompt. `speech`, when present, says how much of each reply to say aloud, because the user works by voice (**Says aloud** set to Most of it or Nearly all): put it in your system prompt too, and `say` far more than a sentence or two, a long reply in pieces with one `turn`. Without it, keep speech short.
+Answer: `{"name": "Mira", "persona": "…", "messages": [], "others": ["Tobias", "Zofia"]}`. `others` are the other sessions' names, which `send` takes. `persona`, when present, is the character the user gave the session (with **Give sessions characters** on): put it in your system prompt. `speech`, when present, says how much of each reply to say aloud, because the user works by voice (**Says aloud** set to Most of it or Nearly all): put it in your system prompt too, and `say` far more than a sentence or two, a long reply in pieces with one `turn`. Without it, keep speech short. `warm` answers `keep_warm`: the voice voice keeps loaded, or why there is nothing to keep (a voice on the CPU loads in moments, so it is not kept).
 
 Register again with the same `session` after voice restarts; it is harmless at any time.
 

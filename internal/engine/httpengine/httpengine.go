@@ -118,6 +118,24 @@ func SetIdle(seconds int) {
 // the first sentence is not late.
 func (e *Engine) Warm(ctx context.Context) error { return e.ensure(ctx) }
 
+// Touch restarts a running server's idle time, so a voice a session keeps
+// warm stays loaded. A server voice does not start (an external one) is not
+// its to keep, and one that is not running stays down.
+func (e *Engine) Touch(ctx context.Context) bool {
+	if len(e.start) == 0 || !e.healthy(ctx) {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, e.url+"/touch", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return true // a sidecar older than /touch answers 404, but any POST resets its idle time
+}
+
 // Loaded reports whether the engine's server runs with its model loaded.
 func (e *Engine) Loaded(ctx context.Context) bool { return e.healthy(ctx) }
 

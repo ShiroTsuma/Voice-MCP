@@ -790,6 +790,55 @@ func (s *Speaker) WarmVoices(presets []string) {
 	}
 }
 
+// KeepWarm keeps the voice of preset (empty: the active one) loaded: its
+// engine counts as just used, and a GPU voice's server starts its idle time
+// again. With load, a GPU voice that is not running starts in the background.
+// It returns the engine and whether it is a GPU voice (one with a server to
+// keep); a voice on the CPU loads again quickly and is left to the usual
+// idle unloading.
+func (s *Speaker) KeepWarm(preset string, load bool) (string, bool) {
+	s.mu.Lock()
+	if preset == "" {
+		preset = s.active
+	}
+	s.mu.Unlock()
+	p, err := s.cfg.Resolve(preset)
+	if err != nil {
+		return "", false
+	}
+	lang := strings.ToLower(s.cfg.DefaultLang)
+	if lang == "" || lang == "auto" {
+		lang = "en"
+	}
+	name := p.For(lang).Engines[0]
+	s.mu.Lock()
+	e := s.engines[name]
+	s.mu.Unlock()
+	if e == nil {
+		if !load {
+			return name, false // not made yet: nothing loaded to keep
+		}
+		if e, err = s.Engine(name); err != nil {
+			return name, false
+		}
+	}
+	w, ok := e.(engine.Warmer)
+	if !ok {
+		return name, false
+	}
+	s.mu.Lock()
+	s.used[name] = time.Now()
+	s.mu.Unlock()
+	if !w.Touch(context.Background()) && load {
+		go func() {
+			if err := w.Warm(context.Background()); err != nil && Logf != nil {
+				Logf("voices: %s did not load: %v", name, err)
+			}
+		}()
+	}
+	return name, true
+}
+
 // Engine returns a started engine, creating it on first use. Failed starts
 // are retried on the next call so a sidecar that comes up later is picked up.
 // Loading a model takes seconds, so it holds only that engine's lock, never

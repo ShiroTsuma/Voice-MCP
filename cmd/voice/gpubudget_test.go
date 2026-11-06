@@ -32,6 +32,7 @@ func (f *fakeGPU) Synthesize(context.Context, engine.Request, func(engine.Chunk)
 func (f *fakeGPU) Close() error                { return nil }
 func (f *fakeGPU) Warm(context.Context) error  { f.loaded = true; return nil }
 func (f *fakeGPU) Loaded(context.Context) bool { return f.loaded }
+func (f *fakeGPU) Touch(context.Context) bool  { return f.loaded }
 func (f *fakeGPU) Unload(context.Context)      { f.loaded = false; f.unloaded++ }
 
 // Before a GPU voice loads, the budget frees the one used least recently

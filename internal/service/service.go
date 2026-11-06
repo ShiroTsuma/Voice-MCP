@@ -79,6 +79,9 @@ type ControlArgs struct {
 	PID     uint32 `json:"pid,omitempty"`
 	Project string `json:"project,omitempty"`
 	Name    string `json:"name,omitempty"` // register: what the user calls this session
+	// KeepWarm: register asks voice to keep this session's GPU voice loaded
+	// while the session runs, so its first sentence is never a cold start.
+	KeepWarm bool `json:"keep_warm,omitempty"`
 	// Character: set_character's choice from list_characters.
 	Character string `json:"character,omitempty"`
 	// Session: transcript's filter, a session's or character's name, or "me".
@@ -511,7 +514,11 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		if persona, _ := s.takePersona(a.PID, true); persona != "" {
 			out += ". Your character: " + persona
 		}
-		return strings.TrimSpace(out + ". " + s.takeLangNote(a.PID, true) + " " + s.takeAloudNote(a.PID, true)), nil
+		out = strings.TrimSpace(out + ". " + s.takeLangNote(a.PID, true) + " " + s.takeAloudNote(a.PID, true))
+		if warm := s.setKeepWarm(a.PID, a.KeepWarm); warm != "" {
+			out += " " + warm
+		}
+		return out, nil
 	case "set_character":
 		// The agent takes another character from the list, e.g. when the user asks.
 		if a.PID == 0 {
