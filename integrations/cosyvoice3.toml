@@ -1,0 +1,9 @@
+id = "cosyvoice3"
+group = "gpu"
+order = 95
+title = "CosyVoice 3"
+about = "Light multilingual cloning that streams, first audio in about 0.15 s. 9 languages."
+size = "0.5B"
+link = "https://github.com/FunAudioLLM/CosyVoice"
+also = ["cloning"]
+uses = "planned"

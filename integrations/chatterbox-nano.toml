@@ -1,0 +1,9 @@
+id = "chatterbox-nano"
+group = "cloning"
+order = 90
+title = "Chatterbox Nano"
+about = "Chatterbox made small enough for the CPU: expressive English with laughs and coughs, and cloning, about 3 times faster than speech on 8 cores. MIT."
+size = "110M"
+link = "https://github.com/resemble-ai/chatterbox"
+languages = ["en"]
+uses = "planned"

@@ -1,0 +1,10 @@
+id = "chatterbox-multilingual"
+group = "gpu"
+order = 96
+title = "Chatterbox Multilingual V3"
+about = "The successor of Chatterbox from the same makers: expressive speech and cloning in 23+ languages. MIT."
+size = "0.5B"
+link = "https://github.com/resemble-ai/chatterbox"
+also = ["cloning"]
+languages = ["*"]
+uses = "planned"

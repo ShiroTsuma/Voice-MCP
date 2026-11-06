@@ -1,0 +1,10 @@
+id = "voxcpm2"
+group = "gpu"
+order = 90
+title = "VoxCPM2"
+about = "Cloning from a short clip (the transcript is optional), voices designed from a description, and style, emotion and pace set in plain words; streams. 30 languages, 48 kHz. Apache-2.0."
+size = "2B; about 8 GB of graphics memory"
+link = "https://huggingface.co/openbmb/VoxCPM2"
+also = ["cloning"]
+languages = ["*"]
+uses = "planned"

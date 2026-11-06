@@ -27,6 +27,7 @@ An integration either names a handler that does the work in voice's code:
 | `sidecar` | `backend = "chatterbox"` | a GPU backend: its state and an Install button (`voice sidecar setup`) |
 | `python` | | the Python voice brings for the GPU backends |
 | `builtin` | | always there, nothing to do |
+| `planned` | `link` | an engine voice may get later: listed as "Coming later", last in its group, with nothing to install; when it is built, its file changes to `sidecar` or `model` |
 
 or describes itself with a check and commands, without `uses`:
 

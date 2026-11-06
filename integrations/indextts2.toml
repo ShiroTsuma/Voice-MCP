@@ -1,0 +1,10 @@
+id = "indextts2"
+group = "gpu"
+order = 93
+title = "IndexTTS2"
+about = "The finest emotion control: from a reference clip, a set of emotion strengths or a description, with cloning from a clip. Chinese and English (2.5 adds Japanese, Spanish, Arabic). bilibili model license."
+size = "about 8 GB of graphics memory"
+link = "https://github.com/index-tts/index-tts"
+also = ["cloning"]
+languages = ["zh", "en", "ja", "es", "ar"]
+uses = "planned"

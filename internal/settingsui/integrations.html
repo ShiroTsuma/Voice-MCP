@@ -65,6 +65,8 @@
   .state.error { color: var(--err); } .state.error::before { background: var(--err); }
   .state.off::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
   .state.missing::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+  .state.planned::before { background: transparent; border: 1.5px dashed var(--ink-3); box-sizing: border-box; }
+  .it.planned h3 > span:first-child, .it.planned .about { color: var(--ink-2); }  /* not in voice yet */
   .about { margin: 3px 0 0; font: 13px/1.45 var(--ui-small); color: var(--ink-2); }
   .expr { margin: 3px 0 0; font: 12px/1.6 var(--ui-small); color: var(--ink-3, var(--ink-2)); }
   .expr .tok { font: 11.5px/1 ui-monospace, Consolas, monospace; color: var(--ink); background: var(--field); border-radius: 4px; padding: 1px 5px; }
@@ -274,9 +276,11 @@ function languagesLine(it) {
 }
 
 function count(g) {
-  const items = data.items.filter(i => inGroup(i, g.id));
+  // Engines still to come are listed, not counted as something to set up.
+  const all = data.items.filter(i => inGroup(i, g.id)), items = all.filter(i => i.status.state !== 'planned');
   const on = items.filter(i => i.status.state === 'on').length;
-  return items.length ? on + ' of ' + items.length + ' set up' : 'Nothing here yet';
+  const later = all.length - items.length;
+  return (items.length ? on + ' of ' + items.length + ' set up' : 'Nothing here yet') + (later ? ', ' + later + ' coming later' : '');
 }
 
 function renderGroups() {
@@ -293,7 +297,7 @@ function renderGroups() {
   }
 }
 
-const stateText = { on: 'Set up', off: 'Off', missing: 'Not installed', partly: 'Needs a step', error: 'Problem' };
+const stateText = { on: 'Set up', off: 'Off', missing: 'Not installed', partly: 'Needs a step', error: 'Problem', planned: 'Coming later' };
 
 function renderMain() {
   const main = $('main'), g = data.groups.find(x => x.id === group);
@@ -304,10 +308,12 @@ function renderMain() {
   const p = document.createElement('p'); p.textContent = g.about;
   main.append(h, p);
   // The group's own first, then those from other groups that show here too.
-  const items = data.items.filter(i => inGroup(i, group)).sort((a, b) => (a.group === group ? 0 : 1) - (b.group === group ? 0 : 1));
+  // Engines still to come last of all.
+  const later = i => i.status.state === 'planned' ? 2 : 0;
+  const items = data.items.filter(i => inGroup(i, group)).sort((a, b) => (later(a) + (a.group === group ? 0 : 1)) - (later(b) + (b.group === group ? 0 : 1)));
   if (!items.length) { const e = document.createElement('p'); e.className = 'empty'; e.textContent = 'Nothing in this group.'; main.append(e); }
   for (const it of items) {
-    const row = document.createElement('div'); row.className = 'it';
+    const row = document.createElement('div'); row.className = 'it' + (it.status.state === 'planned' ? ' planned' : '');
     const left = document.createElement('div');
     const h3 = document.createElement('h3');
     const name = document.createElement('span'); name.textContent = it.title;

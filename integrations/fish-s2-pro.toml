@@ -1,0 +1,10 @@
+id = "fish-s2-pro"
+group = "gpu"
+order = 91
+title = "Fish Audio S2-Pro"
+about = "The most expressive here: free-form tags in the text such as [laughing], [whisper] or [angry], and cloning from a clip; streams. About 80 languages. Research license, non-commercial use."
+size = "about 5B"
+link = "https://github.com/fishaudio/fish-speech"
+also = ["cloning"]
+languages = ["*"]
+uses = "planned"

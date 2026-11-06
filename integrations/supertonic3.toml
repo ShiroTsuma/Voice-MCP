@@ -1,0 +1,9 @@
+id = "supertonic3"
+group = "speech"
+order = 90
+title = "Supertonic 3"
+about = "A fast voice on the CPU in 31 languages, with 10 voices and the language chosen per sentence; for PCs without a graphics card. MIT code, OpenRAIL-M weights."
+size = "99M"
+link = "https://k2-fsa.github.io/sherpa/onnx/tts/all/Polish/supertonic-3-pl.html"
+languages = ["*"]
+uses = "planned"

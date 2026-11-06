@@ -1,0 +1,9 @@
+id = "voxtral-tts"
+group = "gpu"
+order = 94
+title = "Voxtral TTS"
+about = "Mistral's speech model: close cloning from about 3 seconds of a voice. 9 languages. CC BY-NC 4.0, non-commercial use."
+size = "4B"
+link = "https://huggingface.co/mistralai/Voxtral-4B-TTS-2603"
+also = ["cloning"]
+uses = "planned"

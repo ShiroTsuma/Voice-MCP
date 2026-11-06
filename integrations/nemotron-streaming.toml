@@ -1,0 +1,9 @@
+id = "nemotron-streaming"
+group = "listening"
+order = 90
+title = "Nemotron Streaming"
+about = "Recognition that streams: your words appear as you speak, with Parakeet still writing the final text. 40 languages, on the CPU. OpenMDW license."
+size = "about 650 MB"
+link = "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
+languages = ["*"]
+uses = "planned"

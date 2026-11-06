@@ -24,6 +24,7 @@ const (
 	Missing State = "missing" // not installed; an action adds it
 	Partly  State = "partly"  // some of it is set up, or it needs a step by the user
 	Error   State = "error"   // it should work and does not
+	Planned State = "planned" // not in voice yet: listed so it can be seen, nothing to install
 )
 
 // Action is something the user can do with an integration.

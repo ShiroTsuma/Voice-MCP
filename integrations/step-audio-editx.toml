@@ -1,0 +1,10 @@
+id = "step-audio-editx"
+group = "gpu"
+order = 97
+title = "Step-Audio-EditX"
+about = "Speech that can be edited after it is made: emotion, style and sounds such as laughs, breaths and sighs, step by step; with cloning. Chinese and English. Apache-2.0 code."
+size = "about 3B; 12-16 GB of graphics memory"
+link = "https://github.com/elvisxu/step-audio-editx"
+also = ["cloning"]
+languages = ["zh", "en"]
+uses = "planned"

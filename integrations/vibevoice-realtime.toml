@@ -1,0 +1,9 @@
+id = "vibevoice-realtime"
+group = "gpu"
+order = 98
+title = "VibeVoice Realtime"
+about = "Microsoft's small streaming voice, first audio in about 0.3 s, with preset voices; mainly English. MIT."
+size = "0.5B"
+link = "https://github.com/microsoft/VibeVoice"
+languages = ["en"]
+uses = "planned"

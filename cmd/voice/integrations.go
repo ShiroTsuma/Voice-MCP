@@ -49,7 +49,7 @@ type integrationFile struct {
 	Link  string `toml:"link"`
 	Order int    `toml:"order"` // within its group, lower first
 
-	Uses     string   `toml:"uses"`     // a handler: claude-hooks, claude-mod, codex, session-api, model, sidecar, python, builtin
+	Uses     string   `toml:"uses"`     // a handler: claude-hooks, claude-mod, codex, session-api, model, sidecar, python, builtin, planned
 	Requires []string `toml:"requires"` // integrations installed first (their ids)
 	Model    string   `toml:"model"`    // uses = "model": the name in `voice models`
 	Backend  string   `toml:"backend"`  // uses = "sidecar": a name in sidecar/backends.json
@@ -158,6 +158,11 @@ func makeIntegration(f integrationFile, handlers map[string]handler) integration
 		it.About = f.path
 		it.Status = func() integrations.Status {
 			return integrations.Status{State: integrations.Error, Detail: "Cannot read the file: " + msg}
+		}
+	case f.Uses == "planned":
+		// An engine voice may get: shown, with nothing to install or run yet.
+		it.Status = func() integrations.Status {
+			return integrations.Status{State: integrations.Planned, Detail: "Not in voice yet; it may come in a later version"}
 		}
 	case f.Uses != "" && !ok:
 		it.Status = func() integrations.Status {

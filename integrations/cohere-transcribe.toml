@@ -1,0 +1,8 @@
+id = "cohere-transcribe"
+group = "listening"
+order = 91
+title = "Cohere Transcribe"
+about = "Among the most accurate English recognition models, 14 languages; large, so slow on the CPU. Apache-2.0 (gated download)."
+size = "2B"
+link = "https://huggingface.co/CohereLabs/cohere-transcribe-03-2026"
+uses = "planned"

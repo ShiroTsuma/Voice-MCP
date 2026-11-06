@@ -58,6 +58,11 @@ command = ["cmd", "/c", "echo installed"]
 	if st := makeIntegration(readIntegrationFile(write("sapi.toml", `uses = "builtin"`)), handlers).Status(); st.State != integrations.On {
 		t.Fatalf("handler: %+v", st)
 	}
+	// An engine still to come: listed, with nothing to install or run.
+	planned := makeIntegration(readIntegrationFile(write("later.toml", `uses = "planned"`)), handlers)
+	if st := planned.Status(); st.State != integrations.Planned || len(st.Actions) != 0 || planned.Do != nil {
+		t.Fatalf("planned: %+v", st)
+	}
 	if st := makeIntegration(readIntegrationFile(write("odd.toml", `uses = "teleport"`)), handlers).Status(); st.State != integrations.Error {
 		t.Fatalf("unknown handler: %+v", st)
 	}
@@ -77,7 +82,7 @@ func TestShippedIntegrationFilesParse(t *testing.T) {
 		if f.Uses == "broken" {
 			t.Errorf("%s: %s", p, f.About)
 		}
-		if _, ok := known[f.Uses]; f.Uses != "" && !ok {
+		if _, ok := known[f.Uses]; f.Uses != "" && f.Uses != "planned" && !ok {
 			t.Errorf("%s: unknown uses %q", p, f.Uses)
 		}
 	}
