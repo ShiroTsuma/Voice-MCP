@@ -1,6 +1,11 @@
 package service
 
-import "strings"
+import (
+	"strings"
+
+	"voice/internal/core"
+	"voice/internal/hooks"
+)
 
 // The language a session's voice speaks: its character's when characters are
 // on and it names one, else the general one (default_lang). The agent is told
@@ -53,6 +58,21 @@ func (s *Service) speakLang(a SpeakArgs) string {
 		return s.sessionLang(a.PID)
 	}
 	return s.generalLang()
+}
+
+// readableIn reports whether a voice speaking lang can read text as it is:
+// a Polish question is not read by an English voice ("auto" reads either).
+func readableIn(text, lang string) bool {
+	return lang == "" || lang == "auto" || core.DetectLang(text) == lang
+}
+
+// questionText is what is said for a question the agent asks: the question
+// itself when the voice can read it, else the question phrase in its language.
+func (s *Service) questionText(question, lang string) string {
+	if question = strings.TrimSpace(question); question != "" && readableIn(question, lang) {
+		return question
+	}
+	return hooks.Phrase(s.Config.Hooks, hooks.Question, s.phraseLang(lang), "")
 }
 
 // phraseLang is the language of announcement phrases for lang: with "auto"

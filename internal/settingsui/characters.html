@@ -443,7 +443,7 @@ async function api(path, body) {
   const r = await fetch('/settings/api/' + path, body === undefined ? {} :
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || r.statusText);
+  if (!r.ok) throw Object.assign(new Error(data.error || r.statusText), { status: r.status, data });
   return data;
 }
 function status(text, kind) { const s = $('status'); s.textContent = text; s.className = kind || ''; s.title = text; }
@@ -799,8 +799,23 @@ async function move(from, to) {
   try { await store(chars, keep); status('Order saved', 'ok'); } catch (err) { status(err.message, 'warn'); }
 }
 
+// The list goes with the revision it was loaded at: when the characters were
+// changed elsewhere since (an agent, another window), the save is refused, the
+// window shows them as they are now, and the change has to be made again.
 async function store(chars, keep, presets) {
-  const r = await api('save', presets ? { characters: chars, presets } : { characters: chars });
+  const body = { characters: chars, characters_rev: state.characters_rev };
+  if (presets) body.presets = presets;
+  let r;
+  try { r = await api('save', body); }
+  catch (e) {
+    if (e.status === 409 && e.data && e.data.state) {
+      const shown = sel >= 0 ? ((state.characters || [])[sel] || {}).name : null;
+      state = e.data.state;
+      const at = (state.characters || []).findIndex(c => c.name === shown);
+      if (at >= 0) open(at); else { sel = -1; list(); $('form').hidden = true; $('empty').hidden = false; }
+    }
+    throw e;
+  }
   state = r.state;
   list();
   if (keep !== undefined) open(keep);

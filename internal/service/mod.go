@@ -60,7 +60,11 @@ func (s *Service) Mod(ctx context.Context, a ModArgs) (any, error) {
 	// The question is read aloud unless the agent has just spoken (it said it itself).
 	if a.Say != "" && s.voiceReplies() && s.Speaker != nil && core.SinceAsked(pid) > 30*time.Second {
 		ag.mu.Unlock()
-		s.Speak(ctx, SpeakArgs{Text: a.Say, Intent: core.IntentQuestion, PID: pid, Source: "hook"})
+		// A question in another language than the voice's is announced, not read.
+		lang := s.sessionLang(pid)
+		if text := s.questionText(a.Say, lang); text != "" {
+			s.Speak(ctx, SpeakArgs{Text: text, Intent: core.IntentQuestion, Lang: lang, PID: pid, Source: "hook"})
+		}
 		ag.mu.Lock()
 	}
 	if a.Character != "" {

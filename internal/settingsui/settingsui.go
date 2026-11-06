@@ -7,10 +7,13 @@ package settingsui
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -152,7 +155,24 @@ func Register(mux *http.ServeMux, d Deps) {
 		}
 		json.NewEncoder(w).Encode(v)
 	}
-	api("state", func(w http.ResponseWriter, r *http.Request) { reply(w, d.State(), nil) })
+	// state carries characters_rev, the stored characters' revision: a save of
+	// the characters sends it back, so a list changed elsewhere since (another
+	// window, an agent editing settings.toml) is not overwritten.
+	state := func() map[string]any {
+		st := d.State()
+		if st != nil {
+			if s, err := settings.Read(d.SettingsPath); err == nil {
+				// The window edits the stored list as it is on disk now, the
+				// one its revision names, even before the server reloads it.
+				if s.Characters != nil {
+					st["characters"] = *s.Characters
+				}
+				st["characters_rev"] = charactersRev(s.Characters)
+			}
+		}
+		return st
+	}
+	api("state", func(w http.ResponseWriter, r *http.Request) { reply(w, state(), nil) })
 	api("themes", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]any{"themes": themes(d.ThemesDir), "dir": d.ThemesDir}, nil)
 	})
@@ -212,18 +232,39 @@ func Register(mux *http.ServeMux, d Deps) {
 		reply(w, res, err)
 	})
 	api("save", func(w http.ResponseWriter, r *http.Request) {
-		var in settings.Settings
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			reply(w, nil, err)
-			return
-		}
-		err := settings.Update(d.SettingsPath, func(s *settings.Settings) { merge(s, in) })
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			reply(w, nil, err)
 			return
 		}
+		var in settings.Settings
+		var guard struct {
+			Rev *string `json:"characters_rev"`
+		}
+		if err := json.Unmarshal(body, &in); err != nil {
+			reply(w, nil, err)
+			return
+		}
+		json.Unmarshal(body, &guard)
+		stale := false
+		err = settings.Update(d.SettingsPath, func(s *settings.Settings) {
+			if in.Characters != nil && guard.Rev != nil && *guard.Rev != charactersRev(s.Characters) {
+				stale = true
+				return
+			}
+			merge(s, in)
+		})
+		if err != nil {
+			reply(w, nil, err)
+			return
+		}
+		if stale {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": "The characters were changed elsewhere since this window loaded them; they are reloaded now, so make your change again", "state": state()})
+			return
+		}
 		restart, err := d.Reload()
-		reply(w, map[string]any{"restart": restart, "state": d.State()}, err)
+		reply(w, map[string]any{"restart": restart, "state": state()}, err)
 	})
 	api("test", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -320,6 +361,17 @@ func Register(mux *http.ServeMux, d Deps) {
 		}
 		reply(w, d.State()["agents"], nil)
 	})
+}
+
+// charactersRev identifies a stored list of characters: it changes whenever
+// any character in it does.
+func charactersRev(chars *[]settings.Character) string {
+	if chars == nil {
+		return "none"
+	}
+	b, _ := json.Marshal(*chars)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8])
 }
 
 // merge copies the fields the page sent over the stored ones.

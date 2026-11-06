@@ -229,7 +229,7 @@ func (s *Service) sessionEvent(ctx context.Context, a SessionArgs, pid uint32, c
 	}
 	lang := s.sessionLang(pid)
 	text, cacheable := hooks.Compose(h, ev, lang, s.phraseLang(lang))
-	if ev.Kind == hooks.Input && strings.TrimSpace(a.Text) != "" {
+	if ev.Kind == hooks.Input && strings.TrimSpace(a.Text) != "" && readableIn(a.Text, lang) {
 		text, cacheable = strings.TrimSpace(a.Text), false // the question itself
 		if project != "" && (h.AnnounceProject == nil || *h.AnnounceProject) {
 			text = project + ". " + text
