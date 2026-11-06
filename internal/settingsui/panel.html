@@ -1226,8 +1226,9 @@ function align(shown, spoken) {
   }
   let next = m;
   for (let k = map.length - 1; k >= 0; k--) { if (map[k] >= 0) next = map[k]; else map[k] = -1 - next; }
-  return map.map(v => v >= 0 ? v : -1 - v);
+  return map; // >= 0: that spoken word; < 0: goes with spoken word -1-v
 }
+const spokenIndex = v => v >= 0 ? v : -1 - v;
 // What of a said line was heard: null when all of it was (or it still
 // plays), else { words: how many spoken words were heard, dim(i): whether
 // shown word i was never heard }. voice reports a line cut short; a stop
@@ -1240,7 +1241,7 @@ function heardOf(l) {
   let idx = shown.map((_, i) => i), spoken = l.text;
   if (l.spoken) {
     spoken = l.spoken;
-    idx = align(shown, tokens(spoken));
+    idx = align(shown, tokens(spoken)).map(spokenIndex);
   } else if (l.lines && l.lines.length) {
     // A speaker's name goes with the first word of the line it opens.
     idx = []; let n = 0; const said = [];
@@ -1279,16 +1280,22 @@ const speakerWhere = l => l.pid ? whereOf(l.client, l.project) : 'the default vo
 
 // The line being said fills in as it is heard: runes before done are said; the sentence [from, to) plays
 // from at for seconds, so its words light up in proportion to the time gone; after to, not yet.
-let shown = null, spans = [], toks = [], nowIdx = -1, fillRaf = 0, reached = 0, stopped = null, followTop = 0;
+// The line shows what the transcript shows (a display text with its narration, as the reading
+// window does); spokenToks are the words said, and map pairs each shown word with one (align).
+let shown = null, spans = [], toks = [], spokenToks = [], liveMap = [], nowIdx = -1, fillRaf = 0, reached = 0, stopped = null, followTop = 0;
 function fillTick() {
   fillRaf = 0;
-  if (!line || shown !== 'line:' + line.id) return;
+  if (!line || !String(shown).startsWith('line:' + line.id + ':')) return;
   const from = line.from | 0, to = Math.max(from, line.to | 0), dur = Math.max(.05, +line.seconds || 0) * 1000;
   const f = Math.max(0, Math.min(1, (Date.now() - ms(line.at)) / dur));
   const p = Math.max(from + f * (to - from), line.done | 0);
   let cur = -1;
-  toks.forEach((t, i) => { const said = t.s < p; spans[i].classList.toggle('later', !said); if (said) cur = i; });
-  const n = f < 1 && cur >= 0 && toks[cur].e > from ? cur : -1;
+  toks.forEach((t, i) => {
+    const m = liveMap[i], k = spokenIndex(m), said = k < spokenToks.length && spokenToks[k].s < p;
+    spans[i].classList.toggle('later', !said);
+    if (said && m >= 0) cur = i;
+  });
+  const n = f < 1 && cur >= 0 && spokenToks[liveMap[cur]].e > from ? cur : -1;
   if (n !== nowIdx) {
     if (nowIdx >= 0 && spans[nowIdx]) spans[nowIdx].classList.remove('now');
     if (n >= 0) { spans[n].classList.add('now'); flare(); }
@@ -1338,12 +1345,21 @@ function renderSaid() {
     return;
   }
   if (line) {
-    const key = 'line:' + line.id;
+    // Its transcript entry, when it has come: a display text shows more than is said.
+    let entry = null;
+    for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'said' && transcript[i].id === line.id) { entry = transcript[i]; break; }
+    const text = entry && entry.spoken ? entry.text : line.text;
+    // A turn's next piece makes the line longer while it plays: draw it again.
+    const key = 'line:' + line.id + ':' + text.length + ':' + line.text.length;
     if (shown !== key) {
-      shown = key; toks = tokens(line.text); nowIdx = -1; reached = 0; followTop = 0;
-      $('line').className = 'line live'; $('line').scrollTop = 0; $('line').title = '';
+      const scroll = String(shown).startsWith('line:' + line.id + ':') ? $('line').scrollTop : 0;
+      shown = key; toks = tokens(text); spokenToks = tokens(line.text); nowIdx = -1;
+      liveMap = text === line.text ? toks.map((_, i) => i) : align(toks, spokenToks);
+      if (!scroll) { reached = 0; followTop = 0; }
+      $('line').className = 'line live'; $('line').title = '';
       spans = words($('line'), toks);
       spans.forEach(s => s.classList.add('later'));
+      $('line').scrollTop = scroll;
     }
     saidCue(speakerName(line), 'is speaking', speakerWhere(line));
     showPortrait(pidKey(line.pid), nameNow(line));
