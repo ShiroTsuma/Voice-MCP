@@ -21,6 +21,7 @@ const breakawayFromJob = 0x01000000
 func detach(cmd *exec.Cmd) {
 	const detachedProcess, newGroup, noWindow = 0x00000008, 0x00000200, 0x08000000
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: detachedProcess | newGroup | noWindow | breakawayFromJob, HideWindow: true}
+	ownDir(cmd)
 }
 
 // StartDetached starts exe detached and lets it go. A job that does not

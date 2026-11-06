@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-func detach(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }
+func detach(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	ownDir(cmd)
+}
 
 func Detach(cmd *exec.Cmd) { detach(cmd) }
 
