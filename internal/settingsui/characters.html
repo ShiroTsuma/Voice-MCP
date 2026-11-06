@@ -73,8 +73,10 @@
   .opt { font: 12.5px var(--ui-small); color: var(--ink-3); margin-left: 4px; }
   .pair { display: flex; gap: 8px; align-items: center; }
   .pair input.num { width: 72px; flex: none; }
-  aside .hold { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 6px; align-items: center; padding: 4px 0 6px; }
-  aside .hold .lab { font-size: 13px; }
+  aside .hold { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 4px; padding: 4px 0 6px; }
+  aside .hold .lab + *, aside .hold .levelnote { margin-bottom: 6px; }
+  aside .hold .lab { font-size: 13px; white-space: nowrap; }
+  aside .hold select { width: 100%; }
   aside .hold.off { opacity: .45; pointer-events: none; }
   .levelnote { font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); margin: 0; }
   .lab { flex: 1; min-width: 0; font-size: 14px; }
@@ -263,10 +265,10 @@
     <div class="hold" id="hold">
       <label class="lab" for="gImm">Immersion<span class="tip" tabindex="0" id="gImmTip">i</span></label>
       <select id="gImm"></select>
+      <p class="levelnote" id="gNote"></p>
       <label class="lab" for="gGuide">Reminders<span class="tip" tabindex="0" data-tip="How often an agent is reminded of its character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change. A character can choose its own.">i</span></label>
       <div class="pair"><select id="gGuide"></select><input class="text num" type="number" id="gGuideN" min="1" max="100" hidden></div>
     </div>
-    <p class="levelnote" id="gNote"></p>
   </header>
   <div class="list" id="list"></div>
   <footer><button class="btn wide" id="add" type="button"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 1.5v9M1.5 6h9"/></svg>New character</button></footer>
@@ -863,9 +865,9 @@ const LEVELS = [
 ];
 // The [i] of an Immersion list: every level, the chosen one first.
 const levelsTip = own => LEVELS.map(l => l[1] + ': ' + l[2]).join('\n\n') + (own ? '' : '\n\nA character can choose its own.');
-const GUIDES = [[0, 'Only at the start'], [1, 'Every message'], [3, 'Every 3 messages'], [5, 'Every 5 messages'], [10, 'Every 10 messages']];
+const GUIDES = [[0, 'Only at the start'], [1, 'Every message you send'], [3, 'Every 3 of your messages'], [5, 'Every 5 of your messages'], [10, 'Every 10 of your messages']];
 const levelName = v => (LEVELS.find(l => l[0] === v) || LEVELS[1])[1];
-const guideName = v => (GUIDES.find(g => g[0] === v) || [v, 'Every ' + v + ' messages'])[1];
+const guideName = v => (GUIDES.find(g => g[0] === v) || [v, 'Every ' + v + ' of your messages'])[1];
 function fillLevel(sel, cur, perChar) {
   sel.textContent = '';
   const opts = (perChar ? [[0, 'Like the others (' + levelName(state.serve.character_immersion) + ')']] : []).concat(LEVELS.map(l => [l[0], l[1]]));
@@ -880,7 +882,7 @@ function levelNote(selId, noteId) {
 function fillGuide(selId, numId, cur, perChar) {
   const sel = $(selId), num = $(numId);
   sel.textContent = '';
-  const opts = (perChar ? [['', 'Like the others (' + guideName(state.serve.character_guidance) + ')']] : []).concat(GUIDES, [['other', 'Every N messages…']]);
+  const opts = (perChar ? [['', 'Like the others (' + guideName(state.serve.character_guidance) + ')']] : []).concat(GUIDES, [['other', 'Every N of your messages…']]);
   for (const [v, t] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); }
   const known = cur === undefined || cur === null ? '' : GUIDES.some(g => g[0] === cur) ? String(cur) : 'other';
   sel.value = known;
@@ -921,9 +923,9 @@ function guideCost() {
   const start = tokens(persona), each = tokens(reminder);
   $('guideCost').textContent = every === 0
     ? '≈ ' + start + ' tokens once, at the start'
-    : '≈ ' + Math.max(1, Math.round(each / every)) + ' tokens a message (' + start + ' at the start)';
+    : '≈ ' + Math.max(1, Math.round(each / every)) + ' tokens per message you send (' + start + ' at the start)';
   $('guideTip').dataset.tip = REM_TIP + '\n\nA reminder here is ' + (level >= 3 ? 'the whole description, ≈ ' + each + ' tokens, since the character steers fully' : 'one line with its name and traits, ≈ ' + each + ' tokens') +
-    (every === 0 ? '; with "Only at the start" none is sent.' : ', every ' + (every === 1 ? 'message' : every + ' messages') + '. The description at the start is ≈ ' + start + ' tokens.');
+    (every === 0 ? '; with "Only at the start" none is sent.' : ', every ' + (every === 1 ? 'message you send' : every + ' of your messages') + '. The description at the start is ≈ ' + start + ' tokens.');
 }
 for (const id of ['guide', 'guideN', 'desc', 'name']) $(id).addEventListener('input', guideCost);
 $('guide').addEventListener('change', guideCost);
