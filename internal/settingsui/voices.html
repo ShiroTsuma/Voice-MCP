@@ -429,7 +429,9 @@ function users() {
 }
 const engines = () => (state && state.options && state.options.clone_engines) || [];
 const engineLabel = n => (engines().find(e => e.name === n) || {}).label || n;
-const design = () => (state && state.options && state.options.voice_design) || { ready: false, needs: 'Qwen3-TTS' };
+const design = () => (state && state.options && state.options.voice_design) || { ready: false, runs: true, needs: 'Qwen3-TTS' };
+// Why Description is off here: a card it does not run on, or the model not installed yet.
+const designWhy = () => { const d = design(); return d.runs === false ? 'needs ' + d.card + ' (' + d.needs + ')' : 'needs ' + d.needs + ', in Integrations'; };
 
 // ── The list ────────────────────────────────────────────────
 function list() {
@@ -616,8 +618,12 @@ seg('mSecs', '12');
 function fillEngines() {
   const sel = $('mEngine'), keep = sel.value; sel.textContent = '';
   const list = engines();
-  for (const e of [...list.filter(x => x.ready), ...list.filter(x => !x.ready)]) {
-    const o = document.createElement('option'); o.value = e.name; o.textContent = e.label + (e.ready ? '' : ' — not installed'); o.disabled = !e.ready; sel.append(o);
+  // Installed first; then the ones that could be installed here; last, those this PC's card does not run.
+  const rank = e => e.ready ? 0 : e.runs === false ? 2 : 1;
+  for (const e of [...list].sort((a, b) => rank(a) - rank(b))) {
+    const o = document.createElement('option'); o.value = e.name; o.disabled = !e.ready;
+    o.textContent = e.label + (e.ready ? '' : e.runs === false ? ' — needs ' + e.needs : ' — not installed');
+    sel.append(o);
   }
   const ok = n => list.some(e => e.name === n && e.ready);
   sel.value = ok(keep) ? keep : (list.find(e => e.ready) || {}).name || '';
@@ -641,14 +647,14 @@ let lastFrom = '';
 function fromChanged(byUser) {
   const d = design(), btn = $('mFrom').querySelector('[data-v=design]');
   btn.disabled = !d.ready;
-  btn.title = d.ready ? '' : 'Needs ' + d.needs + ': install it in Integrations, GPU voices';
+  btn.title = d.ready ? '' : 'Designing from words ' + designWhy();
   if (!d.ready && segValue('mFrom') === 'design') seg('mFrom', 'record');
   const from = segValue('mFrom') || 'record';
   document.querySelectorAll('#make [data-for]').forEach(r => r.hidden = !r.dataset.for.split(' ').includes(from));
   $('mFromHelp').textContent = from === 'design' ? 'Made up from words; no recording, no one\'s voice'
     : from === 'record' ? 'Your own voice, from the microphone' : 'Someone\'s voice, from a recording'
     ;
-  if (!d.ready) $('mFromHelp').textContent += ' · from a description needs ' + d.needs;
+  if (!d.ready) $('mFromHelp').textContent += ' · from a description ' + designWhy();
   const lab = $('mDescLab');
   lab.innerHTML = from === 'design'
     ? 'The voice in words<span class="tip" tabindex="0" data-tip="Age, gender, timbre, pace, mood and accent, in English: &quot;a woman in her forties, smooth low alto, calm and dry, neutral American accent&quot;. Qwen3-TTS reads the sample once in that voice, and the engine below then speaks with it. It also becomes the voice&#39;s description.">i</span>'
@@ -715,7 +721,7 @@ $('make').addEventListener('submit', async e => {
   if (group) a.group = group;
   if (desc) a.description = desc;
   if (from === 'design') {
-    if (!design().ready) return fail('Designing a voice needs ' + design().needs + ': install it in Integrations');
+    if (!design().ready) return fail('Designing a voice ' + designWhy());
     if (!desc) return fail('Describe the voice in words first', 'mDesc');
     if ($('mSample').value.trim()) a.text = $('mSample').value.trim();
     working(true, 'Designing ' + name + '…');

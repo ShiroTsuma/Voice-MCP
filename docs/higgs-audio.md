@@ -48,7 +48,7 @@ The documented way to serve Higgs is for **NVIDIA** cards (CUDA). SGLang-Omni su
 
 - run the server on another machine with an NVIDIA card, or a rented GPU server (below), and point voice at it; or
 - try vLLM-Omni on native Linux with ROCm (not WSL) at your own risk;
-- or use voice's own GPU engines: its sidecar sets Chatterbox and Qwen3-TTS up with AMD's ROCm PyTorch for Windows on recent Radeon cards (the list is in `sidecar/profiles/amd-rocm-windows.json`); Chatterbox shows moods as intensity, neither makes sound tags.
+- or use voice's own GPU engines: its sidecar sets Chatterbox, Chatterbox Turbo and XTTS up with AMD's ROCm PyTorch for Windows on recent Radeon cards (the list is in `sidecar/profiles/amd-rocm-windows.json`); Chatterbox shows moods as intensity, and Chatterbox Turbo makes laughs, sighs and coughs. Qwen3-TTS, F5-TTS and OmniVoice need an NVIDIA card (`gpus` in `sidecar/backends.json`), so designing a voice from a description does too.
 
 ### Or a server elsewhere
 

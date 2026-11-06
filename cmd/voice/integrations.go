@@ -817,11 +817,17 @@ func cloneEngines() []map[string]any {
 		{"name": "pocket", "label": "Pocket", "note": "on the CPU; the default", "ready": model("pocket"), "languages": []string{"en"}},
 		{"name": "zipvoice", "label": "ZipVoice", "note": "on the CPU", "ready": model("zipvoice"), "transcript": true, "languages": []string{"en", "zh"}},
 	}
-	// The GPU backends, from sidecar/backends.json.
+	// The GPU backends, from sidecar/backends.json. One that does not run on
+	// this PC's graphics card (an NVIDIA-only one on AMD) says what it needs:
+	// it cannot be installed here, so the windows must not suggest it.
 	for _, b := range sidecar.Backends() {
 		if b.Clones && !b.Hidden {
-			out = append(out, map[string]any{"name": b.Name, "label": b.Label, "note": b.Note,
-				"ready": sidecarStatus(b.Name).State == integrations.On, "transcript": b.Transcript, "languages": b.Languages})
+			e := map[string]any{"name": b.Name, "label": b.Label, "note": b.Note,
+				"ready": sidecarStatus(b.Name).State == integrations.On, "transcript": b.Transcript, "languages": b.Languages, "runs": true}
+			if !b.RunsOn(gpuKinds()) {
+				e["runs"], e["needs"] = false, b.GPUNames()
+			}
+			out = append(out, e)
 		}
 	}
 	return out
@@ -830,9 +836,12 @@ func cloneEngines() []map[string]any {
 // voiceDesign says whether voices can be designed from a description: its
 // backend is installed, or the environment it runs in is (Qwen3-TTS installs
 // the design model's package with its own).
+// On a card it does not run on (Qwen3-TTS is NVIDIA-only) it is not offered at
+// all: "card" says which card it would need, and nothing points to installing it.
 func voiceDesign() map[string]any {
 	ready := sidecarStatus(service.DesignEngine).State == integrations.On
 	label := "Qwen3-TTS"
+	out := map[string]any{"runs": true}
 	if sb, ok := sidecar.Find(service.DesignEngine); ok {
 		if env := sb.EnvName(); env != service.DesignEngine {
 			if owner, ok := sidecar.Find(env); ok {
@@ -840,8 +849,12 @@ func voiceDesign() map[string]any {
 			}
 			ready = ready || sidecarStatus(env).State == integrations.On
 		}
+		if !sb.RunsOn(gpuKinds()) {
+			out["runs"], out["card"], ready = false, sb.GPUNames(), false
+		}
 	}
-	return map[string]any{"ready": ready, "needs": label}
+	out["ready"], out["needs"] = ready, label
+	return out
 }
 
 // Speech servers started from the Integrations window, while they load.

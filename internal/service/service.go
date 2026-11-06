@@ -825,7 +825,11 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		}
 		pcm, rate, err := s.design(ctx, desc, sample, lang)
 		if err != nil {
-			return nil, userErr("designing the voice failed: %v (it needs Qwen3-TTS installed, see Integrations, and a free graphics card)", err)
+			card := "a graphics card"
+			if b, ok := sidecar.Find(DesignEngine); ok {
+				card = b.GPUNames() // Qwen3-TTS runs on NVIDIA only: an AMD user is told so, not sent to install it
+			}
+			return nil, userErr("designing the voice failed: %v (it needs Qwen3-TTS, which runs on %s with free memory, installed in Integrations)", err, card)
 		}
 		clip := filepath.Join(os.TempDir(), "voice-design-"+a.Name+".wav")
 		if err := os.WriteFile(clip, audio.EncodeWAV(pcm, rate), 0o644); err != nil {
