@@ -172,6 +172,8 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 		return s.Speak(ctx, SpeakArgs{Lines: a.Lines, Scene: a.Scene, Mode: a.Mode, SaveTo: a.SaveTo, Lang: a.Lang, PID: pid, Client: client, Project: project})
 	case "status":
 		return s.Control(ctx, ControlArgs{Action: "status", ID: a.ID, PID: pid, Client: client, Project: project})
+	case "stop":
+		return s.Control(ctx, ControlArgs{Action: "stop", PID: pid, Client: client, Project: project})
 	case "style":
 		return s.Control(ctx, ControlArgs{Action: "set_style", Style: a.Style, PID: pid, Client: client, Project: project})
 	case "theme":

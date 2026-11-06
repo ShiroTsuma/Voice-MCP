@@ -91,6 +91,14 @@ Says a whole scene in several voices, as the MCP's `voice_scene`, and returns at
 
 What became of a `say` or a `scene`: `queued`, `rendering` (with its progress), `playing`, `done`, or why not (`error`, `stopped`, `interrupted`, `muted`), with the voices and engines that said it. Without `id`, the speaker's state: the voice, mute, the queue.
 
+### stop
+
+```json
+{"session": "notes-3f2a"}
+```
+
+Silences this session's speech now: what is playing, when it is this session's, and everything it has queued. Other sessions' speech goes on. Use it when the user cuts in and the new answer does not exist yet; `interrupt` on the next `say` comes too late for that. The stopped lines end as `stopped` in `status`. The MCP's `voice_control stop` does the same for the calling session; the user's stop hotkey still silences everyone.
+
 ### style
 
 ```json

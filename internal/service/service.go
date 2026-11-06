@@ -412,7 +412,7 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: a.Intent, Lang: a.Lang, Interrupt: a.Interrupt,
-		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood, Mode: a.Mode,
+		Preset: preset, Cache: a.Cache, Lines: lines, MaxChars: maxChars, Mood: a.Mood, Mode: a.Mode, Owner: a.PID,
 	})
 	if errors.Is(err, core.ErrMuted) {
 		return nil, userErr("muted by the user; stay silent until they unmute")
@@ -533,8 +533,16 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		}
 		return out, nil
 	case "stop":
-		sp.Stop()
-		return "stopped", nil
+		// A session stops its own speech; others' goes on. A caller voice
+		// cannot tell apart (the command line) stops everything.
+		if a.PID == 0 {
+			sp.Stop()
+			return "stopped", nil
+		}
+		if n := sp.StopOwner(a.PID); n == 0 {
+			return "nothing of yours was playing or queued", nil
+		}
+		return "stopped your speech; other sessions' goes on", nil
 	case "set_style":
 		switch a.Style {
 		case StyleShort:
@@ -1118,7 +1126,7 @@ func (s *Service) saveSpeech(ctx context.Context, a SpeakArgs) (any, error) {
 	}
 	t, err := s.Speaker.Speak(core.Request{
 		Text: a.Text, Intent: core.IntentInfo, Lang: a.Lang,
-		Preset: preset, SaveTo: path, Lines: lines, MaxChars: narrativeChars, // a file is meant to hold it all
+		Preset: preset, SaveTo: path, Lines: lines, MaxChars: narrativeChars, Owner: a.PID, // a file is meant to hold it all
 	})
 	if err != nil {
 		return nil, UserError{err.Error()}

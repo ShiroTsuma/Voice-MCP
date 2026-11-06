@@ -56,6 +56,9 @@ type Request struct {
 	// (or empty) renders first when the script uses two or more GPU engines.
 	// SaveTo always renders first.
 	Mode string
+	// Owner is the session that speaks (its agent's process ID), so one
+	// session's speech can be stopped without the others'; 0 is no session.
+	Owner uint32
 }
 
 // ScriptLine is one line of a script and the preset that says it. Pause is
@@ -129,6 +132,10 @@ type item struct {
 	primary string
 	tags    *tagUse // what became of its tags and moods (play)
 	grouped bool    // rendered first, one engine at a time (Request.Mode)
+	owner   uint32  // Request.Owner
+	// why is the reason it was cut off while playing (stopped, interrupted),
+	// set under Speaker.mu before its context is cancelled.
+	why error
 }
 
 // part is a stretch of an utterance in one voice; pause is the silence after
@@ -308,7 +315,7 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	}
 	s.nextID++
 	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead, grouped: s.renderFirst(req.Mode, req.SaveTo, parts),
-		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, done: make(chan Result, 1)}
+		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, owner: req.Owner, done: make(chan Result, 1)}
 	if req.Interrupt {
 		s.dropLocked(ErrInterrupted)
 	}
@@ -390,9 +397,43 @@ func (s *Speaker) dropLocked(reason error) {
 		it.done <- Result{Err: reason}
 	}
 	s.queue = nil
+	s.cutLocked(reason)
+}
+
+// cutLocked cuts off the utterance playing, recording why; the caller holds s.mu.
+func (s *Speaker) cutLocked(reason error) {
+	if s.current != nil && s.current.why == nil {
+		s.current.why = reason
+	}
 	if s.cancel != nil {
 		s.cancel()
 	}
+}
+
+// StopOwner silences one session's speech: its queued utterances and the
+// one playing, when it is theirs. Other sessions' speech goes on. It
+// reports how many utterances it stopped.
+func (s *Speaker) StopOwner(owner uint32) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	kept := s.queue[:0]
+	for _, it := range s.queue {
+		if it.owner != owner {
+			kept = append(kept, it)
+			continue
+		}
+		endLocked(it, Result{Err: ErrStopped})
+		it.done <- Result{Err: ErrStopped}
+		n++
+	}
+	clear(s.queue[len(kept):])
+	s.queue = kept
+	if s.current != nil && s.current.owner == owner {
+		s.cutLocked(ErrStopped)
+		n++
+	}
+	return n
 }
 
 func (s *Speaker) SetMuted(m bool) {
@@ -700,9 +741,12 @@ func (s *Speaker) loop() {
 
 		res := s.play(ctx, it) // calls audible before its first sound
 		s.mu.Lock()
+		cut := it.why != nil && ctx.Err() != nil // checked before the cancel below
 		s.cancel()
 		s.current, s.cancel = nil, nil
-		if res.Err != nil && !errors.Is(res.Err, context.Canceled) {
+		if cut {
+			res.Err = it.why // stopped or interrupted, as the caller said
+		} else if res.Err != nil && !errors.Is(res.Err, context.Canceled) {
 			s.lastErr = res.Err.Error()
 		}
 		endLocked(it, res)
