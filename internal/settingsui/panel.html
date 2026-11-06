@@ -1194,24 +1194,51 @@ function tokens(text) {
   }
   return out;
 }
-// How many words of a said line were heard, counted in its shown text; null
-// when it was heard in full (or still plays). voice reports it for a line cut
-// short; a stop from this window is known here first. A scene's shown text
-// names each speaker ("Clara: ..."), words that were never spoken.
+// Shown words to spoken ones, as the reading window does: each shown word
+// gets the index of the spoken word it is, or of the next one (a word only
+// shown, such as narration around the dialogue, goes with what follows it).
+const norm = w => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+function align(shown, spoken) {
+  const map = shown.map(() => -1);
+  let j = 0;
+  shown.forEach((t, i) => {
+    const a = norm(t.w);
+    for (let k = j; k < Math.min(j + 4, spoken.length); k++) if (norm(spoken[k].w) === a) { map[i] = k; j = k + 1; return; }
+  });
+  let next = spoken.length;
+  for (let i = map.length - 1; i >= 0; i--) { if (map[i] >= 0) next = map[i]; else map[i] = -1 - next; }
+  return map.map(v => v >= 0 ? v : -1 - v);
+}
+// What of a said line was heard: null when all of it was (or it still
+// plays), else { words: how many spoken words were heard, dim(i): whether
+// shown word i was never heard }. voice reports a line cut short; a stop
+// from this window is known here first. The shown text can be more than
+// was spoken: a display text around the dialogue (l.spoken is what was
+// said), or a scene, whose shown text names each speaker ("Clara: ...").
 function heardOf(l) {
   if (l.kind !== 'said') return null;
-  if (l.heard == null) {
+  const shown = tokens(l.text);
+  let idx = shown.map((_, i) => i), spoken = l.text;
+  if (l.spoken) {
+    spoken = l.spoken;
+    idx = align(shown, tokens(spoken));
+  } else if (l.lines && l.lines.length) {
+    // A speaker's name goes with the first word of the line it opens.
+    idx = []; let n = 0; const said = [];
+    for (const sl of l.lines) {
+      if (!sl.text) continue;
+      if (sl.speaker) for (const _ of tokens(sl.speaker + ':')) idx.push(n);
+      for (const _ of tokens(sl.text)) idx.push(n++);
+      said.push(sl.text);
+    }
+    spoken = said.join(' ');
+  }
+  let heard = l.heard;
+  if (heard == null) {
     if (!(stopped && stopped.id && stopped.id === l.id)) return null;
-    return tokens(l.text).filter(t => t.s < stopped.p).length;
+    heard = tokens(spoken).filter(t => t.s < stopped.p).length; // stopped.p counts in what was spoken
   }
-  let left = l.heard, n = l.heard;
-  for (const sl of l.lines || []) {
-    if (!sl.text) continue;
-    if (left <= 0) break;
-    if (sl.speaker) n += tokens(sl.speaker + ':').length;
-    left -= tokens(sl.text).length;
-  }
-  return n;
+  return { words: heard, dim: i => (idx[i] ?? i) >= heard };
 }
 function words(el, toks, quoted) {
   el.textContent = '';
@@ -1307,7 +1334,7 @@ function renderSaid() {
   if (fillRaf) { cancelAnimationFrame(fillRaf); fillRaf = 0; }
   let last = null;
   // The last line heard: one stopped before a word of it played stays in the transcript only.
-  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'said' && heardOf(transcript[i]) !== 0) { last = transcript[i]; break; }
+  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'said' && (heardOf(transcript[i]) || { words: 1 }).words > 0) { last = transcript[i]; break; }
   if (!last) {
     // Nothing said yet: the voice that would speak, and the light alone where a face would be.
     const key = 'quiet:' + defaultVoice() + ':' + muted;
@@ -1321,14 +1348,14 @@ function renderSaid() {
     return;
   }
   const heard = heardOf(last);
-  const key = 'rest:' + (last.id || '') + ':' + last.at + ':' + (heard ?? '');
+  const key = 'rest:' + (last.id || '') + ':' + last.at + ':' + last.text.length + ':' + (heard ? heard.words : '');
   if (shown !== key) {
     shown = key; nowIdx = -1;
     toks = tokens(last.text);
     $('line').className = 'line'; $('line').scrollTop = 0; $('line').title = last.text;
     spans = words($('line'), toks);
     // What was never heard stays dim: you see where it was cut off.
-    if (heard != null) spans.forEach((s, i) => { if (i >= heard) s.classList.add('unsaid'); });
+    if (heard) spans.forEach((s, i) => { if (heard.dim(i)) s.classList.add('unsaid'); });
   }
   const verb = last.source === 'hook' ? 'announced' : 'said';
   saidCue(speakerName(last), muted ? verb + '; voice is muted now' : verb, ago(last.at));
@@ -1698,7 +1725,7 @@ $('personas').addEventListener('change', () => {
 let logSig = null;
 function renderLog() {
   const last = transcript[transcript.length - 1];
-  const sig = transcript.length + '|' + (last ? last.at + last.id : '') + '|' + Math.floor(Date.now() / 60000) + '|' + JSON.stringify(chars().map(c => [c.name, c.image, c.color])) + '|' + (stopped && stopped.id) + '|' + transcript.map(l => l.heard ?? '').join(',');
+  const sig = transcript.length + '|' + (last ? last.at + last.id : '') + '|' + Math.floor(Date.now() / 60000) + '|' + JSON.stringify(chars().map(c => [c.name, c.image, c.color])) + '|' + (stopped && stopped.id) + '|' + transcript.map(l => (l.heard ?? '') + ':' + l.text.length).join(',');
   if (sig === logSig) return;
   logSig = sig;
   const box = $('log'); box.textContent = '';
@@ -1737,7 +1764,7 @@ function renderLog() {
       // Cut short: the words never heard stay dim.
       if (i) txt.append(' ');
       const s = document.createElement('span'); s.textContent = t.w;
-      if (i >= heard) s.className = 'unsaid';
+      if (heard.dim(i)) s.className = 'unsaid';
       txt.append(s);
     });
     body.append(who, txt);

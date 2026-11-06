@@ -390,9 +390,11 @@ function build(l) {
   }
   // Cut short (stopped, interrupted, muted): the words never heard stay dim. A scene's
   // words come line by line in the order they are spoken, so the count lines up.
+  // A display text shows more than was said (l.spoken): its words are matched to the spoken ones.
   if (!you && l.heard != null) {
     el.classList.add('cut');
-    spans.forEach((s, i) => { if (i >= l.heard) s.classList.add('unsaid'); });
+    const idx = l.spoken ? align(toks, tokens(l.spoken)).map(v => v >= 0 ? v : -1 - v) : spans.map((_, i) => i);
+    spans.forEach((s, i) => { if (idx[i] >= l.heard) s.classList.add('unsaid'); });
   }
   el.append(you ? pic('You', YOU) : pic(speaker), body);
   return { el, toks, spans, lineOf, st, l };

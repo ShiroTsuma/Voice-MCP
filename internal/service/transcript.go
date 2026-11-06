@@ -19,7 +19,10 @@ type Line struct {
 	Project string    `json:"project,omitempty"` // its folder
 	Source  string    `json:"source,omitempty"`  // said: "hook" (an announcement) or "" (the agent itself)
 	Text    string    `json:"text"`
-	Outcome string    `json:"outcome,omitempty"` // dictated, message: where it went
+	// Spoken: what of a said line was spoken, when Text shows more (display);
+	// empty when Text is what was said.
+	Spoken  string `json:"spoken,omitempty"`
+	Outcome string `json:"outcome,omitempty"` // dictated, message: where it went
 	// Heard: said lines cut short (stopped, interrupted, muted, failed) keep
 	// how many of their words were heard (0: none); the windows dim the rest.
 	// Absent for a line heard in full or still playing.
@@ -82,16 +85,23 @@ func (a *Agents) Record(l Line) {
 }
 
 // Grow adds a reply's next piece to the said line of utterance id, which
-// it joined (core.Request.Turn): one reply stays one line.
-func (a *Agents) Grow(id, text string) {
-	if a == nil || id == "" || strings.TrimSpace(text) == "" {
+// it joined (core.Request.Turn): one reply stays one line. shown is what the
+// windows show of the piece, spoken what was said (the same without display).
+func (a *Agents) Grow(id, shown, spoken string) {
+	if a == nil || id == "" || strings.TrimSpace(shown) == "" {
 		return
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for i := len(a.transcript) - 1; i >= 0; i-- {
 		if l := &a.transcript[i]; l.ID == id && l.Kind == "said" {
-			l.Text = strings.TrimSpace(l.Text + " " + text)
+			if l.Spoken != "" || shown != spoken {
+				if l.Spoken == "" {
+					l.Spoken = l.Text // so far shown as said
+				}
+				l.Spoken = strings.TrimSpace(l.Spoken + " " + spoken)
+			}
+			l.Text = strings.TrimSpace(l.Text + " " + shown)
 			a.saveTranscriptLocked()
 			return
 		}

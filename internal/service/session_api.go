@@ -41,7 +41,8 @@ type SessionArgs struct {
 	Lang      string `json:"lang,omitempty"`
 	Interrupt bool   `json:"interrupt,omitempty"`
 	Voice     string `json:"voice,omitempty"`
-	Turn      string `json:"turn,omitempty"` // say: one reply in pieces (SpeakArgs.Turn)
+	Turn      string `json:"turn,omitempty"`    // say: one reply in pieces (SpeakArgs.Turn)
+	Display   string `json:"display,omitempty"` // say: what the windows show, when more than text (SpeakArgs.Display)
 	// scene, as the MCP's voice_scene: the lines in their voices, where and
 	// when, how it is heard, or a file to render it into.
 	Lines  SpeakLines `json:"lines,omitempty"`
@@ -185,7 +186,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 		if strings.TrimSpace(a.Text) == "" {
 			return nil, userErr("say needs text")
 		}
-		return s.Speak(ctx, SpeakArgs{Text: a.Text, Intent: a.Intent, Mood: a.Mood, Lang: a.Lang, Interrupt: a.Interrupt, Voice: a.Voice, Turn: a.Turn, PID: pid, Client: client, Project: project})
+		return s.Speak(ctx, SpeakArgs{Text: a.Text, Intent: a.Intent, Mood: a.Mood, Lang: a.Lang, Interrupt: a.Interrupt, Voice: a.Voice, Turn: a.Turn, Display: a.Display, PID: pid, Client: client, Project: project})
 	case "scene":
 		if len(a.Lines) == 0 {
 			return nil, userErr("scene needs lines")

@@ -56,6 +56,7 @@ var (
 			"interrupt": map[string]any{"type": "boolean", "default": false, "description": "Cut off what is playing and drop the queue. Only for urgent messages."},
 			"voice":     map[string]any{"type": "string", "description": "Only when the user asks for a particular voice: a character's name (from voice_control list_characters) or a preset's name (list_presets), for this call only. Omit to speak as yourself."},
 			"turn":      map[string]any{"type": "string", "description": "When you say one reply in several calls: the same id (any short word) on each piece, so they play as one utterance without a break and the transcript keeps one line. A piece joins while the one before is still queued or playing; later, or with another turn, it starts anew."},
+			"display":   map[string]any{"type": "string", "description": "What the user's transcript and reading window show instead of text, when it is more than you say aloud: a role-play reply with its narration around the dialogue, say. Only text is spoken; the windows highlight the spoken words inside it."},
 		},
 		"additionalProperties": false,
 	}

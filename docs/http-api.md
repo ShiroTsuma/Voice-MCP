@@ -67,6 +67,7 @@ The rest is optional, as on the MCP's `voice_speak`:
 | `lang` | the language of `text` (`en`, `pl`, ...), when it is not the default |
 | `interrupt` | `true` cuts in: stops what is playing and clears the queue first |
 | `voice` | for this line only, a character's name or a preset (`presets` lists them) instead of the session's |
+| `display` | what the transcript and the reading window show instead of `text`, when it is more than is said: a role-play reply with its narration (`*She leans closer.* "You're late."`) while `text` is only the dialogue. Only `text` is spoken; the reading window highlights the spoken words inside the shown text, and dims what was never heard when the line is cut short. With `turn`, each piece brings its own `display`. |
 | `turn` | an id for one reply you send in pieces (say each sentence as your model writes it). A `say` with the same `turn` joins the one before while that is still queued or playing: one utterance, no break between the pieces, one transcript line that grows. The answer then has the first piece's `id` and `"state": "appended"`. The turn closes when you poll `idle`, send `event` `done`, `stop`, say something without this `turn`, or 2 seconds after all of it was heard with nothing new; a later piece starts a new utterance. |
 
 The text can carry voice's own tags, which are never read aloud: `{laugh}`, `{sigh}`, `{cough}` and the other sounds, `{pause}` or `{pause:1.5}`.

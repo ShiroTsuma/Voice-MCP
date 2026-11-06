@@ -57,6 +57,10 @@ type SpeakArgs struct {
 	// Turn: an id for one reply sent in pieces; a piece with the same turn
 	// joins the one before while it is queued or playing (core.Request.Turn).
 	Turn string `json:"turn,omitempty"`
+	// Display: what the transcript and the windows show for Text, when it is
+	// more than is said (a role-play reply's narration around its dialogue);
+	// only Text is spoken.
+	Display string `json:"display,omitempty"`
 	// SaveTo: render into this file (an absolute .wav or .mp3 path) instead
 	// of saying it; the call returns once the file is written.
 	SaveTo string `json:"save_to,omitempty"`
@@ -423,10 +427,19 @@ func (s *Service) Speak(ctx context.Context, a SpeakArgs) (any, error) {
 	if err != nil {
 		return nil, UserError{err.Error()}
 	}
+	// What the windows show: the display text when the call has one.
+	shown := said
+	if d := strings.TrimSpace(core.StripTags(a.Display)); d != "" && len(lines) == 0 {
+		shown = d
+	}
 	if t.Appended {
-		s.Agents.Grow(t.ID, said) // one reply, one transcript line
+		s.Agents.Grow(t.ID, shown, said) // one reply, one transcript line
 	} else {
-		s.Agents.Record(Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: said, Scene: len(lines) > 0, Lines: s.scene(a, lines), Setting: a.Scene, Style: s.Agents.Style(a.PID)})
+		l := Line{Kind: "said", ID: t.ID, PID: a.PID, Source: a.Source, Text: shown, Scene: len(lines) > 0, Lines: s.scene(a, lines), Setting: a.Scene, Style: s.Agents.Style(a.PID)}
+		if shown != said {
+			l.Spoken = said
+		}
+		s.Agents.Record(l)
 	}
 	if a.Source != "hook" {
 		core.MarkAsked(a.PID) // its end-of-turn announcement and question reading stay quiet
