@@ -80,6 +80,9 @@
   /* The whole block at once: what is not said yet is quieter, the word being said is marked. */
   .block .live .w.later { color: var(--ink-3); }
   .msg .w.unsaid { color: var(--ink-3); }  /* cut off: what was never heard */
+  .msg .w.aside { color: var(--ink-2); }   /* shown, never spoken (narration): steady, does not light up */
+  .msg.grown { animation: none; }          /* drawn again as a turn grew: no second entrance */
+  .msg.instant .w { transition: none; }
   .block .live .w.now { background: color-mix(in oklab, var(--light) 32%, transparent); color: var(--ink);
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--light) 32%, transparent); }
   #empty { margin: auto; color: var(--ink-3); }
@@ -411,7 +414,9 @@ function build(l) {
   }
   // Cut short (stopped, interrupted, muted): the words never heard stay dim. A scene's
   // words come line by line in the order they are spoken, so the count lines up.
-  // A display text shows more than was said (l.spoken): its words are matched to the spoken ones.
+  // A display text shows more than was said (l.spoken): its words are matched to the spoken ones,
+  // and the narration around them stays steady (aside): it is never said, so it never lights up.
+  if (!you && l.spoken) align(toks, tokens(l.spoken)).forEach((m, i) => { if (m < 0) spans[i].classList.add('aside'); });
   if (!you && l.heard != null) {
     el.classList.add('cut');
     const idx = l.spoken ? align(toks, tokens(l.spoken)).map(v => v >= 0 ? v : -1 - v) : spans.map((_, i) => i);
@@ -501,7 +506,18 @@ function render() {
   t.forEach((l, i) => {
     const k = keyOf(l);
     let v = views.get(k);
-    if (!v || v.l.text !== l.text || v.l.heard !== l.heard) { if (v) v.el.remove(); v = build(l); views.set(k, v); if (live && liveKey === k) liveKey = null; }
+    if (!v || v.l.text !== l.text || v.l.heard !== l.heard) {
+      // Drawn again (a turn grew, or it was cut short): it stays where it was, with no second
+      // entrance and no fade, so the words do not seem to flicker.
+      const again = !!v;
+      if (v) v.el.remove();
+      v = build(l); views.set(k, v);
+      if (again) {
+        v.el.classList.add('grown', 'instant');
+        const el = v.el; requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('instant')));
+      }
+      if (live && liveKey === k) liveKey = null;
+    }
     if (list.children[i + 1] !== v.el) list.insertBefore(v.el, list.children[i + 1] || null); // after #empty
     v.el.classList.toggle('last', i === t.length - 1);
   });
@@ -520,7 +536,7 @@ function render() {
     if (live) {
       live.spoken = tokens(line.text); live.map = align(live.toks, live.spoken); live.now = -1;
       live.el.classList.add('live');
-      live.spans.forEach(s => s.classList.add('later'));
+      live.spans.forEach((s, i) => { if (live.map[i] >= 0) s.classList.add('later'); }); // narration stays as shown
     }
   }
   dictation(list);
@@ -557,10 +573,10 @@ function tick() {
   const sp = live.spoken;
   let cur = -1;
   live.map.forEach((m, i) => {
-    const k = m >= 0 ? m : -1 - m;
-    const said = k < sp.length && sp[k].s < p;
+    if (m < 0) return; // narration: shown as it is, it does not light up
+    const said = m < sp.length && sp[m].s < p;
     live.spans[i].classList.toggle('later', !said);
-    if (said && m >= 0) cur = i;
+    if (said) cur = i;
   });
   const n = !line.preparing && f < 1 && cur >= 0 && sp[live.map[cur]].e > from ? cur : -1;
   if (n !== live.now) {

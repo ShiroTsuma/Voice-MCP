@@ -87,6 +87,8 @@
   .line .w.later { color: var(--ink-3); }                       /* not yet said */
   .line .w.now { color: var(--lit); transition: color .1s; }   /* the word in the light */
   .line .w.unsaid { color: var(--ink-3); }                      /* cut off; what never got said stays dim */
+  .line .w.aside { color: var(--ink-2); }                       /* shown, never spoken (narration): steady */
+  .line.instant .w { transition: none; }                        /* redrawn as it was, no fade */
   .line.quiet { color: var(--ink-2); }
 
   /* The portrait beside the line: whoever's words these are. */
@@ -1291,9 +1293,11 @@ function fillTick() {
   const p = Math.max(from + f * (to - from), line.done | 0);
   let cur = -1;
   toks.forEach((t, i) => {
-    const m = liveMap[i], k = spokenIndex(m), said = k < spokenToks.length && spokenToks[k].s < p;
+    const m = liveMap[i];
+    if (m < 0) return; // narration: shown as it is, it does not light up
+    const said = spokenToks[m].s < p;
     spans[i].classList.toggle('later', !said);
-    if (said && m >= 0) cur = i;
+    if (said) cur = i;
   });
   const n = f < 1 && cur >= 0 && spokenToks[liveMap[cur]].e > from ? cur : -1;
   if (n !== nowIdx) {
@@ -1356,10 +1360,12 @@ function renderSaid() {
       shown = key; toks = tokens(text); spokenToks = tokens(line.text); nowIdx = -1;
       liveMap = text === line.text ? toks.map((_, i) => i) : align(toks, spokenToks);
       if (!scroll) { reached = 0; followTop = 0; }
-      $('line').className = 'line live'; $('line').title = '';
+      // Drawn again (a turn's next piece): words come back as they were, without fading in.
+      $('line').className = 'line live' + (scroll ? ' instant' : ''); $('line').title = '';
       spans = words($('line'), toks);
-      spans.forEach(s => s.classList.add('later'));
+      spans.forEach((s, i) => s.classList.add(liveMap[i] < 0 ? 'aside' : 'later'));
       $('line').scrollTop = scroll;
+      if (scroll) { if (fillRaf) { cancelAnimationFrame(fillRaf); fillRaf = 0; } fillTick(); requestAnimationFrame(() => requestAnimationFrame(() => $('line').classList.remove('instant'))); }
     }
     saidCue(speakerName(line), 'is speaking', speakerWhere(line));
     showPortrait(pidKey(line.pid), nameNow(line));
@@ -1391,6 +1397,8 @@ function renderSaid() {
     spans = words($('line'), toks);
     // What was never heard stays dim: you see where it was cut off.
     if (heard) spans.forEach((s, i) => { if (heard.dim(i)) s.classList.add('unsaid'); });
+    // Narration around the dialogue looks as it did while she spoke.
+    if (last.spoken) align(toks, tokens(last.spoken)).forEach((m, i) => { if (m < 0 && !spans[i].classList.contains('unsaid')) spans[i].classList.add('aside'); });
   }
   const verb = last.source === 'hook' ? 'announced' : 'said';
   saidCue(speakerName(last), muted ? verb + '; voice is muted now' : verb, ago(last.at));

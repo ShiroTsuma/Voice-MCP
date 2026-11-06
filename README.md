@@ -241,7 +241,7 @@ What the page writes for a theme to use (the built-in look hides the parts marke
 | `.setting` with `.title`, `.location`, `.time` (hidden) | `data-background` | a scene's setting |
 | `.lines` > `.line` (`.speaking` while said) | `data-speaker`, `data-voice`, `data-kind`, `data-mood`, `data-to`, `data-pause`, `data-action`, `data-spoken`, `data-narrator`, `data-index` | one line of a scene |
 | `.line` > `.line-pic`, `.meta` with `.name`, `.mood` (hidden), `.to` (hidden), `.voice` (hidden); `.action`; `.text` | | its speaker, how and to whom, the stage direction, the words |
-| `.w` (`.later`, `.now`, `.unsaid`) | | a word: not said yet, being said, never heard (the message was cut short: `.cut`) |
+| `.w` (`.later`, `.now`, `.unsaid`, `.aside`) | | a word: not said yet, being said, never heard (the message was cut short: `.cut`), shown but never spoken (a display text's narration) |
 | `#hint`, `#dict` | | the bar shown when opened with the key; your dictation as it is heard |
 
 Variables: `--ground`, `--ink`, `--ink-2`, `--ink-3`, `--you`, `--plain`, `--ui`, `--ui-display`; `--light` is the message's speaker colour and `--c` a scene line's.
