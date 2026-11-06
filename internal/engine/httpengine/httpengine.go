@@ -266,11 +266,12 @@ func (e *Engine) shutdown(ctx context.Context) {
 }
 
 // BeforeStart, when set, runs before a server voice starts loads its model:
-// voice frees GPU voices there to keep them within a budget. OnUse learns
-// each request an engine serves, and OnMeasure the graphics memory its server
-// has taken (MB, measured now and then), with the options it runs with.
+// voice frees GPU voices there to keep them within a budget and the card's
+// free memory, and an error (no room) keeps the server from starting. OnUse
+// learns each request an engine serves, and OnMeasure the graphics memory its
+// server has taken (MB, measured now and then), with the options it runs with.
 var (
-	BeforeStart func(ctx context.Context, engine string)
+	BeforeStart func(ctx context.Context, engine string) error
 	OnUse       func(engine string)
 	OnMeasure   func(engine string, options map[string]string, mb int)
 )
@@ -326,7 +327,9 @@ func (e *Engine) ensure(ctx context.Context) error {
 	// Room for its model first (a budget for GPU voices), before this
 	// engine's lock: making room unloads other engines, which take theirs.
 	if fn := BeforeStart; fn != nil && len(e.start) > 0 {
-		fn(ctx, e.name)
+		if err := fn(ctx, e.name); err != nil {
+			return err // no room on the graphics card: starting would fail or crawl
+		}
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()

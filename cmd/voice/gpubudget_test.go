@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,8 +40,9 @@ func (f *fakeGPU) Unload(context.Context)      { f.loaded = false; f.unloaded++ 
 // first, only as many as it must; "one" frees them all; a voice too big for
 // the budget on its own still loads, with the others freed.
 func TestMakeRoom(t *testing.T) {
-	old := voiceEngine
-	defer func() { voiceEngine = old }()
+	old, oldMem := voiceEngine, gpuMemory
+	defer func() { voiceEngine, gpuMemory = old, oldMem }()
+	gpuMemory = func(context.Context) (float64, float64, bool) { return 0, 0, false } // the budget alone
 	var fakes map[string]*fakeGPU
 	voiceEngine = func(name string) (engine.Engine, error) {
 		if f, ok := fakes[name]; ok {
@@ -81,6 +83,68 @@ func TestMakeRoom(t *testing.T) {
 	g.makeRoom(context.Background(), "qwen3")
 	if fakes["chatterbox"].unloaded+fakes["omnivoice"].unloaded != 0 {
 		t.Fatal("no limit: a voice was freed")
+	}
+}
+
+// The card's real free memory counts too, whatever the budget: another
+// program (Higgs in WSL) holding the card makes voice free its own voices,
+// least recently used first, and when that is not enough the voice does not
+// load, with an error that says why.
+func TestMakeRoomFreeMemory(t *testing.T) {
+	old, oldMem := voiceEngine, gpuMemory
+	defer func() { voiceEngine, gpuMemory = old, oldMem }()
+	var fakes map[string]*fakeGPU
+	voiceEngine = func(name string) (engine.Engine, error) {
+		if f, ok := fakes[name]; ok {
+			return f, nil
+		}
+		return &fakeGPU{}, nil
+	}
+	cfg := &preset.Config{}
+	g := &gpuBudget{used: map[string]time.Time{}, measured: map[string]float64{}, config: func() *preset.Config { return cfg }}
+	var others float64 // GB another program holds
+	gpuMemory = func(context.Context) (float64, float64, bool) {
+		used := others
+		for name, f := range fakes {
+			if f.loaded {
+				used += mustBackend(t, name).VRAM
+			}
+		}
+		return 16 - used, 16, true
+	}
+	reset := func(other float64) {
+		others = other
+		fakes = map[string]*fakeGPU{"chatterbox": {loaded: true}, "omnivoice": {loaded: true}}
+		now := time.Now()
+		g.used = map[string]time.Time{"chatterbox": now.Add(-time.Minute), "omnivoice": now}
+	}
+
+	reset(0) // 8 GB free, qwen3 needs 5.5: nothing goes
+	if err := g.makeRoom(context.Background(), "qwen3"); err != nil || fakes["chatterbox"].unloaded+fakes["omnivoice"].unloaded != 0 {
+		t.Fatalf("room enough: %v", err)
+	}
+	reset(5) // 3 GB free: the least recently used voice goes, then it fits
+	if err := g.makeRoom(context.Background(), "qwen3"); err != nil || fakes["chatterbox"].unloaded != 1 || fakes["omnivoice"].unloaded != 0 {
+		t.Fatalf("one voice freed: %v, chatterbox %d omnivoice %d", err, fakes["chatterbox"].unloaded, fakes["omnivoice"].unloaded)
+	}
+	reset(15.6) // Higgs holds the card: freeing ours is not enough
+	err := g.makeRoom(context.Background(), "qwen3")
+	if err == nil || !strings.Contains(err.Error(), "another program is using the graphics card") {
+		t.Fatalf("no room: %v", err)
+	}
+	if fakes["chatterbox"].unloaded != 1 || fakes["omnivoice"].unloaded != 1 {
+		t.Fatal("voice's own voices were not freed first")
+	}
+}
+
+func TestParseNvidiaMemory(t *testing.T) {
+	if f, tot, ok := parseNvidiaMemory("7423, 16303\r\n2048, 8192\n"); !ok || f < 7.2 || f > 7.3 || tot < 15.9 || tot > 16 {
+		t.Fatalf("first card: %v %v %v", f, tot, ok)
+	}
+	for _, bad := range []string{"", "[N/A], [N/A]", "No devices were found"} {
+		if _, _, ok := parseNvidiaMemory(bad); ok {
+			t.Fatalf("%q read as memory", bad)
+		}
 	}
 }
 

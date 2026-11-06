@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func TestRegisterKeepWarm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := res.(SessionResult).Warm; !strings.Contains(w, "nothing to keep loaded") {
+	if w := res.(SessionResult).Warm; !strings.Contains(w, "runs on the CPU") {
 		t.Fatalf("a CPU voice kept warm: %q", w)
 	}
 	if len(s.Agents.KeepWarm()) != 0 {
@@ -54,5 +55,28 @@ func TestRegisterKeepWarm(t *testing.T) {
 	s.Agents.Forget(21)
 	if len(s.Agents.KeepWarm()) != 0 {
 		t.Fatal("an ended session is still kept warm")
+	}
+}
+
+// A voice on a speech server voice does not start (Higgs over the OpenAI
+// speech API) is not voice's to keep, and the answer says so instead of
+// calling it quick to load.
+func TestKeepWarmOutsideServer(t *testing.T) {
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "config.toml")
+	os.WriteFile(conf, []byte("default_preset = \"far\"\n[engines.far]\ntype = \"openai\"\nurl = \"http://127.0.0.1:1\"\n[presets.far]\nengine = \"far\"\nchime = \"none\"\n"), 0o644)
+	cfg, err := preset.Load(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := core.NewSpeaker(cfg)
+	t.Cleanup(sp.Close)
+	s := &Service{Speaker: sp, Config: cfg, Agents: &Agents{}}
+	res, err := s.Session(context.Background(), SessionArgs{Action: "register", Session: "h", PID: 31, KeepWarm: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := res.(SessionResult).Warm; !strings.Contains(w, "does not start") {
+		t.Fatalf("outside server: %q", w)
 	}
 }

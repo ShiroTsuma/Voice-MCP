@@ -28,7 +28,10 @@ func (s *Service) setKeepWarm(pid uint32, on bool) string {
 	name, gpu := s.Speaker.KeepWarm(s.sessionPreset(pid), true)
 	if !gpu {
 		s.Agents.SetKeepWarm(pid, false)
-		return "keep_warm: this session's voice (" + name + ") does not run in a server of its own, so it loads quickly and there is nothing to keep loaded."
+		if e, ok := s.Config.Engines[name]; ok && (e.String("type") == "openai" || e.String("url") != "" && len(e.Strings("start")) == 0) {
+			return "keep_warm: this session's voice (" + name + ") runs on a speech server voice does not start, so voice cannot keep it loaded; that server stays loaded or not by its own settings."
+		}
+		return "keep_warm: this session's voice (" + name + ") runs on the CPU and loads quickly, so there is nothing to keep loaded."
 	}
 	return "keep_warm: voice keeps this session's voice (" + name + ") loaded while the session runs."
 }

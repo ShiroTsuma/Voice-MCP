@@ -106,16 +106,22 @@ func budgetOf(cfg *preset.Config) (mode string, limit float64) {
 	return "off", 0
 }
 
-// makeRoom runs before engine next's server loads its model.
-func (g *gpuBudget) makeRoom(ctx context.Context, next string) {
+// makeRoom runs before engine next's server loads its model: it frees GPU
+// voices for the budget, then checks the card's real free memory, which other
+// programs share (a speech server voice does not run, such as Higgs in WSL, a
+// game, training). Short of it, voice frees more of its own voices, least
+// recently used first; when that is not enough, the voice does not load and
+// the error says why, instead of failing for memory or spilling into the
+// PC's memory and slowing everything down.
+func (g *gpuBudget) makeRoom(ctx context.Context, next string) error {
 	if g.config == nil {
-		return
+		return nil
 	}
 	cfg := g.config()
 	mode, limit := budgetOf(cfg)
 	nb, ok := sidecar.Find(next)
-	if mode == "off" || !ok {
-		return
+	if !ok {
+		return nil
 	}
 	need, _ := g.size(nb, cfg)
 	type loadedVoice struct {
@@ -148,22 +154,44 @@ func (g *gpuBudget) makeRoom(ctx context.Context, next string) {
 		sum += gb
 	}
 	sort.Slice(loaded, func(i, j int) bool { return loaded[i].got.Before(loaded[j].got) })
-	for _, l := range loaded {
-		if mode == "gb" && sum+need <= limit {
-			break
-		}
-		why := "only one GPU voice at a time"
-		if mode == "gb" {
-			why = fmt.Sprintf("to keep GPU voices within %s", gbText(limit))
-		}
+	unload := func(l loadedVoice, why string) {
 		logf("speech: unloading %s (about %s) for %s, %s", l.b.Label, gbText(l.gb), nb.Label, why)
 		c, cancel := context.WithTimeout(ctx, 30*time.Second)
 		l.e.Unload(c)
 		cancel()
 		sum -= l.gb
 	}
-	if mode == "gb" && need > limit {
-		logf("speech: %s takes about %s, more than the %s budget: it runs alone", nb.Label, gbText(need), gbText(limit))
+	if mode != "off" {
+		for len(loaded) > 0 {
+			if mode == "gb" && sum+need <= limit {
+				break
+			}
+			why := "only one GPU voice at a time"
+			if mode == "gb" {
+				why = fmt.Sprintf("to keep GPU voices within %s", gbText(limit))
+			}
+			unload(loaded[0], why)
+			loaded = loaded[1:]
+		}
+		if mode == "gb" && need > limit {
+			logf("speech: %s takes about %s, more than the %s budget: it runs alone", nb.Label, gbText(need), gbText(limit))
+		}
+	}
+
+	// The card itself. 10% under the size is still tried: a size is a peak
+	// or an estimate, and the model may well fit.
+	for {
+		free, total, known := gpuMemory(ctx)
+		if !known || free >= need*0.9 {
+			return nil
+		}
+		if len(loaded) == 0 {
+			logf("speech: %s needs about %s of graphics memory, %s of %s is free", nb.Label, gbText(need), gbText(free), gbText(total))
+			return fmt.Errorf("%s needs about %s of graphics memory and only %s of %s is free: another program is using the graphics card (a speech server such as Higgs, a game, model training); close it, or use a voice that runs on the CPU",
+				nb.Label, gbText(need), gbText(free), gbText(total))
+		}
+		unload(loaded[0], fmt.Sprintf("the graphics card has only %s free", gbText(free)))
+		loaded = loaded[1:]
 	}
 }
 
