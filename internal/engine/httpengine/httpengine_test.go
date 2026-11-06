@@ -184,6 +184,15 @@ func TestVoicePromptGoesToItsEngineAndModel(t *testing.T) {
 	if send("chatterbox", "big", v) {
 		t.Fatal("a qwen3 prompt went to chatterbox")
 	}
+	// qwen3_fast reads qwen3's prompt files and the other way round (prompts_as).
+	if !send("qwen3_fast", "big", v) {
+		t.Fatal("a qwen3 prompt did not go to qwen3_fast")
+	}
+	fast := v
+	fast.PromptEngine = "qwen3_fast"
+	if !send("qwen3", "big", fast) || send("qwen3", "small", fast) || send("omnivoice", "big", fast) {
+		t.Fatal("a qwen3_fast prompt went to the wrong engine or model")
+	}
 }
 
 func TestBatchOfSentences(t *testing.T) {

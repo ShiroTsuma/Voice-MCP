@@ -998,7 +998,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	saving := it.saveTo != ""
 	var saved []float32
 	if !saving {
-		release, err := acquirePlayback(ctx)
+		release, err := playbackLock(ctx)
 		if err != nil {
 			return Result{Err: err}
 		}
@@ -1231,7 +1231,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				if it.turn != "" && n < len(vs) {
 					// A GPU voice waits a moment for the reply's next pieces, so they
 					// render together instead of one slow sentence at a time.
-					if s.heavyEngine(vs[n].choice.Engines[0]) && !addParts(s.gather(ctx, it, took)) {
+					if s.batches(vs[n].choice.Engines[0]) && !addParts(s.gather(ctx, it, took)) {
 						return
 					}
 					merge(n)
@@ -1372,6 +1372,10 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 	return Result{Engine: used}
 }
 
+// playbackLock takes the lock all voice processes on this PC share while one
+// speaks; tests take one of their own, so a running voice does not hold them up.
+var playbackLock = acquirePlayback
+
 // lineGap is the breath between two voices of a script, in seconds.
 const lineGap = 0.3
 
@@ -1432,6 +1436,14 @@ func (s *Speaker) PresetExpressive(name string) Expressive {
 // heavyEngine reports whether an engine runs a model on a server (voice's
 // GPU sidecar, or a speech server of its own): one that may not fit beside
 // another.
+// batches tells whether a GPU engine renders sentences in batches: one
+// slower than speech, whose sentences are worth gathering (qwen3); a fast
+// one (qwen3_fast) is asked sentence by sentence.
+func (s *Speaker) batches(name string) bool {
+	b, _ := s.cfg.Engines[name]["batch"].(bool)
+	return b && s.heavyEngine(name)
+}
+
 func (s *Speaker) heavyEngine(name string) bool {
 	t, _ := s.cfg.Engines[name]["type"].(string)
 	return t == "http" || t == "openai"

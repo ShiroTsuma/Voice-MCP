@@ -34,6 +34,7 @@ import (
 
 	"voice/internal/audio"
 	"voice/internal/engine"
+	"voice/sidecar"
 )
 
 func init() { engine.Register("http", New) }
@@ -492,6 +493,16 @@ func (e *Engine) Voices(ctx context.Context) ([]engine.VoiceInfo, error) {
 }
 
 // payload is a request as the sidecar protocol has it.
+// samePrompts tells whether engine b reads the voice prompts engine a made:
+// the same engine, or two backends of one prompt format (sidecar.PromptFormat).
+func samePrompts(a, b string) bool {
+	if a == b {
+		return true
+	}
+	f := sidecar.PromptFormat(a)
+	return f != "" && f == sidecar.PromptFormat(b)
+}
+
 func (e *Engine) payload(req engine.Request) map[string]any {
 	payload := map[string]any{
 		"text": req.Text, "lang": req.Lang, "voice": req.Voice.Primary(),
@@ -505,9 +516,10 @@ func (e *Engine) payload(req engine.Request) map[string]any {
 		maps.Copy(extra, req.Extra)
 		payload["extra"] = extra
 	}
-	// A voice prompt this engine made, with the model it runs now: it reads
-	// that, not the recording. With another model size it uses the recording.
-	if v := req.Voice; v.Prompt != "" && v.PromptEngine == e.name {
+	// A voice prompt this engine made (or one that reads the same files, as
+	// qwen3 and qwen3_fast do), with the model it runs now: it reads that,
+	// not the recording. With another model size it uses the recording.
+	if v := req.Voice; v.Prompt != "" && samePrompts(v.PromptEngine, e.name) {
 		if m := e.want()["model"]; v.PromptModel == "" || m == "" || m == v.PromptModel {
 			payload["voice_prompt"] = v.Prompt
 		}

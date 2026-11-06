@@ -79,7 +79,33 @@
         "default": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
         "choices": [
           { "value": "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "label": "1.7B", "vram": 5.5, "note": "closest to the voice; about 4.5 GB download, 6-8 GB of graphics memory" },
-          { "value": "Qwen/Qwen3-TTS-12Hz-0.6B-Base", "label": "0.6B", "vram": 3.5, "note": "faster and lighter; about 2 GB download, 3-4 GB of graphics memory" }
+          { "value": "Qwen/Qwen3-TTS-12Hz-0.6B-Base", "label": "0.6B", "vram": 3.5, "note": "lighter, about as fast; about 2 GB download, 3-4 GB of graphics memory" }
+        ]
+      }
+    },
+    {
+      "name": "qwen3_fast",
+      "vram": 5,
+      "gpus": ["nvidia"],
+      "label": "Qwen3-TTS fast",
+      "note": "the same Qwen3-TTS voices, many times faster (CUDA graphs, faster-qwen3-tts): a sentence in about a second instead of ten; reads the voice prompts Qwen3-TTS makes. If it fails on this PC, Qwen3-TTS stays the choice",
+      "pip": ["faster-qwen3-tts", "transformers==5.15.1"],
+      "module": "faster_qwen3_tts",
+      "port": 8772,
+      "clones": true,
+      "transcript": true,
+      "prompts": true,
+      "prompts_as": "qwen3",
+      "languages": ["de", "en", "es", "fr", "it", "ja", "ko", "pt", "ru", "zh"],
+      "start_timeout": 1800,
+      "prefetch": ["Qwen/Qwen3-TTS-12Hz-1.7B-Base"],
+      "option": {
+        "key": "model",
+        "label": "Model size",
+        "default": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+        "choices": [
+          { "value": "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "label": "1.7B", "vram": 5, "note": "closest to the voice; about 4.5 GB download, about 5 GB of graphics memory" },
+          { "value": "Qwen/Qwen3-TTS-12Hz-0.6B-Base", "label": "0.6B", "vram": 3, "note": "lighter, about as fast; about 2 GB download, 3 GB of graphics memory" }
         ]
       }
     },

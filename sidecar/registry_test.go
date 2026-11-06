@@ -23,6 +23,18 @@ func TestRegistry(t *testing.T) {
 	if slices.Contains(Names(false), "test") || !slices.Contains(Names(true), "test") {
 		t.Fatal("hidden backend")
 	}
+	// The fast Qwen3 shares qwen3's prompts, model choices, and needs NVIDIA;
+	// it renders sentence by sentence (no batches).
+	f, ok := Find("qwen3_fast")
+	if !ok || PromptFormat("qwen3_fast") != "qwen3" || PromptFormat("qwen3") != "qwen3" || f.Batch || !f.RunsOn(map[string]bool{"nvidia": true}) || f.RunsOn(map[string]bool{"amd": true}) {
+		t.Fatalf("qwen3_fast: %+v", f)
+	}
+	if f.Option == nil || f.Option.Key != q.Option.Key || f.Option.Default != q.Option.Default {
+		t.Fatal("qwen3_fast must offer qwen3's model choices, or the prompts' model check fails")
+	}
+	if PromptFormat("chatterbox") != "" || PromptFormat("nope") != "" {
+		t.Fatal("an engine without prompts has a prompt format")
+	}
 }
 
 func TestRunsOn(t *testing.T) {

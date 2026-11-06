@@ -44,6 +44,10 @@ func (e *turnEngine) take() []string {
 
 func init() {
 	engine.Register("turntest", func(string, engine.Config) (engine.Engine, error) { return turnEng, nil })
+	// The lock every voice on this PC shares: a running voice that speaks
+	// would hold these tests up.
+	var mu sync.Mutex
+	playbackLock = func(context.Context) (func(), error) { mu.Lock(); return mu.Unlock, nil }
 }
 
 func turnSpeaker(t *testing.T) *Speaker {
@@ -150,7 +154,7 @@ func TestTurnBatchesGPU(t *testing.T) {
 	engine.Register("http", func(string, engine.Config) (engine.Engine, error) { return gpu, nil })
 	dir := t.TempDir()
 	conf := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(conf, []byte("default_preset = \"g\"\n[engines.gpu]\ntype = \"http\"\n[presets.g]\nengine = \"gpu\"\nchime = \"none\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(conf, []byte("default_preset = \"g\"\n[engines.gpu]\ntype = \"http\"\nbatch = true\n[presets.g]\nengine = \"gpu\"\nchime = \"none\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := preset.Load(conf)

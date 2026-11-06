@@ -33,20 +33,23 @@ type Option struct {
 }
 
 type Backend struct {
-	Name       string         `json:"name"`
-	Label      string         `json:"label"`
-	Note       string         `json:"note"`
-	Pip        []string       `json:"pip"`
-	Module     string         `json:"module"` // the import that proves it is installed
-	Port       int            `json:"port"`
-	Clones     bool           `json:"clones"`
-	Transcript bool           `json:"transcript"` // cloning needs the clip's transcript
-	Prompts    bool           `json:"prompts"`    // saves a voice prompt, so a clone speaks without its recording
-	Batch      bool           `json:"batch"`      // renders several sentences in one call (POST /synthesize_batch)
-	Languages  []string       `json:"languages"`  // what it speaks: en, pl, ...
-	Hidden     bool           `json:"hidden"`     // not offered in the windows (test)
-	Extra      map[string]any `json:"extra"`      // per-request settings voice sends
-	Option     *Option        `json:"option"`
+	Name       string   `json:"name"`
+	Label      string   `json:"label"`
+	Note       string   `json:"note"`
+	Pip        []string `json:"pip"`
+	Module     string   `json:"module"` // the import that proves it is installed
+	Port       int      `json:"port"`
+	Clones     bool     `json:"clones"`
+	Transcript bool     `json:"transcript"` // cloning needs the clip's transcript
+	Prompts    bool     `json:"prompts"`    // saves a voice prompt, so a clone speaks without its recording
+	// PromptsAs names the backend whose voice prompt files it reads and
+	// writes (the same model run another way); empty is its own.
+	PromptsAs string         `json:"prompts_as"`
+	Batch     bool           `json:"batch"`     // renders several sentences in one call (POST /synthesize_batch)
+	Languages []string       `json:"languages"` // what it speaks: en, pl, ...
+	Hidden    bool           `json:"hidden"`    // not offered in the windows (test)
+	Extra     map[string]any `json:"extra"`     // per-request settings voice sends
+	Option    *Option        `json:"option"`
 	// StartTimeout is how long voice waits for the server to load, in
 	// seconds (default 300): a model downloaded on first use takes longer.
 	StartTimeout int `json:"start_timeout"`
@@ -145,6 +148,20 @@ func Find(name string) (Backend, bool) {
 	return Backend{}, false
 }
 
+// PromptFormat is the kind of voice prompt file the engine of that name
+// reads and writes: the backend PromptsAs names, else its own name; ""
+// for an engine that keeps no prompts or is no backend.
+func PromptFormat(name string) string {
+	b, ok := Find(name)
+	if !ok || !b.Prompts {
+		return ""
+	}
+	if b.PromptsAs != "" {
+		return b.PromptsAs
+	}
+	return b.Name
+}
+
 // Names lists the backends, the hidden ones too when all is set.
 func Names(all bool) []string {
 	var out []string
@@ -207,6 +224,11 @@ func Check() error {
 			return fmt.Errorf("%s and %s share port %d", b.Name, other, b.Port)
 		}
 		ports[b.Port] = b.Name
+		if b.PromptsAs != "" {
+			if o, ok := Find(b.PromptsAs); !ok || !o.Prompts || !b.Prompts {
+				return fmt.Errorf("%s: prompts_as %q needs both to keep prompts", b.Name, b.PromptsAs)
+			}
+		}
 		if o := b.Option; o != nil {
 			found := false
 			for _, c := range o.Choices {

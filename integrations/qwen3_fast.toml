@@ -1,0 +1,11 @@
+id = "qwen3_fast"
+group = "gpu"
+order = 41
+title = "Qwen3-TTS fast"
+about = "The same Qwen3-TTS voices, many times faster: a sentence in about a second instead of ten. It reads the voices Qwen3-TTS made. If it does not work on this PC, keep using Qwen3-TTS."
+size = "8-12 GB"
+link = "https://github.com/andimarafioti/faster-qwen3-tts"
+also = ["cloning"]
+uses = "sidecar"
+backend = "qwen3_fast"
+requires = ["python"]
