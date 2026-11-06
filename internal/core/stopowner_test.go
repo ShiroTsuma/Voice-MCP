@@ -48,6 +48,28 @@ func TestStopOwner(t *testing.T) {
 	}
 }
 
+// StopAll names each session it cut off once, playing or queued; speech of
+// no session and files being saved are not anyone's to be told about.
+func TestStopAllOwners(t *testing.T) {
+	mk := func(id string, owner uint32) *item {
+		return &item{id: id, owner: owner, track: &Track{ID: id}, done: make(chan Result, 1)}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	file := mk("v5", 8)
+	file.saveTo = `C:\x.wav`
+	s := &Speaker{current: mk("v1", 7), cancel: cancel, queue: []*item{mk("v2", 9), mk("v3", 7), mk("v4", 0), file}}
+	got := s.StopAll()
+	if len(got) != 2 || got[0] != 7 || got[1] != 9 {
+		t.Fatalf("owners %v, want [7 9]", got)
+	}
+	if len(s.queue) != 0 || ctx.Err() == nil {
+		t.Fatal("StopAll left speech going")
+	}
+	if (&Speaker{}).StopAll() != nil {
+		t.Fatal("a quiet speaker cut someone off")
+	}
+}
+
 // An interruption keeps its own reason; a later stop does not rename it.
 func TestCutKeepsFirstReason(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())

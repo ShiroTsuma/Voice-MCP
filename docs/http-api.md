@@ -49,7 +49,7 @@ Poll every second or two while your agent runs. A session that has not polled fo
 - `"state": "idle"`: the agent waits for the user. `messages` are the user's next prompt; answer them. The turn they start counts as busy until you poll idle again or send `done`.
 - `"state": "busy"`: the agent is working. `messages` are what the user said meanwhile ("also check the tests"): take them into account in the running turn.
 
-Answer: `{"name": "Mira", "messages": ["add a dark theme"], "voice_reply": true, "persona": "…", "others": ["Tobias", "Zofia"]}`. `voice_reply` means the user spoke these words and has **Answer by voice** on: say the key point of your answer aloud (`say`). `persona` appears once after the user changed the session's character.
+Answer: `{"name": "Mira", "messages": ["add a dark theme"], "voice_reply": true, "persona": "…", "others": ["Tobias", "Zofia"]}`. `voice_reply` means the user spoke these words and has **Answer by voice** on: say the key point of your answer aloud (`say`). `persona` appears once after the user changed the session's character. `"interrupted": true` appears once after the user started dictating while this session spoke or had speech queued: voice has already stopped that speech, so drop the rest of what you meant to say and listen to what comes next.
 
 ### say
 

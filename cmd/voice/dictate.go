@@ -74,7 +74,8 @@ func (c *controller) dictate() {
 			c.problem("no speech recognition model; run `voice models pull vad asr-parakeet`")
 			return
 		}
-		c.sp.Stop() // do not record the agent talking
+		// Do not record the agent talking; the sessions cut off learn it from their poll.
+		c.agents.Interrupted(c.sp.StopAll()...)
 		screen, _ := c.feedback()
 		logf("dictation: recording (overlay %v, on screen %v)", c.ov != nil, screen)
 		c.show(func(s *overlay.State) { s.Recording, s.Level = true, 0 })

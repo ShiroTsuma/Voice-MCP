@@ -385,10 +385,25 @@ func endLocked(it *item, res Result) {
 }
 
 // Stop silences the current utterance and clears the queue.
-func (s *Speaker) Stop() {
+func (s *Speaker) Stop() { s.StopAll() }
+
+// StopAll is Stop that reports the sessions whose speech it cut off,
+// playing or queued (Request.Owner, no zeros), so they can be told.
+func (s *Speaker) StopAll() []uint32 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var owners []uint32
+	add := func(it *item) {
+		if it != nil && it.owner != 0 && it.saveTo == "" && !slices.Contains(owners, it.owner) {
+			owners = append(owners, it.owner)
+		}
+	}
+	add(s.current)
+	for _, it := range s.queue {
+		add(it)
+	}
 	s.dropLocked(ErrStopped)
+	return owners
 }
 
 func (s *Speaker) dropLocked(reason error) {

@@ -62,6 +62,9 @@ type SessionResult struct {
 	Messages []string `json:"messages"`
 	// VoiceReply: the user spoke these; with the setting on, answer aloud too.
 	VoiceReply bool `json:"voice_reply,omitempty"`
+	// Interrupted: the user started dictating while the session spoke (or had
+	// speech queued), and voice stopped it. Said once.
+	Interrupted bool `json:"interrupted,omitempty"`
 	// Others are the other sessions' names, which send takes.
 	Others []string `json:"others"`
 }
@@ -151,6 +154,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 			return nil, userErr("state is idle or busy, not %q", a.State)
 		}
 		out.VoiceReply = slices.ContainsFunc(out.Messages, func(m string) bool { return !FromAgent(m) }) && s.voiceReplies()
+		out.Interrupted, st.interrupted = st.interrupted, false
 		report := func() {}
 		if len(out.Messages) > 0 {
 			report = ag.changed(true)

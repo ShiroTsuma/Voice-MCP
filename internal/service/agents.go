@@ -70,6 +70,9 @@ type agentSeen struct {
 	custom   bool      // the name is the user's own, not one from the character list
 	session  string    // Claude Code's session id, from its hooks
 	modAt    time.Time // the last time its Claude Code mod asked for messages
+	// interrupted: the user started dictating over its speech; the next
+	// Session API poll says so and clears it. Not saved: a restart ends it.
+	interrupted bool
 }
 
 // Names given to sessions, short and far apart for a speech recognizer, in
@@ -211,6 +214,21 @@ func (a *Agents) Seen(pid uint32, client, project string) {
 	defer a.mu.Unlock()
 	a.get(pid, client, project)
 	a.saveLocked()
+}
+
+// Interrupted marks sessions whose speech the user cut off by starting to
+// dictate; their next poll says so once. Unknown processes are skipped.
+func (a *Agents) Interrupted(pids ...uint32) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, pid := range pids {
+		if st, ok := a.seen[pid]; ok {
+			st.interrupted = true
+		}
+	}
 }
 
 // Forget drops pid, e.g. after its process ended.
