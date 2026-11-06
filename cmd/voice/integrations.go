@@ -827,6 +827,23 @@ func cloneEngines() []map[string]any {
 	return out
 }
 
+// voiceDesign says whether voices can be designed from a description: its
+// backend is installed, or the environment it runs in is (Qwen3-TTS installs
+// the design model's package with its own).
+func voiceDesign() map[string]any {
+	ready := sidecarStatus(service.DesignEngine).State == integrations.On
+	label := "Qwen3-TTS"
+	if sb, ok := sidecar.Find(service.DesignEngine); ok {
+		if env := sb.EnvName(); env != service.DesignEngine {
+			if owner, ok := sidecar.Find(env); ok {
+				label = owner.Label
+			}
+			ready = ready || sidecarStatus(env).State == integrations.On
+		}
+	}
+	return map[string]any{"ready": ready, "needs": label}
+}
+
 // Speech servers started from the Integrations window, while they load.
 var starting = struct {
 	sync.Mutex

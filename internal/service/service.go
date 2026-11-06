@@ -135,8 +135,10 @@ type CloneArgs struct {
 	NewName  string `json:"new_name,omitempty"`  // rename: the voice's new name
 }
 
-// designEngine makes voices from a description (sidecar/backends.json).
-const designEngine = "qwen3_design"
+// DesignEngine makes voices from a description (sidecar/backends.json).
+const DesignEngine = "qwen3_design"
+
+const designEngine = DesignEngine
 
 // designSample is what a designed voice reads once; it becomes the clone's
 // recording and transcript. About ten seconds, varied in tone.

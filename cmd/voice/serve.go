@@ -454,7 +454,7 @@ func (b *backend) state() map[string]any {
 			"summary_sentences": cfg.Hooks.SummaryLength(), "summary_from": cfg.Hooks.SummaryPart(),
 			"codex_goal_wait": cfg.Hooks.GoalWait().Seconds(),
 		},
-		"options": map[string]any{"presets": presets, "outputs": outputs, "inputs": inputs, "models": asrModels(), "themes": overlayThemes(), "traits": cfg.TraitChoices(), "clone_engines": cloneEngines()},
+		"options": map[string]any{"presets": presets, "outputs": outputs, "inputs": inputs, "models": asrModels(), "themes": overlayThemes(), "traits": cfg.TraitChoices(), "clone_engines": cloneEngines(), "voice_design": voiceDesign()},
 		"notes":   b.ctl.hotkeyErrors(),
 		// The GPU voices' memory: the card, the budget, what the voices in use take.
 		"gpu": gpuOverview(cfg),

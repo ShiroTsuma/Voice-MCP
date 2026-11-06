@@ -410,6 +410,7 @@
   #gpuToast.on { opacity: 1; transform: none; pointer-events: auto; }
   #gpuToast .gpulead { color: var(--ink); font-weight: 600; }
   .cm-off { display: none !important; }
+  .seg button:disabled { opacity: .45; cursor: not-allowed; }
   textarea.text { height: auto; min-height: 52px; padding: 7px 10px; line-height: 1.4; resize: vertical; font-family: inherit; }
   .cloneacts.cm-design { grid-template-columns: 1fr; }
   .cloneacts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -645,7 +646,7 @@ nav.side .side-results .nohit { margin: 4px 12px; font: 12.5px var(--ui-small); 
             <label class="lab" for="cloneGroupSel">Group</label>
             <select id="cloneGroupSel"></select>
           </div>
-          <div class="row col cm-clone">
+          <div class="row col">
             <label class="lab" for="cloneEngine">Engine<span class="help" id="cloneEngineHint"></span></label>
             <select id="cloneEngine"></select>
           </div>
@@ -2122,12 +2123,26 @@ function wireClone() {
   seg('cloneMode', 'clone');
   cloneMode();
 }
-// Recording or Description: which rows the new voice's form shows.
+// Can voices be designed from words here: the design model's environment is installed.
+const designInfo = () => (state && state.options.voice_design) || { ready: false, needs: 'Qwen3-TTS' };
+// Recording or Description: which rows the new voice's form shows. Description
+// needs the design model; without it the choice is off and says what to install.
 function cloneMode() {
+  const d = designInfo(), btn = $('cloneMode').querySelector('[data-v=design]');
+  btn.disabled = !d.ready;
+  btn.title = d.ready ? '' : 'Needs ' + d.needs + ': install it in Integrations, GPU voices';
+  if (!d.ready && segValue('cloneMode') === 'design') seg('cloneMode', 'clone');
   const design = segValue('cloneMode') === 'design';
+  // A designed voice is cloned from its sample by the engine chosen here; Qwen3-TTS, which designed it, comes closest.
+  if (design && $('cloneMode').dataset.was !== 'design') {
+    const q = ((state && state.options.clone_engines) || []).find(x => x.name === 'qwen3' && x.ready);
+    if (q) { $('cloneEngine').value = 'qwen3'; cloneEngineHint(); }
+  }
+  $('cloneMode').dataset.was = design ? 'design' : 'clone';
   document.querySelectorAll('.cm-clone').forEach(x => x.classList.toggle('cm-off', design));
   document.querySelectorAll('.cm-design').forEach(x => x.classList.toggle('cm-off', !design));
-  $('cloneModeHelp').textContent = design ? 'Make one up from words, no recording (Qwen3-TTS)' : 'Clone someone from a recording';
+  $('cloneModeHelp').textContent = design ? 'Make one up from words, no recording; the engine below then speaks it'
+    : 'Clone someone from a recording' + (d.ready ? '' : ' (from a description needs ' + d.needs + ', in Integrations)');
   $('cloneDescHelp').textContent = design ? 'The voice in words: age, timbre, pace, mood, accent. English works best' : 'Optional: what the voice is for';
   $('cloneDesc').placeholder = design ? 'A woman in her forties, smooth low alto, calm and dry, neutral American accent' : '';
 }
@@ -2150,7 +2165,12 @@ async function designVoice() {
   const name = $('cloneName').value.trim(), desc = $('cloneDesc').value.trim(), sample = $('cloneSample').value.trim();
   if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(name)) { cloneMsg('Give the voice a name: 1-40 lowercase letters, digits, - or _.', true); $('cloneName').focus(); return; }
   if (!desc) { cloneMsg('Describe the voice in words first.', true); $('cloneDesc').focus(); return; }
+  const d = designInfo();
+  if (!d.ready) { cloneMsg('Designing a voice needs ' + d.needs + ': install it in Integrations, GPU voices.', true); return; }
+  const engine = $('cloneEngine').value, e = ((state && state.options.clone_engines) || []).find(x => x.name === engine);
+  if (e && !e.ready) { cloneMsg(e.label + ' is not installed: install it in Integrations, or pick another engine.', true); return; }
   const a = { action: 'design', name, ...cloneExtras() };
+  if (engine) a.engine = engine;
   if (sample) a.text = sample;
   cloneBusy = true; $('cloneDesign').disabled = true;
   cloneMsg('Designing ' + name + '… the first time loads the design model, which takes a while.');
@@ -2190,6 +2210,7 @@ function render(s) {
   const o = s.options;
   notes(s.notes);
   fillCloneEngines(s);
+  cloneMode(); // Description only while the design model is installed
   renderWordLists(s);
   if (!$('myWords').contains(document.activeElement)) renderMyWords((s.listen && s.listen.words) || []);
   renderLangs(s.languages || []);
