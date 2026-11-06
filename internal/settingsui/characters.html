@@ -167,6 +167,13 @@
   .tune .grid .lab { font-size: 13.5px; }
   .tune .val { font: 12.5px var(--ui-small); color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
   .tune .span2 { grid-column: 2 / 4; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  /* A folded group of settings, built like Tune; closed, its line says what they are set to. */
+  .fold .inner { display: grid; row-gap: 14px; padding: 2px 14px 14px; }
+  .fold .tuned { color: var(--ink-2); margin-left: auto; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .fold summary { min-width: 0; }
+  aside .fold { margin: 4px 0 6px; }
+  aside .fold summary { padding: 8px 10px; font-size: 13px; }
+  aside .fold .inner { row-gap: 0; padding: 0 10px 8px; }
   .seg { flex: none; display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
   .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 5px; background: none; font-size: 13px; font-weight: 600; color: var(--ink-2); }
   .seg button:hover { color: var(--ink); background: var(--field-hi); }
@@ -262,18 +269,23 @@
       <label class="lab" for="personas">Give sessions characters<span class="help">Each session takes on its character's personality, voice and picture; off keeps just the names</span></label>
       <label class="switch"><input type="checkbox" id="personas"><span></span></label>
     </div>
-    <div class="hold" id="hold">
-      <label class="lab" for="gImm">Immersion<span class="tip" tabindex="0" id="gImmTip">i</span></label>
-      <select id="gImm"></select>
-      <p class="levelnote" id="gNote"></p>
-      <label class="lab" for="gGuide">Reminders<span class="tip" tabindex="0" data-tip="How often an agent is reminded of its character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change. A character can choose its own.">i</span></label>
-      <div class="pair"><select id="gGuide"></select><input class="text num" type="number" id="gGuideN" min="1" max="100" hidden></div>
-    </div>
-    <div class="hold">
-      <label class="lab" for="gAloud">Says aloud<span class="tip" tabindex="0" id="gAloudTip">i</span></label>
-      <select id="gAloud"></select>
-      <p class="levelnote" id="gAloudNote"></p>
-    </div>
+    <details class="tune fold" id="allFold">
+      <summary><b>All characters</b> <span class="tuned" id="allSum"></span></summary>
+      <div class="inner">
+        <div class="hold" id="hold">
+          <label class="lab" for="gImm">Immersion<span class="tip" tabindex="0" id="gImmTip">i</span></label>
+          <select id="gImm"></select>
+          <p class="levelnote" id="gNote"></p>
+          <label class="lab" for="gGuide">Reminders<span class="tip" tabindex="0" data-tip="How often an agent is reminded of its character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change. A character can choose its own.">i</span></label>
+          <div class="pair"><select id="gGuide"></select><input class="text num" type="number" id="gGuideN" min="1" max="100" hidden></div>
+        </div>
+        <div class="hold">
+          <label class="lab" for="gAloud">Says aloud<span class="tip" tabindex="0" id="gAloudTip">i</span></label>
+          <select id="gAloud"></select>
+          <p class="levelnote" id="gAloudNote"></p>
+        </div>
+      </div>
+    </details>
   </header>
   <div class="list" id="list"></div>
   <footer><button class="btn wide" id="add" type="button"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 1.5v9M1.5 6h9"/></svg>New character</button></footer>
@@ -322,6 +334,9 @@
             </div>
           </details>
         </div>
+        <details class="tune fold" id="behave">
+        <summary><b>How it behaves</b> <span class="tuned" id="behaveSum"></span></summary>
+        <div class="inner">
         <div class="row col">
           <label class="lab" for="speaks">Speaks<span class="tip" tabindex="0" data-tip="The language it speaks aloud and announces in; its agent is told to speak it. Like the others: the Speaking language in the settings. Voices in languages other than English sound noticeably worse.">i</span></label>
           <div class="pair"><select id="speaks"></select></div>
@@ -341,6 +356,8 @@
           <div class="pair"><select id="guide"></select><input class="text num" type="number" id="guideN" min="1" max="100" hidden></div>
           <p class="levelnote" id="guideCost"></p>
         </div>
+        </div>
+        </details>
         <div class="row col">
           <div class="lab">Colour<span class="help">Its light when it speaks; automatic follows its place in the list</span></div>
           <div class="lights" id="lights" role="group" aria-label="Colour"></div>
@@ -615,7 +632,7 @@ function open(i) {
   fillLevel($('imm'), c.immersion || 0, true); levelNote('imm', 'immNote'); $('immTip').dataset.tip = levelsTip(true);
   fillGuide('guide', 'guideN', c.guidance, true);
   fillAloud($('aloud'), c.aloud || 0, true); aloudNote('aloud', 'aloudNote'); $('aloudTip').dataset.tip = aloudTip(true);
-  guideCost();
+  guideCost(); foldSums();
   paint();
   lights();
   const on = new Set(c.traits || []), box = $('traits'); box.textContent = '';
@@ -991,11 +1008,35 @@ function guideCost() {
 for (const id of ['guide', 'guideN', 'desc', 'name']) $(id).addEventListener('input', guideCost);
 $('guide').addEventListener('change', guideCost);
 $('traits').addEventListener('click', () => setTimeout(guideCost, 0));
+// The folded groups' lines: what the settings in them are set to, read while closed. A
+// character's own says "like the others" until it chooses something of its own.
+const optText = id => {
+  const s = $(id);
+  if (!s || s.selectedIndex < 0) return '';
+  const n = $(id + 'N'); // Reminders: "Every N of your messages…" with its number
+  return s.value === 'other' && n ? 'every ' + (n.value || '?') + ' of your messages' : s.options[s.selectedIndex].text;
+};
+function foldSums() {
+  $('allSum').textContent = [optText('gImm'), 'says ' + optText('gAloud').toLowerCase(), optText('gGuide').toLowerCase()].filter(Boolean).join(' · ');
+  if (sel < 0) return;
+  // Each setting's "Like the others" value: Reminders' 0 is a choice of its own (only at the start).
+  const own = [['speaks', 'speaks ', ''], ['imm', '', '0'], ['aloud', 'says ', '0'], ['guide', '', '']].filter(([id, , like]) => $(id).value !== like);
+  $('behaveSum').textContent = own.length ? own.map(([id, pre]) => pre + optText(id).toLowerCase()).join(' · ') : 'like the others';
+}
+document.addEventListener('change', foldSums);
+document.addEventListener('input', e => { if (e.target.id === 'guideN' || e.target.id === 'gGuideN') foldSums(); });
+// Open or closed as the user left them, in this window (a convenience; nothing depends on it).
+for (const id of ['allFold', 'behave']) {
+  try { $(id).open = localStorage.getItem('voice.characters.' + id) === 'open'; } catch (e) {}
+  $(id).addEventListener('toggle', () => { try { localStorage.setItem('voice.characters.' + id, $(id).open ? 'open' : 'closed'); } catch (e) {} });
+}
+
 function fillHold() {
   fillLevel($('gImm'), state.serve.character_immersion, false); levelNote('gImm', 'gNote'); $('gImmTip').dataset.tip = levelsTip(false);
   fillGuide('gGuide', 'gGuideN', state.serve.character_guidance, false);
   $('hold').classList.toggle('off', !$('personas').checked); $('gNote').hidden = !$('personas').checked;
   fillAloud($('gAloud'), state.serve.character_aloud || 1, false); aloudNote('gAloud', 'gAloudNote'); $('gAloudTip').dataset.tip = aloudTip(false);
+  foldSums();
 }
 async function saveHold() {
   const serve = { character_immersion: +$('gImm').value, character_guidance: guideValue('gGuide', 'gGuideN'), character_aloud: +$('gAloud').value };
@@ -1006,6 +1047,7 @@ async function saveHold() {
     const s = $('imm').value, a = $('aloud').value; fillLevel($('imm'), +s, true); fillGuide('guide', 'guideN', guideValue('guide', 'guideN') ?? undefined, true); fillAloud($('aloud'), +a, true);
     $('imm').value = s; levelNote('imm', 'immNote'); aloudNote('aloud', 'aloudNote'); guideCost();
   }
+  foldSums();
 }
 $('gImm').addEventListener('change', saveHold);
 $('gAloud').addEventListener('change', saveHold);
