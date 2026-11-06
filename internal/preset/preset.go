@@ -559,6 +559,27 @@ func (c *Config) DeletePreset(name string) {
 	delete(c.Presets, name)
 }
 
+// ReplacePresets takes the presets of a freshly loaded config, so voices
+// added, tuned or removed in the settings files apply without a restart. The
+// presets named in keep stay as they are here: runtime ones the files do not
+// hold, such as the settings window's preview.
+func (c *Config) ReplacePresets(from *Config, keep ...string) {
+	from.mu.RLock()
+	next := make(map[string]Preset, len(from.Presets)+len(keep))
+	for name, p := range from.Presets {
+		next[name] = p
+	}
+	from.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, name := range keep {
+		if p, ok := c.Presets[name]; ok {
+			next[name] = p
+		}
+	}
+	c.Presets = next
+}
+
 func (c *Config) resolveLocked(name string) (Resolved, error) {
 	if name == "" {
 		name = c.DefaultPreset

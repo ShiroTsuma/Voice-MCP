@@ -148,6 +148,19 @@ func runServe(args []string) error {
 	ctl := startExtras(ctx, cfg, sp, l, agents)
 	b := &backend{cfgPath: *cfgPath, cfg: cfg, sp: sp, ctl: ctl, stop: stop, exe: exe, logPath: logPath, devices: cfg.Device}
 	ctl.onSpeaking, ctl.onDictating, ctl.onReaderKey = b.speaking, b.dictating, b.toggleReader
+	// The files change outside the windows too: an agent sets a character's
+	// voice or adds a preset, the user edits them by hand. Apply that live.
+	go watchFiles(ctx, 2*time.Second, []string{*cfgPath, settingsPath(*cfgPath)}, func() {
+		restart, err := b.reloadChanged()
+		switch {
+		case err != nil:
+			logf("settings changed, not applied: %v", err)
+		case restart:
+			logf("settings changed; the output device applies after a restart")
+		default:
+			logf("settings changed, applied")
+		}
+	})
 	sp.OnPreparing(b.preparing)
 	// The Integrations window picks a GPU backend's model size here.
 	sidecarOptions = func(name string) map[string]string { return b.cfg.Sidecar[name] }
@@ -254,6 +267,9 @@ type backend struct {
 	logPath string
 	info    daemon.Info
 	devices string // the output device this process opened
+	// reloading keeps the windows' saves and the file watcher from applying
+	// the files at the same time.
+	reloading sync.Mutex
 }
 
 func (b *backend) save(fn func(*settings.Settings)) {
@@ -338,7 +354,16 @@ func (b *backend) test(name, text string) error {
 
 // reload re-reads config.toml and settings.toml and applies what can change
 // live; devices and the recognizer need a restart.
-func (b *backend) reload() (bool, error) {
+func (b *backend) reload() (bool, error) { return b.applyFiles(false) }
+
+// reloadChanged applies the files after they changed outside the windows. The
+// voice switched with voice_control set_preset, which is not saved, stays
+// unless default_preset itself changed or that voice is gone.
+func (b *backend) reloadChanged() (bool, error) { return b.applyFiles(true) }
+
+func (b *backend) applyFiles(keepActive bool) (bool, error) {
+	b.reloading.Lock()
+	defer b.reloading.Unlock()
 	next, err := loadConfig(b.cfgPath, "")
 	if err != nil {
 		return false, err
@@ -376,10 +401,15 @@ func (b *backend) reload() (bool, error) {
 	}
 	cur.DefaultLang, cur.Volume, cur.Serve, cur.Hooks = next.DefaultLang, next.Volume, next.Serve, next.Hooks
 	cur.LanguageNotice = next.LanguageNotice
+	// Voices tuned in the Characters window or written to the files by hand
+	// or by an agent; cloned voices come with them from the voices folder.
+	cur.ReplacePresets(next, settingsui.PreviewPreset)
 	cur.Characters = next.Characters
 	// Compare with the active preset too: voice_control set_preset switches it
 	// without touching default_preset, and the page shows the active one.
-	if next.DefaultPreset != cur.DefaultPreset || next.DefaultPreset != b.sp.Status().Preset {
+	active := b.sp.Status().Preset
+	_, gone := cur.Resolve(active)
+	if next.DefaultPreset != cur.DefaultPreset || gone != nil || (!keepActive && next.DefaultPreset != active) {
 		if err := b.sp.SetPreset(next.DefaultPreset); err != nil {
 			return restart, err
 		}
