@@ -44,6 +44,26 @@ func TestPollInterrupted(t *testing.T) {
 	none.Interrupted(11) // no sessions kept: nothing happens
 }
 
+// A cut-off line keeps how much of it was heard; other lines and
+// dictation are left alone.
+func TestTranscriptCut(t *testing.T) {
+	a := &Agents{}
+	a.Record(Line{Kind: "said", ID: "v1", Text: "one two three"})
+	a.Record(Line{Kind: "dictated", ID: "v1", Text: "hello"})
+	a.Record(Line{Kind: "said", ID: "v2", Text: "four five"})
+	a.Cut("v1", 0)
+	a.Cut("nope", 3)
+	tr := a.Transcript()
+	if tr[0].Heard == nil || *tr[0].Heard != 0 {
+		t.Fatalf("v1 heard %v, want 0", tr[0].Heard)
+	}
+	if tr[1].Heard != nil || tr[2].Heard != nil {
+		t.Fatal("a line that was not cut got marked")
+	}
+	var none *Agents
+	none.Cut("v1", 1)
+}
+
 // Every action Session handles has a route: the daemon serves SessionActions,
 // and Session refuses the rest, so an action missing from the list fails here.
 func TestSessionStopIsServed(t *testing.T) {

@@ -236,12 +236,12 @@ What the page writes for a theme to use (the built-in look hides the parts marke
 | Element | Data attributes | What it is |
 | --- | --- | --- |
 | `body` | `data-theme`, `data-speaker` | the theme; who speaks now. Classes `words` or `block` (Words appear), `pinned` (opened with the key) |
-| `.msg` (`.said`, `.dictated`, `.scene`, `.live`, `.last`) | `data-kind`, `data-speaker`, `data-client`, `data-project`, `data-source`, `data-to`, `data-scene`, `data-background` | one message |
+| `.msg` (`.said`, `.dictated`, `.scene`, `.live`, `.last`, `.cut`) | `data-kind`, `data-speaker`, `data-client`, `data-project`, `data-source`, `data-to`, `data-scene`, `data-background` | one message |
 | `.msg > .pic`, `.body`, `.head` with `.name`, `.where`, `.state`, `time` | | portrait or voiceprint, who, where from, speaking or getting ready, when |
 | `.setting` with `.title`, `.location`, `.time` (hidden) | `data-background` | a scene's setting |
 | `.lines` > `.line` (`.speaking` while said) | `data-speaker`, `data-voice`, `data-kind`, `data-mood`, `data-to`, `data-pause`, `data-action`, `data-spoken`, `data-narrator`, `data-index` | one line of a scene |
 | `.line` > `.line-pic`, `.meta` with `.name`, `.mood` (hidden), `.to` (hidden), `.voice` (hidden); `.action`; `.text` | | its speaker, how and to whom, the stage direction, the words |
-| `.w` (`.later`, `.now`) | | a word: not said yet, being said |
+| `.w` (`.later`, `.now`, `.unsaid`) | | a word: not said yet, being said, never heard (the message was cut short: `.cut`) |
 | `#hint`, `#dict` | | the bar shown when opened with the key; your dictation as it is heard |
 
 Variables: `--ground`, `--ink`, `--ink-2`, `--ink-3`, `--you`, `--plain`, `--ui`, `--ui-display`; `--light` is the message's speaker colour and `--c` a scene line's.

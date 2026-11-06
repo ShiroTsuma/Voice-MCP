@@ -79,6 +79,7 @@
   .words .live .w.now { color: color-mix(in oklab, var(--light) 55%, var(--ink)); }
   /* The whole block at once: what is not said yet is quieter, the word being said is marked. */
   .block .live .w.later { color: var(--ink-3); }
+  .msg .w.unsaid { color: var(--ink-3); }  /* cut off: what was never heard */
   .block .live .w.now { background: color-mix(in oklab, var(--light) 32%, transparent); color: var(--ink);
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--light) 32%, transparent); }
   #empty { margin: auto; color: var(--ink-3); }
@@ -387,6 +388,12 @@ function build(l) {
     words(text, l.text, null);
     body.append(text);
   }
+  // Cut short (stopped, interrupted, muted): the words never heard stay dim. A scene's
+  // words come line by line in the order they are spoken, so the count lines up.
+  if (!you && l.heard != null) {
+    el.classList.add('cut');
+    spans.forEach((s, i) => { if (i >= l.heard) s.classList.add('unsaid'); });
+  }
   el.append(you ? pic('You', YOU) : pic(speaker), body);
   return { el, toks, spans, lineOf, st, l };
 }
@@ -471,7 +478,7 @@ function render() {
   t.forEach((l, i) => {
     const k = keyOf(l);
     let v = views.get(k);
-    if (!v || v.l.text !== l.text) { if (v) v.el.remove(); v = build(l); views.set(k, v); if (live && liveKey === k) liveKey = null; }
+    if (!v || v.l.text !== l.text || v.l.heard !== l.heard) { if (v) v.el.remove(); v = build(l); views.set(k, v); if (live && liveKey === k) liveKey = null; }
     if (list.children[i + 1] !== v.el) list.insertBefore(v.el, list.children[i + 1] || null); // after #empty
     v.el.classList.toggle('last', i === t.length - 1);
   });

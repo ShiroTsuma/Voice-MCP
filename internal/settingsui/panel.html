@@ -262,6 +262,7 @@
   .ln .who .thumb, .ln .who .dot { align-self: center; margin-top: 0; }
   .ln .txt { font: 13.5px/1.4 var(--ui); color: var(--ink); text-wrap: pretty; overflow-wrap: anywhere; user-select: text; cursor: text; }
   .ln.hook .txt { color: var(--ink-2); }
+  .ln .txt .unsaid { color: var(--ink-3); }                     /* cut off: what was never heard */
   .ln .txt .q { color: var(--ink-3); }
   .ln .out { margin-top: 1px; font: 12px/1.4 var(--ui-small); color: var(--ink-2); }
   .dot { position: relative; display: inline-block; width: 20px; height: 20px; flex: none; }
@@ -1193,6 +1194,25 @@ function tokens(text) {
   }
   return out;
 }
+// How many words of a said line were heard, counted in its shown text; null
+// when it was heard in full (or still plays). voice reports it for a line cut
+// short; a stop from this window is known here first. A scene's shown text
+// names each speaker ("Clara: ..."), words that were never spoken.
+function heardOf(l) {
+  if (l.kind !== 'said') return null;
+  if (l.heard == null) {
+    if (!(stopped && stopped.id && stopped.id === l.id)) return null;
+    return tokens(l.text).filter(t => t.s < stopped.p).length;
+  }
+  let left = l.heard, n = l.heard;
+  for (const sl of l.lines || []) {
+    if (!sl.text) continue;
+    if (left <= 0) break;
+    if (sl.speaker) n += tokens(sl.speaker + ':').length;
+    left -= tokens(sl.text).length;
+  }
+  return n;
+}
 function words(el, toks, quoted) {
   el.textContent = '';
   if (quoted) { const q = document.createElement('span'); q.className = 'q'; q.textContent = '“'; el.append(q); }
@@ -1299,17 +1319,17 @@ function renderSaid() {
     showPortrait('voice', '');
     return;
   }
-  const cut = stopped && stopped.id && stopped.id === last.id;
-  const key = 'rest:' + (last.id || '') + ':' + last.at + ':' + (cut ? 'cut' : '');
+  const heard = heardOf(last);
+  const key = 'rest:' + (last.id || '') + ':' + last.at + ':' + (heard ?? '');
   if (shown !== key) {
     shown = key; nowIdx = -1;
     toks = tokens(last.text);
     $('line').className = 'line'; $('line').scrollTop = 0; $('line').title = last.text;
     spans = words($('line'), toks);
-    // What was not said stays dim: you see where it was cut off.
-    if (cut) toks.forEach((t, i) => { if (t.s >= stopped.p) spans[i].classList.add('unsaid'); });
+    // What was never heard stays dim: you see where it was cut off.
+    if (heard != null) spans.forEach((s, i) => { if (i >= heard) s.classList.add('unsaid'); });
   }
-  const verb = cut ? 'was stopped' : last.source === 'hook' ? 'announced' : 'said';
+  const verb = last.source === 'hook' ? 'announced' : 'said';
   saidCue(speakerName(last), muted ? verb + '; voice is muted now' : verb, ago(last.at));
   showPortrait(pidKey(last.pid), nameNow(last));
 }
@@ -1677,7 +1697,7 @@ $('personas').addEventListener('change', () => {
 let logSig = null;
 function renderLog() {
   const last = transcript[transcript.length - 1];
-  const sig = transcript.length + '|' + (last ? last.at + last.id : '') + '|' + Math.floor(Date.now() / 60000) + '|' + JSON.stringify(chars().map(c => [c.name, c.image, c.color])) + '|' + (stopped && stopped.id);
+  const sig = transcript.length + '|' + (last ? last.at + last.id : '') + '|' + Math.floor(Date.now() / 60000) + '|' + JSON.stringify(chars().map(c => [c.name, c.image, c.color])) + '|' + (stopped && stopped.id) + '|' + transcript.map(l => l.heard ?? '').join(',');
   if (sig === logSig) return;
   logSig = sig;
   const box = $('log'); box.textContent = '';
@@ -1686,7 +1706,7 @@ function renderLog() {
   }
   for (let k = transcript.length - 1; k >= 0; k--) {
     const l = transcript[k], you = l.kind === 'dictated';
-    const cut = !you && stopped && stopped.id && stopped.id === l.id;
+    const heard = heardOf(l);
     const ln = document.createElement('div');
     ln.className = 'ln ' + (you ? 'dictated' : 'said') + (!you && l.source === 'hook' ? ' hook' : '');
     const t = document.createElement('time'); t.textContent = clock(l.at); t.title = ago(l.at);
@@ -1706,12 +1726,19 @@ function renderLog() {
     } else {
       b.textContent = l.pid ? l.name || 'A session' : 'Default voice'; b.style.setProperty('--c', l.pid ? colourOf(l.name) : PLAIN);
       const w = l.pid ? whereOf(l.client, l.project) : '';
-      detail.textContent = (cut ? 'was stopped' : l.source === 'hook' ? 'announced' : 'said') + (w ? ', ' + w : '');
+      detail.textContent = (l.source === 'hook' ? 'announced' : 'said') + (w ? ', ' + w : '');
       who.append(b, detail);
     }
     const txt = document.createElement('div'); txt.className = 'txt';
     if (you) { txt.innerHTML = '<span class="q">“</span><span></span><span class="q">”</span>'; txt.children[1].textContent = l.text; }
-    else txt.textContent = l.text;
+    else if (heard == null) txt.textContent = l.text;
+    else tokens(l.text).forEach((t, i) => {
+      // Cut short: the words never heard stay dim.
+      if (i) txt.append(' ');
+      const s = document.createElement('span'); s.textContent = t.w;
+      if (i >= heard) s.className = 'unsaid';
+      txt.append(s);
+    });
     body.append(who, txt);
     if ((you || l.kind === 'message') && l.outcome) { const out = document.createElement('div'); out.className = 'out'; out.textContent = cap(l.outcome); body.append(out); }
     ln.append(you ? mark('', 20, true) : l.pid ? mark(l.name, 20) : mark('', 20), body, t);

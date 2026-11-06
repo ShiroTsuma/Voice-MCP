@@ -20,9 +20,13 @@ type Line struct {
 	Source  string    `json:"source,omitempty"`  // said: "hook" (an announcement) or "" (the agent itself)
 	Text    string    `json:"text"`
 	Outcome string    `json:"outcome,omitempty"` // dictated, message: where it went
-	From    string    `json:"from,omitempty"`    // message: the session that sent it
-	Scene   bool      `json:"scene,omitempty"`   // said: a script of lines ("Name: text ...")
-	Style   string    `json:"style,omitempty"`   // said: the session's style then (narrative while telling a story)
+	// Heard: said lines cut short (stopped, interrupted, muted, failed) keep
+	// how many of their words were heard (0: none); the windows dim the rest.
+	// Absent for a line heard in full or still playing.
+	Heard *int   `json:"heard,omitempty"`
+	From  string `json:"from,omitempty"`  // message: the session that sent it
+	Scene bool   `json:"scene,omitempty"` // said: a script of lines ("Name: text ...")
+	Style string `json:"style,omitempty"` // said: the session's style then (narrative while telling a story)
 	// Lines: a scene's lines one by one, for the reading window and its themes.
 	Lines []SceneLine `json:"lines,omitempty"`
 	// Setting: where and when the scene takes place, as the call gave it.
@@ -73,6 +77,23 @@ func (a *Agents) Record(l Line) {
 			logf("said: %s%s: %s", who, map[bool]string{true: " [announcement]"}[l.Source == "hook"], clip(l.Text, 160))
 		default:
 			logf("dictated: %s: %s", clip(l.Text, 160), l.Outcome)
+		}
+	}
+}
+
+// Cut records that the said line of utterance id ended after its first
+// words of it were heard (core.Speaker.OnCut).
+func (a *Agents) Cut(id string, words int) {
+	if a == nil || id == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for i := len(a.transcript) - 1; i >= 0; i-- {
+		if l := &a.transcript[i]; l.ID == id && l.Kind == "said" {
+			l.Heard = &words
+			a.saveTranscriptLocked()
+			return
 		}
 	}
 }

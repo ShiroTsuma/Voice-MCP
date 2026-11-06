@@ -173,6 +173,35 @@ type Speaker struct {
 	levelAt time.Time
 	wake    chan struct{}
 	closed  chan struct{}
+	// cutFn learns how many words of an utterance were heard when it ended
+	// before its end (stopped, interrupted, muted, failed).
+	cutFn func(id string, words int)
+}
+
+// OnCut sets a callback for an utterance that ended before all of it was
+// heard: its id and how many of its words were heard (0: none). It runs on
+// its own goroutine. Call before speaking.
+func (s *Speaker) OnCut(fn func(id string, words int)) { s.cutFn = fn }
+
+// endedLocked records how an utterance ended and, when it was cut short,
+// tells OnCut how much of it was heard; the caller holds s.mu.
+func (s *Speaker) endedLocked(it *item, res Result) {
+	endLocked(it, res)
+	if res.Err == nil || it.saveTo != "" || s.cutFn == nil {
+		return
+	}
+	words := 0
+	if l := it.line; !l.At.IsZero() {
+		// The sentence playing [From, To) is heard in proportion to its time.
+		f := 1.0
+		if l.Seconds > 0 {
+			f = min(1, time.Since(l.At).Seconds()/l.Seconds)
+		}
+		runes := []rune(it.text)
+		at := min(len(runes), max(l.Done, l.From+int(f*float64(l.To-l.From))))
+		words = len(strings.Fields(string(runes[:at])))
+	}
+	go s.cutFn(it.id, words)
 }
 
 // OnPreparing sets a callback for when an utterance starts rendering (true)
@@ -408,7 +437,7 @@ func (s *Speaker) StopAll() []uint32 {
 
 func (s *Speaker) dropLocked(reason error) {
 	for _, it := range s.queue {
-		endLocked(it, Result{Err: reason})
+		s.endedLocked(it, Result{Err: reason})
 		it.done <- Result{Err: reason}
 	}
 	s.queue = nil
@@ -438,7 +467,7 @@ func (s *Speaker) StopOwner(owner uint32) int {
 			kept = append(kept, it)
 			continue
 		}
-		endLocked(it, Result{Err: ErrStopped})
+		s.endedLocked(it, Result{Err: ErrStopped})
 		it.done <- Result{Err: ErrStopped}
 		n++
 	}
@@ -764,7 +793,7 @@ func (s *Speaker) loop() {
 		} else if res.Err != nil && !errors.Is(res.Err, context.Canceled) {
 			s.lastErr = res.Err.Error()
 		}
-		endLocked(it, res)
+		s.endedLocked(it, res)
 		idle := len(s.queue) == 0
 		s.mu.Unlock()
 		if hook := s.activity; hook != nil && idle && s.audibleOn {

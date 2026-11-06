@@ -80,6 +80,7 @@ func startExtras(ctx context.Context, cfg *preset.Config, sp *core.Speaker, l *l
 	}
 	c.apply()
 	sp.OnActivity(c.onActivity)
+	sp.OnCut(agents.Cut) // the windows dim what of a cut-off line was not heard
 	go func() {
 		<-ctx.Done()
 		if c.sessions != nil {
