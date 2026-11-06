@@ -574,6 +574,42 @@ func (s *Speaker) moreParts(ctx context.Context, it *item, have int, heard func(
 	}
 }
 
+// How long a turn in a GPU voice waits for its next pieces before it
+// renders what it has: until none came for gatherQuiet, gatherMax at most,
+// or a batch is full.
+var (
+	gatherQuiet = 700 * time.Millisecond
+	gatherMax   = 2500 * time.Millisecond
+)
+
+// gather waits for a turn's pieces after the first have of them to come
+// together (see gatherQuiet) and returns them; none when the turn closed.
+func (s *Speaker) gather(ctx context.Context, it *item, have int) []part {
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	start, last, n := time.Now(), time.Now(), have
+	for {
+		s.mu.Lock()
+		if len(it.parts) != n {
+			n, last = len(it.parts), time.Now()
+		}
+		open := it.open
+		s.mu.Unlock()
+		if !open || n-have+1 >= batchSize || time.Since(last) >= gatherQuiet || time.Since(start) >= gatherMax {
+			break
+		}
+		select {
+		case <-tick.C:
+		case <-it.grew:
+		case <-ctx.Done():
+			return nil
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(it.parts[have:])
+}
+
 // StopOwner silences one session's speech: its queued utterances and the
 // one playing, when it is theirs. Other sessions' speech goes on. It
 // reports how many utterances it stopped.
@@ -1158,8 +1194,48 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 			if it.lead > 0 && !put(rendered{pcm: audio.Silence(audio.DeviceRate, it.lead), gap: true}) {
 				return
 			}
+			// took counts the item's parts taken into vs, which merging shortens.
+			took := len(vs)
+			// addParts voices a turn's new pieces; false after an error went out.
+			addParts := func(more []part) bool {
+				took += len(more)
+				for _, p := range more {
+					v, err := voice(p)
+					if err != nil {
+						put(rendered{err: err})
+						return false
+					}
+					vs = append(vs, v)
+				}
+				return true
+			}
+			// merge joins a turn's pieces from vs[from] on that go on in the same
+			// voice and mood, with no break between, into one part: its sentences
+			// then render in batches, as one long text's would. A GPU voice renders
+			// a batch in about the time of one sentence, slower than speech.
+			merge := func(from int) {
+				out := vs[:from]
+				for _, v := range vs[from:] {
+					if k := len(out) - 1; k >= from && out[k].preset.Name == v.preset.Name && out[k].mood == v.mood && out[k].pause == 0 && v.before == 0 {
+						out[k].text += " " + v.text
+						out[k].sentences = append(out[k].sentences, v.sentences...)
+						out[k].pause = v.pause
+						continue
+					}
+					out = append(out, v)
+				}
+				vs = out
+			}
 			n := 0
 			for {
+				if it.turn != "" && n < len(vs) {
+					// A GPU voice waits a moment for the reply's next pieces, so they
+					// render together instead of one slow sentence at a time.
+					if s.heavyEngine(vs[n].choice.Engines[0]) && !addParts(s.gather(ctx, it, took)) {
+						return
+					}
+					merge(n)
+				}
 				for ; n < len(vs); n++ {
 					if n > 0 {
 						// A turn's next piece in the same voice carries on its effects,
@@ -1181,17 +1257,9 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 					break
 				}
 				// An open turn: the reply's next piece, rendered as it comes.
-				more, ok := s.moreParts(ctx, it, len(vs), func() bool { return played.Load() == int64(sent) })
-				if !ok {
+				more, ok := s.moreParts(ctx, it, took, func() bool { return played.Load() == int64(sent) })
+				if !ok || !addParts(more) {
 					break
-				}
-				for _, p := range more {
-					v, err := voice(p)
-					if err != nil {
-						put(rendered{err: err})
-						return
-					}
-					vs = append(vs, v)
 				}
 			}
 			if len(vs) > 0 {

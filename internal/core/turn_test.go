@@ -122,6 +122,61 @@ func TestTurnJoins(t *testing.T) {
 	done(t, c)
 }
 
+// gpuEngine stands for a GPU voice (type "http", which core tests do not
+// otherwise have): it renders batches and keeps their sizes.
+type gpuEngine struct {
+	turnEngine
+	batches []int
+}
+
+func (e *gpuEngine) SynthesizeBatch(ctx context.Context, reqs []engine.Request) ([]engine.Chunk, error) {
+	e.mu.Lock()
+	e.batches = append(e.batches, len(reqs))
+	e.mu.Unlock()
+	var out []engine.Chunk
+	for _, r := range reqs {
+		if err := e.Synthesize(ctx, r, func(c engine.Chunk) error { out = append(out, c); return nil }); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// A reply's pieces in a GPU voice, sent as a model writes them, render
+// together in one batch, as one long text's sentences would, not one slow
+// sentence at a time.
+func TestTurnBatchesGPU(t *testing.T) {
+	gpu := &gpuEngine{}
+	engine.Register("http", func(string, engine.Config) (engine.Engine, error) { return gpu, nil })
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(conf, []byte("default_preset = \"g\"\n[engines.gpu]\ntype = \"http\"\n[presets.g]\nengine = \"gpu\"\nchime = \"none\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := preset.Load(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := NewSpeaker(cfg)
+	sp.RecordTo(filepath.Join(dir, "out.wav"))
+	t.Cleanup(sp.Close)
+
+	first, _ := sp.Speak(Request{Text: s1, Lang: "en", Owner: 5, Turn: "r"})
+	for _, piece := range []string{s2, s3, "And a fourth sentence closes the reply."} {
+		time.Sleep(100 * time.Millisecond)
+		if tk, _ := sp.Speak(Request{Text: piece, Lang: "en", Owner: 5, Turn: "r"}); !tk.Appended {
+			t.Fatal("a piece did not join")
+		}
+	}
+	sp.EndTurn(5)
+	done(t, first)
+	gpu.mu.Lock()
+	defer gpu.mu.Unlock()
+	if !slices.Equal(gpu.batches, []int{4}) {
+		t.Fatalf("batches %v, want the four pieces in one", gpu.batches)
+	}
+}
+
 // Speech without a turn, or with another, closes the open one; a turn left
 // open ends by itself once all of it was heard.
 func TestTurnCloses(t *testing.T) {
