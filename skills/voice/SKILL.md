@@ -93,6 +93,12 @@ user asks for. `status` reports the active preset and the last error.
   sample once, the sample becomes an ordinary cloned voice (so it sounds the
   same every time), and a preview plays. Ask the user whether to keep it;
   `remove` it if not, and try another description.
+- The user files voices in their own groups ("D&D", "ASMR"). `groups` lists
+  them with their voices; `list` gives each voice's group. When you make a
+  voice for a purpose that fits one of their groups (or they name one), pass
+  `group` to `add`, `record` or `design`. `group` moves a voice, and
+  `rename_group` and `remove_group` change groups only when the user asks;
+  removing a group keeps its voices.
 
 ## Background process
 

@@ -54,7 +54,10 @@ type Profile struct {
 	PromptRevision string `toml:"prompt_revision,omitempty"`
 	// Designed is the description a voice was designed from (voice_clone
 	// design); empty for a recorded voice.
-	Designed     string `toml:"designed,omitempty"`
+	Designed string `toml:"designed,omitempty"`
+	// Group is the user's group the voice is filed in ("D&D", "ASMR"); empty:
+	// none. groups.toml keeps the groups' order, empty ones too.
+	Group        string `toml:"group,omitempty"`
 	PromptPath   string `toml:"-"` // Prompt as a full path, when there is one
 	OriginalPath string `toml:"-"`
 }
@@ -96,6 +99,9 @@ func Add(name, src, text, engineName, rights string, replace bool) (Profile, err
 	p := Profile{
 		Name: name, Text: strings.TrimSpace(text), Source: filepath.Base(src), Added: time.Now().UTC().Truncate(time.Second),
 		Engine: engineName, Rights: rights, Duration: math.Round(float64(len(pcm))/refRate*10) / 10,
+	}
+	if old, err := Get(name); err == nil {
+		p.Group = old.Group // a replaced voice stays in its group
 	}
 	stage := dir(name) + ".new"
 	os.RemoveAll(stage)
@@ -188,11 +194,16 @@ func SetDesigned(name, description string) error {
 		return err
 	}
 	p.Designed = strings.TrimSpace(description)
+	return writeMeta(p)
+}
+
+// writeMeta stores p's voice.toml.
+func writeMeta(p Profile) error {
 	var meta bytes.Buffer
 	if err := toml.NewEncoder(&meta).Encode(p); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir(name), "voice.toml"), meta.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(dir(p.Name), "voice.toml"), meta.Bytes(), 0o644)
 }
 
 // Reference reads a reference description: a JSON file with the recording

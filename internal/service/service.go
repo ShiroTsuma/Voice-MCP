@@ -128,6 +128,10 @@ type CloneArgs struct {
 	// Description: design's voice in words ("a raspy older woman, slow and dry").
 	Description string `json:"description,omitempty"`
 	Lang        string `json:"lang,omitempty"` // design: the sample's language (default en)
+	// Group: the user's group a voice goes in (group; add, record and design
+	// file the new voice there), or the group to rename or remove.
+	Group    string `json:"group,omitempty"`
+	NewGroup string `json:"new_group,omitempty"` // rename_group: the group's new name
 }
 
 // designEngine makes voices from a description (sidecar/backends.json).
@@ -749,6 +753,15 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		p = s.autoTranscript(p)
 		s.Config.SetPreset(core.ClonePresetName(p.Name), core.ClonePreset(p))
 		out := map[string]any{"name": p.Name, "preset": core.ClonePresetName(p.Name), "engine": p.Engine, "seconds": p.Duration, "transcript": p.Text}
+		if strings.TrimSpace(a.Group) != "" {
+			if g, err := clones.SetGroup(p.Name, a.Group); err != nil {
+				out["warning"] = "not filed in a group: " + err.Error()
+			} else {
+				out["group"] = g
+			}
+		} else if p.Group != "" {
+			out["group"] = p.Group
+		}
 		if NeedsTranscript(p.Engine) && p.Text == "" {
 			out["warning"] = p.Engine + " needs a transcript; call set_transcript"
 		}
@@ -804,7 +817,7 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		}
 		defer os.Remove(clip)
 		res, err := s.Clone(ctx, CloneArgs{Action: "add", Name: a.Name, ClipPath: clip, Transcript: sample, Engine: target,
-			RightsConfirmed: true, Rights: "designed from a description; no recorded person", Replace: a.Replace})
+			RightsConfirmed: true, Rights: "designed from a description; no recorded person", Replace: a.Replace, Group: a.Group})
 		if err != nil {
 			return nil, err
 		}
@@ -844,9 +857,10 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 	case "list":
 		rows := [][]any{}
 		for _, p := range clones.List() {
-			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Engine, p.Duration, p.Text != "", p.Source, p.Designed})
+			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Group, p.Engine, p.Duration, p.Text != "", p.Source, p.Designed})
 		}
-		return map[string]any{"columns": []string{"name", "preset", "engine", "seconds", "transcript", "source", "designed_from"}, "rows": rows}, nil
+		return map[string]any{"columns": []string{"name", "preset", "group", "engine", "seconds", "transcript", "source", "designed_from"}, "rows": rows,
+			"groups": clones.Groups()}, nil
 	case "preview":
 		if err := need("name"); err != nil {
 			return nil, err
@@ -880,8 +894,73 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		}
 		s.Config.DeletePreset(name)
 		return "removed " + a.Name, nil
+	case "groups":
+		return cloneGroups(), nil
+	case "group":
+		// With a name: file that voice in group (empty: in none). Without one:
+		// a new, empty group.
+		if a.Name == "" {
+			g, err := clones.AddGroup(a.Group)
+			if err != nil {
+				return nil, UserError{err.Error()}
+			}
+			return "group " + g + " is there", nil
+		}
+		g, err := clones.SetGroup(a.Name, a.Group)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		if g == "" {
+			return a.Name + " is in no group", nil
+		}
+		return a.Name + " is in " + g, nil
+	case "rename_group":
+		if a.Group == "" || a.NewGroup == "" {
+			return nil, userErr("rename_group needs group and new_group")
+		}
+		g, err := clones.RenameGroup(a.Group, a.NewGroup)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		return "group " + a.Group + " is now " + g, nil
+	case "remove_group":
+		if a.Group == "" {
+			return nil, userErr("remove_group needs group")
+		}
+		if err := clones.RemoveGroup(a.Group); err != nil {
+			return nil, UserError{err.Error()}
+		}
+		return "group " + a.Group + " removed; its voices are in no group", nil
 	}
 	return nil, userErr("unknown action %q", a.Action)
+}
+
+// cloneGroups is the user's groups of voices in their order, each with its
+// voices, then the voices in no group.
+func cloneGroups() map[string]any {
+	voices := clones.List()
+	byGroup := map[string][]string{}
+	var loose []string
+	for _, p := range voices {
+		if p.Group == "" {
+			loose = append(loose, p.Name)
+			continue
+		}
+		k := strings.ToLower(p.Group)
+		byGroup[k] = append(byGroup[k], p.Name)
+	}
+	rows := [][]any{}
+	for _, g := range clones.Groups() {
+		v := byGroup[strings.ToLower(g)]
+		if v == nil {
+			v = []string{}
+		}
+		rows = append(rows, []any{g, v})
+	}
+	if loose == nil {
+		loose = []string{}
+	}
+	return map[string]any{"columns": []string{"group", "voices"}, "rows": rows, "ungrouped": loose}
 }
 
 // design renders text in a voice made from desc by the design engine.

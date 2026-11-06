@@ -360,6 +360,26 @@
   .clones .cl b { font-weight: 600; }
   .clones .cl small { display: block; color: var(--ink-2); font-size: 12px; }
   .clones .cl .btn { height: 28px; padding: 0 10px; font-weight: 500; }
+  /* The user's groups of voices: a section each, voices dragged between them. */
+  .clones .cltools { display: flex; justify-content: flex-end; }
+  .clones .cltools .btn { height: 28px; padding: 0 10px; font-weight: 500; }
+  .clones .clsec { border-radius: 6px; padding: 2px 6px 4px; margin: 0 -6px; transition: background .12s; }
+  .clones .clsec.over { background: var(--field); box-shadow: inset 0 0 0 1px var(--ink-3, #666); }
+  .clones .clsechd { display: flex; align-items: center; gap: 6px; min-height: 32px; }
+  .clones .clsechd .fold { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .clones .clsechd .fold::before { content: ""; width: 0; height: 0; border-left: 5px solid var(--ink-2); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .15s; flex: none; }
+  .clones .clsec:not(.shut) .clsechd .fold::before { transform: rotate(90deg); }
+  .clones .clsechd b { font-size: 12.5px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .clones .clsechd small { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+  .clones .clsechd .icon { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--ink-2); font-size: 14px; cursor: pointer; opacity: .7; }
+  .clones .clsechd .icon:hover, .clones .clsechd .icon:focus-visible { background: var(--field-hi); color: var(--ink); opacity: 1; outline: none; }
+  .clones .clsechd .icon.sure { width: auto; padding: 0 8px; font-size: 12px; color: var(--ink); background: var(--field); opacity: 1; }
+  .clones .clsechd input.text { height: 28px; flex: 1; }
+  .clones .clsec.shut > .clbody { display: none; }
+  .clones .clempty { padding: 6px 0 6px 13px; color: var(--ink-2); font-size: 12.5px; }
+  .clones .cl[draggable="true"] { cursor: grab; }
+  .clones .cl.dragging { opacity: .4; }
+  .clones .clbody > .cl { padding-left: 13px; }
   /* The GPU voices' memory: under its setting, and for a while at the bottom after a voice choice. */
   .gpuview { padding: 0 0 6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
   .gpuview p, #gpuToast p { margin: 4px 0; }
@@ -1794,19 +1814,59 @@ function summaries() {
 // ── Voice clone ────────────────────────────────────────────────
 // Cloned voices: record one from the microphone or take a sound file. The
 // rights switch must be on; voice refuses otherwise.
-let clones = [], cloneBusy = false;
+let clones = [], cloneGroups = [], cloneBusy = false;
 async function loadClones() {
   try {
     const r = await api('clone', { action: 'list' });
     const cols = r.columns || [];
     clones = (r.rows || []).map(row => Object.fromEntries(cols.map((c, i) => [c, row[i]])));
-  } catch (e) { clones = []; }
+    cloneGroups = r.groups || [];
+  } catch (e) { clones = []; cloneGroups = []; }
+  drawClones();
+  if (state) summaries();
+}
+// Who speaks with each cloned voice: the characters whose voice is it, or a
+// tuning of it (voice-anna extends calm-mature, ...).
+function cloneUsers() {
+  const presets = (state && state.options && state.options.presets) || [];
+  const base = name => {
+    for (let i = 0; i < 5; i++) { const p = presets.find(x => x.name === name); if (!p || !p.extends) break; name = p.extends; }
+    return name;
+  };
+  const users = {};
+  for (const ch of (state && state.characters) || []) {
+    const v = ch.preset && base(ch.preset);
+    if (v) (users[v] = users[v] || []).push(ch.name);
+  }
+  if (state && state.default_preset) { const v = base(state.default_preset); (users[v] = users[v] || []).push('the default voice'); }
+  return users;
+}
+// The voices in the user's own groups ("D&D", "ASMR", ...), a section each in
+// their order, then those in no group. A voice is dragged onto a section to
+// move it there; New group adds one, a section's pencil renames it and its
+// cross removes it (its voices stay, in no group). Folded sections stay folded.
+const shutKey = 'voice.cloneGroupsShut';
+const shutGroups = new Set((() => { try { return JSON.parse(localStorage.getItem(shutKey) || '[]'); } catch (e) { return []; } })());
+const saveShut = () => { try { localStorage.setItem(shutKey, JSON.stringify([...shutGroups])); } catch (e) {} };
+let dragVoice = '';
+async function groupAct(args, done) {
+  try { await api('clone', args); if (done) cloneMsg(done); await loadClones(); }
+  catch (e) { cloneMsg(e.message, true); }
+}
+function drawClones() {
   const box = $('clones'); box.textContent = '';
-  for (const c of clones) {
+  if (!clones.length && !cloneGroups.length) return;
+  const users = cloneUsers();
+  const row = c => {
     const d = document.createElement('div'); d.className = 'cl';
     d.innerHTML = '<span><b></b><small></small></span>';
     d.querySelector('b').textContent = c.name;
-    d.querySelector('small').textContent = [c.seconds ? Math.round(c.seconds) + ' s' : '', c.engine].filter(Boolean).join(', ');
+    const who = users[c.name];
+    d.querySelector('small').textContent = [who ? andList(who) : '', c.seconds ? Math.round(c.seconds) + ' s' : '', c.engine].filter(Boolean).join(' · ');
+    d.title = (c.designed_from ? c.designed_from + '\n\n' : '') + 'Drag onto a group to move it there.';
+    d.draggable = true;
+    d.addEventListener('dragstart', e => { dragVoice = c.name; d.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.name); });
+    d.addEventListener('dragend', () => { dragVoice = ''; box.querySelectorAll('.dragging, .over').forEach(x => x.classList.remove('dragging', 'over')); });
     const hear = document.createElement('button'); hear.className = 'btn'; hear.type = 'button'; hear.textContent = 'Hear it';
     hear.addEventListener('click', () => cloneAct({ action: 'preview', name: c.name }, 'Playing ' + c.name + '…'));
     const rm = document.createElement('button'); rm.className = 'btn'; rm.type = 'button'; rm.textContent = 'Remove';
@@ -1815,9 +1875,87 @@ async function loadClones() {
       else { rm.dataset.sure = '1'; rm.textContent = 'Remove ' + c.name + '?'; setTimeout(() => { delete rm.dataset.sure; rm.textContent = 'Remove'; }, 3000); }
     });
     d.append(hear, rm);
-    box.append(d);
-  }
-  if (state) summaries();
+    return d;
+  };
+  const icon = (text, label) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'icon'; b.textContent = text; b.title = label; b.setAttribute('aria-label', label); return b; };
+  // group: a group's name, or '' for the voices in no group.
+  const section = (group, list) => {
+    const sec = document.createElement('div'); sec.className = 'clsec' + (shutGroups.has(group) ? ' shut' : '');
+    const hd = document.createElement('div'); hd.className = 'clsechd';
+    const fold = document.createElement('button'); fold.type = 'button'; fold.className = 'fold';
+    fold.innerHTML = '<b></b><small></small>';
+    fold.querySelector('b').textContent = group || 'No group';
+    fold.querySelector('small').textContent = list.length === 1 ? '1 voice' : list.length + ' voices';
+    fold.setAttribute('aria-expanded', String(!shutGroups.has(group)));
+    fold.addEventListener('click', () => {
+      const shut = sec.classList.toggle('shut');
+      shut ? shutGroups.add(group) : shutGroups.delete(group); saveShut();
+      fold.setAttribute('aria-expanded', String(!shut));
+    });
+    hd.append(fold);
+    if (group) {
+      const ren = icon('✎', 'Rename ' + group);
+      ren.addEventListener('click', () => renameGroup(hd, group));
+      const del = icon('✕', 'Remove the group ' + group + ' (its voices stay, in no group)');
+      del.addEventListener('click', () => {
+        if (del.classList.contains('sure')) groupAct({ action: 'remove_group', group }, 'Removed the group ' + group + '; its voices are in No group.');
+        else { del.classList.add('sure'); del.textContent = 'Remove group?'; setTimeout(() => { del.classList.remove('sure'); del.textContent = '✕'; }, 3000); }
+      });
+      hd.append(ren, del);
+    }
+    const body = document.createElement('div'); body.className = 'clbody';
+    if (list.length) list.forEach(c => body.append(row(c)));
+    else { const e = document.createElement('div'); e.className = 'clempty'; e.textContent = 'Drag voices here'; body.append(e); }
+    sec.append(hd, body);
+    sec.addEventListener('dragover', e => {
+      if (!dragVoice) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      box.querySelectorAll('.clsec.over').forEach(x => x !== sec && x.classList.remove('over'));
+      sec.classList.add('over');
+    });
+    sec.addEventListener('dragleave', e => { if (!sec.contains(e.relatedTarget)) sec.classList.remove('over'); });
+    sec.addEventListener('drop', e => {
+      e.preventDefault(); sec.classList.remove('over');
+      const voice = dragVoice || e.dataTransfer.getData('text/plain');
+      const c = clones.find(x => x.name === voice);
+      if (!c || (c.group || '') === group) return;
+      groupAct({ action: 'group', name: voice, group }, group ? 'Moved ' + voice + ' to ' + group + '.' : 'Moved ' + voice + ' out of its group.');
+    });
+    return sec;
+  };
+  const tools = document.createElement('div'); tools.className = 'cltools';
+  const add = document.createElement('button'); add.type = 'button'; add.className = 'btn'; add.textContent = '+ New group';
+  add.addEventListener('click', async () => {
+    let name = 'New group', n = 2;
+    while (cloneGroups.some(g => g.toLowerCase() === name.toLowerCase())) name = 'New group ' + n++;
+    await groupAct({ action: 'group', group: name });
+    const hd = [...box.querySelectorAll('.clsec')].find(s => s.querySelector('.fold b').textContent === name);
+    if (hd) renameGroup(hd.querySelector('.clsechd'), name);
+  });
+  tools.append(add);
+  box.append(tools);
+  const lower = g => (g || '').toLowerCase();
+  for (const g of cloneGroups) box.append(section(g, clones.filter(c => lower(c.group) === lower(g))));
+  const loose = clones.filter(c => !c.group);
+  if (loose.length || cloneGroups.length) box.append(section('', loose));
+}
+// Turns a section's title into a field: Enter or leaving it renames the group, Escape keeps the name.
+function renameGroup(hd, group) {
+  const fold = hd.querySelector('.fold');
+  if (!fold || hd.querySelector('input')) return;
+  const input = document.createElement('input'); input.className = 'text'; input.type = 'text'; input.maxLength = 40; input.value = group;
+  input.setAttribute('aria-label', 'Name of the group ' + group);
+  fold.hidden = true; hd.prepend(input); input.focus(); input.select();
+  let done = false;
+  const finish = keep => {
+    if (done) return; done = true;
+    const name = input.value.trim();
+    if (keep || !name || name === group) { input.remove(); fold.hidden = false; return; }
+    if (shutGroups.delete(group)) { shutGroups.add(name); saveShut(); }
+    groupAct({ action: 'rename_group', group, new_group: name }, 'Renamed ' + group + ' to ' + name + '.');
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finish(false); } else if (e.key === 'Escape') { e.preventDefault(); finish(true); } });
+  input.addEventListener('blur', () => finish(false));
 }
 function cloneMsg(text, warn) { const m = $('cloneMsg'); m.textContent = text || ''; m.classList.toggle('warn', !!warn); }
 async function cloneAct(args, busyText) {
@@ -1931,6 +2069,8 @@ document.addEventListener('click', e => { if (e.target.classList && e.target.cla
 // ── Settings ──────────────────────────────────────────────────
 function render(s) {
   state = s;
+  // Who uses each voice may have changed; not mid-drag or mid-rename.
+  if (clones.length && !dragVoice && !$('clones').querySelector('input')) drawClones();
   const o = s.options;
   notes(s.notes);
   fillCloneEngines(s);
