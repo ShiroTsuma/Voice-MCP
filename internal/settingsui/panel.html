@@ -1306,7 +1306,8 @@ function renderSaid() {
   }
   if (fillRaf) { cancelAnimationFrame(fillRaf); fillRaf = 0; }
   let last = null;
-  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'said') { last = transcript[i]; break; }
+  // The last line heard: one stopped before a word of it played stays in the transcript only.
+  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'said' && heardOf(transcript[i]) !== 0) { last = transcript[i]; break; }
   if (!last) {
     // Nothing said yet: the voice that would speak, and the light alone where a face would be.
     const key = 'quiet:' + defaultVoice() + ':' + muted;
