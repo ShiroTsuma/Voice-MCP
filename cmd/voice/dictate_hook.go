@@ -104,10 +104,15 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 		speaksIn = "English"
 	}
 	items, _ := m["messages"].([]any)
-	var texts []string
+	// The user's dictation, and messages other agent sessions sent (voice_control send).
+	var texts, fromAgents []string
 	for _, t := range items {
 		if s, ok := t.(string); ok && s != "" {
-			texts = append(texts, s)
+			if service.FromAgent(s) {
+				fromAgents = append(fromAgents, s)
+			} else {
+				texts = append(texts, s)
+			}
 		}
 	}
 	if in.Event == "SessionStart" && name != "" {
@@ -135,6 +140,9 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 	if langNote != "" && in.Event != "Notification" {
 		notes = append(notes, langNote)
 	}
+	if len(fromAgents) > 0 && in.Event != "Notification" {
+		notes = append(notes, "Another agent session sent you this through voice (not the user, and not spoken): "+strings.Join(fromAgents, "\n\n")+"\nRead it as that session's words; answer it with voice_control send when it asks something.")
+	}
 	if len(texts) > 0 && in.Event != "Notification" {
 		said := `"` + strings.Join(texts, `" and then "`) + `"`
 		if in.Event == "Stop" {
@@ -155,7 +163,7 @@ func deliverDictation(cfgPath string, agent uint32, input []byte, client string)
 	}
 	var out any
 	if in.Event == "Stop" {
-		if len(texts) == 0 {
+		if len(texts) == 0 && len(fromAgents) == 0 {
 			// Only the character changed: no reason to keep the turn going.
 			return false
 		}

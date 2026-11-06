@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -149,7 +150,7 @@ func (s *Service) Session(ctx context.Context, a SessionArgs) (any, error) {
 			ag.mu.Unlock()
 			return nil, userErr("state is idle or busy, not %q", a.State)
 		}
-		out.VoiceReply = len(out.Messages) > 0 && s.voiceReplies()
+		out.VoiceReply = slices.ContainsFunc(out.Messages, func(m string) bool { return !FromAgent(m) }) && s.voiceReplies()
 		report := func() {}
 		if len(out.Messages) > 0 {
 			report = ag.changed(true)
@@ -270,7 +271,7 @@ func (s *Service) sessionSend(a SessionArgs, from uint32) (any, error) {
 		return nil, userErr("could not send to %s: %s and %s exchanged %d messages in the last minute; stop here and tell the user instead (a loop guard)", a.To, s.Agents.Name(from), a.To, sendLimit)
 	}
 	sender := dirOr(s.Agents.Name(from), "another session")
-	msg := "Message from " + sender + " (another agent session, not the user): " + strings.TrimSpace(a.Text)
+	msg := "Message from " + sender + agentMark + strings.TrimSpace(a.Text)
 	if s.Agents.Name(from) != "" {
 		// How to answer, so any agent can, not only one told in the message.
 		msg += fmt.Sprintf("\n(To answer, use voice_control send with to %q.)", s.Agents.Name(from))
@@ -281,6 +282,16 @@ func (s *Service) sessionSend(a SessionArgs, from uint32) (any, error) {
 	}
 	s.Agents.Record(Line{Kind: "message", PID: to, From: sender, Text: strings.TrimSpace(a.Text), Outcome: report})
 	return map[string]any{"to": s.Agents.Name(to), "delivered": report}, nil
+}
+
+// agentMark follows the sender's name in a message from another session; it
+// tells the message apart from the user's dictation, which waits in the same queue.
+const agentMark = " (another agent session, not the user): "
+
+// FromAgent reports whether a queued message came from another agent session
+// (voice_control send), not from the user's dictation.
+func FromAgent(msg string) bool {
+	return strings.HasPrefix(msg, "Message from ") && strings.Contains(msg, agentMark)
 }
 
 // sendLimit messages between the same two sessions in sendWindow, either

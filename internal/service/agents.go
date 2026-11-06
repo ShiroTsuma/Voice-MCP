@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -424,7 +425,7 @@ func (s *Service) Agent(_ context.Context, a AgentArgs) (any, error) {
 	res := AgentResult{Messages: queued, Name: st.name, Style: st.style}
 	// Dictated words reach the agent: through this hook, or as the prompt it
 	// is about to answer (the mod's, Codex's queue, typed into a console).
-	if !sub && s.voiceReplies() && (len(queued) > 0 || ag.dictatedLocked(a.PID, a.Prompt)) {
+	if !sub && s.voiceReplies() && (slices.ContainsFunc(queued, func(m string) bool { return !FromAgent(m) }) || ag.dictatedLocked(a.PID, a.Prompt)) {
 		res.VoiceReply = true
 	}
 	// Not at a turn's end: a changed character waits for the next prompt or step.

@@ -146,3 +146,27 @@ func TestSendErrorsNameTheRecipient(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// A message another session sent waits in the same queue as dictation, but it
+// is not the user's voice: it neither reads as dictation nor asks for a
+// spoken reply.
+func TestAgentMessageIsNotTheUsersVoice(t *testing.T) {
+	on := true
+	cfg := &preset.Config{}
+	cfg.Serve.VoiceReplies = &on
+	s := &Service{Config: cfg, Agents: &Agents{}}
+	msg := "Message from Mira" + agentMark + "Which recipe?"
+	if !FromAgent(msg) || FromAgent("Message from the past, the user said") {
+		t.Fatal("FromAgent")
+	}
+	s.Agents.Enqueue(3, msg)
+	res, _ := s.Agent(context.Background(), AgentArgs{PID: 3, Client: "claude", Event: "busy"})
+	if r := res.(AgentResult); len(r.Messages) != 1 || r.VoiceReply {
+		t.Fatalf("agent message: %+v", r)
+	}
+	s.Agents.Enqueue(3, "Clara, check the tests")
+	res, _ = s.Agent(context.Background(), AgentArgs{PID: 3, Client: "claude", Event: "busy"})
+	if r := res.(AgentResult); !r.VoiceReply {
+		t.Fatalf("dictation: %+v", r)
+	}
+}
