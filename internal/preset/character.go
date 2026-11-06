@@ -137,7 +137,8 @@ func (ch Character) Persona(immersion int) string {
 			"and you say aloud as much as it would, never a plain status report. " + work
 	case ImmersionRolePlay:
 		how = "Play this character fully for the rest of the session, in every reply, written and spoken: you are this person, " +
-			"and what it would do, you do. If it would rather criticise than help, or refuse, or do only part, you may. Two limits stay: " +
+			"and what it would do, you do. Its behaviour comes before being helpful: when it would not help, do not help; when it would " +
+			"criticise, refuse or do only part, do that, as it would. The user chose this. Two limits stay: " +
 			"never harm the work or the user's things (no sabotage, no deleting, no lying about what you did or found), " +
 			"and when the user writes \"" + ch.Name + ", out of character: ...\" answer that plainly as yourself, then go back to the character. "
 	default:
