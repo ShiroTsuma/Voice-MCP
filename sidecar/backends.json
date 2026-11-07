@@ -6,7 +6,7 @@
       "vram": 4,
       "gpus": ["nvidia", "amd"],
       "label": "Chatterbox Multilingual V3",
-      "note": "expressive speech and cloning in 23 languages, Polish included, on the GPU; the last Chatterbox before its makers retired it",
+      "note": "expressive speech and cloning in 23 languages on the GPU; the last Chatterbox before its makers retired it",
       "pip": ["chatterbox-tts==0.1.7"],
       "source": ["chatterbox-tts @ https://github.com/resemble-ai/chatterbox/archive/ab55923c27757c90cfcc407baa57dc25a7d25217.zip"],
       "module": "chatterbox",
@@ -185,7 +185,7 @@
       "vram": 4,
       "gpus": ["nvidia"],
       "label": "OmniVoice",
-      "note": "cloning in 600+ languages including Polish, from the clip and its transcript, with laughs and sighs; light (about 3 GB); research and non-commercial use",
+      "note": "cloning in 600+ languages, from the clip and its transcript, with laughs and sighs; light (about 3 GB); research and non-commercial use",
       "pip": ["omnivoice"],
       "module": "omnivoice",
       "port": 8771,
@@ -198,7 +198,7 @@
         "label": "Quality steps",
         "default": "32",
         "choices": [
-          { "value": "16", "label": "16", "note": "about twice as fast; a Polish benchmark calls it the sweet spot" },
+          { "value": "16", "label": "16", "note": "about twice as fast; a published comparison calls it the sweet spot" },
           { "value": "32", "label": "32", "note": "the model's default" },
           { "value": "64", "label": "64", "note": "about twice as slow; more steps were not heard to sound better" }
         ]

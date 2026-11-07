@@ -79,8 +79,8 @@
   .log .fail { color: var(--err); }
   /* Not common.css's centred empty state: a quiet line under the group's heading. */
   .empty { margin: 30px 0 0; padding: 0; font: inherit; text-align: start; color: var(--ink-2); }
-  .langs { margin: 3px 0 0; font: 12.5px/1.45 var(--ui-small); color: var(--ink-2); }
-  .langs.miss { color: var(--part); }
+  /* An [i] with something to check inside: an update, a step left, none of the user's languages. */
+  .tip.warn { color: var(--part); box-shadow: inset 0 0 0 1.2px var(--part); }
   /* A setting of the integration, such as a model size. */
   .pick { margin: 8px 0 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 12.5px var(--ui-small); color: var(--ink-2); }
   .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
@@ -196,8 +196,20 @@ function soundsFacts(x) {
     : (moods.length ? moods.length : 'some') + (x.emotion === 'intensity' ? ', set as intensity' : x.emotion === 'labels' ? ', as labels' : '');
   return ['- **Sounds:** ' + s, '- **Moods:** ' + m];
 }
+// attention is what a card's [i] holds for the user to check, and turns the
+// [i] yellow: a step left or an update, or no language of theirs.
+function attention(it) {
+  const out = [];
+  if (it.status.detail && (it.status.state === 'partly' || it.status.label)) out.push('**' + (it.status.label || 'Needs a step') + ':** ' + it.status.detail + '.');
+  const langs = it.languages || [], mine = data.languages || [];
+  if (mine.length && langs.length && !langs.includes('*') && !mine.some(m => langs.includes(m))) {
+    out.push('**Not your languages:** it speaks none of ' + andList(mine.map(langName)) + '.');
+  }
+  return out;
+}
+
 function tipText(it) {
-  const facts = [], caveats = [];
+  const facts = [], caveats = attention(it);
   if (it.runs_on) facts.push('- **Runs on:** ' + capFirst(it.runs_on.replace(/^an? /, '')));
   if (it.vram) facts.push('- **Graphics memory:** about ' + it.vram + ' GB while loaded');
   if (it.size) facts.push('- **Size:** ' + sizeText(it.size));
@@ -234,24 +246,17 @@ function renderMain() {
     const name = document.createElement('span'); name.textContent = it.title;
     // One short line under the title; the rest behind the [i] beside it.
     const why = tipText(it);
-    if (why) { const t = document.createElement('span'); t.className = 'tip'; t.tabIndex = 0; t.textContent = 'i'; t.dataset.tip = why; t.dataset.for = it.id; name.append(t); }
+    if (why) { const t = document.createElement('span'); t.className = 'tip' + (attention(it).length ? ' warn' : ''); t.tabIndex = 0; t.textContent = 'i'; t.dataset.tip = why; t.dataset.for = it.id; name.append(t); }
     const st = document.createElement('span'); st.className = 'state ' + it.status.state;
     const running = it.job && !it.job.done;
     st.textContent = running ? 'Working…' : it.status.label || stateText[it.status.state] || it.status.state;
     h3.append(name, st);
     left.append(h3);
     if (it.about) { const a = document.createElement('p'); a.className = 'about'; a.textContent = it.about; left.append(a); }
-    const langs = languagesLine(it);
-    if (langs) {
-      const l = document.createElement('p'); l.className = 'langs'; l.textContent = langs;
-      const mine = data.languages || [];
-      if (mine.length && !(it.languages || []).includes('*') && !mine.some(m => it.languages.includes(m))) l.classList.add('miss');
-      left.append(l);
-    }
-    // What it does, its size and settings are in Info and settings (the
-    // button's menu); the row keeps what needs attention: an error, a step
-    // left, what to download, an update.
-    if (it.status.detail && (it.status.state === 'error' || it.status.state === 'partly' || it.status.state === 'missing' || it.status.label)) {
+    // The rest is behind the [i], yellow when something there needs a look
+    // (a step left, an update, none of the user's languages); only an error
+    // shows on the row.
+    if (it.status.detail && it.status.state === 'error') {
       const d = document.createElement('p'); d.className = 'detail'; d.textContent = it.status.detail;
       left.append(d);
     }

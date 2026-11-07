@@ -100,6 +100,21 @@ type handler struct {
 	do     func(ctx context.Context, f integrationFile, action string, log func(string)) error
 }
 
+// envLocks keeps one setup at a time in each sidecar environment.
+var envLocks sync.Map // env name -> *sync.Mutex
+
+// lockEnv takes env's setup lock, calling waiting first when another setup
+// holds it, and returns the unlock.
+func lockEnv(env string, waiting func()) (unlock func()) {
+	m, _ := envLocks.LoadOrStore(env, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	if !mu.TryLock() {
+		waiting()
+		mu.Lock()
+	}
+	return mu.Unlock
+}
+
 // retiredCards are cards voice no longer ships: their files may linger next
 // to voice.exe after an update that copied the new ones over the old.
 var retiredCards = map[string]bool{
@@ -613,6 +628,13 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 				if b, _ := sidecar.Find(f.Backend); b.CPU {
 					torch = "PyTorch for the processor"
 				}
+				// Backends that share an environment (Chatterbox and Turbo) install
+				// one after the other: two setups in one environment at once break each other.
+				envName := f.Backend
+				if b, ok := sidecar.Find(f.Backend); ok {
+					envName = b.EnvName()
+				}
+				defer lockEnv(envName, func() { log("Waiting for the other setup in the " + envName + " environment to finish…") })()
 				log("Setting up " + f.Title + ": a Python environment, " + torch + ", then the backend. This takes a while.")
 				args := []string{"sidecar"}
 				if pyruntime.Installed(httpengine.SidecarDir) { // the Python voice brings, when it is there
