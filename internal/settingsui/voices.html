@@ -105,7 +105,11 @@
 <aside>
   <header>
     <h1>Voice design</h1>
-    <p class="help">Voices you made, in your groups<span class="tip" tabindex="0" data-tip="Every voice here is a preset: give it to a character or make it the default voice in Speaking. Drag a voice onto a group to move it; folded groups stay folded. Agents see the groups and descriptions too (voice_clone).">i</span></p>
+    <p class="help">Voices you made, in your groups<span class="tip" tabindex="0" data-tip="Every voice here is a preset: give it to a character or make it the default voice in Speaking.
+- Drag a voice onto a group to move it.
+- Folded groups stay folded.
+
+Agents see the groups and descriptions too (voice_clone).">i</span></p>
   </header>
   <div class="list" id="list"></div>
   <footer>
@@ -120,7 +124,10 @@
   <form id="voice" hidden autocomplete="off">
     <div class="scroll"><div class="fields">
       <div class="row col">
-        <label class="lab" for="vName">Name<span class="tip" tabindex="0" data-tip="Lowercase letters, digits, - or _. It is also the voice's preset name: renaming it moves the characters, the default voice and the tunings that use it along.">i</span></label>
+        <label class="lab" for="vName">Name<span class="tip" tabindex="0" data-tip="The voice's name, also its preset name.
+Lowercase letters, digits, - or _.
+
+Renaming it moves the characters, the default voice and the tunings that use it along.">i</span></label>
         <input class="text name" type="text" id="vName" maxlength="40" spellcheck="false">
       </div>
       <div class="row col">
@@ -161,11 +168,20 @@
         <textarea id="mDesc" maxlength="600"></textarea>
       </div>
       <div class="row col" data-for="design">
-        <label class="lab" for="mSample">Sample<span class="opt">optional</span><span class="tip" tabindex="0" data-tip="What the new voice reads once, about ten seconds. The voice keeps the tone of this reading, so write it the way the voice should sound: calm, excited, sarcastic. Empty: a neutral greeting.">i</span></label>
+        <label class="lab" for="mSample">Sample<span class="opt">optional</span><span class="tip" tabindex="0" data-tip="What the new voice reads once, about ten seconds.
+
+The voice keeps the **tone** of this reading, so write it the way the voice should sound: calm, excited, sarcastic.
+
+Empty: a neutral greeting.">i</span></label>
         <input class="text" type="text" id="mSample" maxlength="400" placeholder="A few sentences in the voice's own mood">
       </div>
       <div class="row col" data-for="file">
-        <div class="lab">Recording<span class="tip" tabindex="0" data-tip="5 to 15 seconds of one clear speaker, no music: WAV, MP3, FLAC, OGG or M4A. Longer clips are cut. What it says is written down by speech recognition when the engine needs it.">i</span></div>
+        <div class="lab">Recording<span class="tip" tabindex="0" data-tip="The recording the voice is cloned from.
+- 5 to 15 seconds of one clear speaker, no music.
+- WAV, MP3, FLAC, OGG or M4A.
+- Longer clips are cut.
+
+What it says is written down by speech recognition when the engine needs it.">i</span></div>
         <div class="drop" id="mDrop"><span id="mDropText">Drop a sound file here</span><button class="btn" id="mPick" type="button">Choose a file…</button></div>
         <input type="file" id="mFile" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" hidden>
       </div>
@@ -444,8 +460,9 @@ function engineHelp() {
   const missing = e && e.languages ? mine.filter(l => !e.languages.includes(l)) : [];
   $('mEngineHelp').textContent = !e ? 'Install a voice engine in Integrations' : (speaks.length ? 'Speaks ' + andList(speaks.map(langWord)) : 'None of your languages')
     + (missing.length ? '; not ' + andList(missing.map(langWord)) : '');
-  $('mEngineTip').dataset.tip = e ? e.label + ': ' + e.note + '.' + (e.transcript ? ' It needs what the recording says; speech recognition writes it down.' : '')
-    + ' Engines are installed in Integrations, GPU voices.' : 'The engines are installed in Integrations.';
+  $('mEngineTip').dataset.tip = e ? 'The engine the new voice speaks with.\n**' + e.label + ':** ' + e.note + '.'
+    + (e.transcript ? '\n\nIt needs what the recording says; speech recognition writes it down.' : '')
+    + '\n\nEngines are installed in Integrations, GPU voices.' : 'The engines are installed in Integrations.';
 }
 $('mEngine').addEventListener('change', engineHelp);
 
@@ -464,7 +481,7 @@ function fromChanged(byUser) {
   if (!d.ready) $('mFromHelp').textContent += ' · from a description ' + designWhy();
   const lab = $('mDescLab');
   lab.innerHTML = from === 'design'
-    ? 'The voice in words<span class="tip" tabindex="0" data-tip="Age, gender, timbre, pace, mood and accent, in English: &quot;a woman in her forties, smooth low alto, calm and dry, neutral American accent&quot;. Qwen3-TTS reads the sample once in that voice, and the engine below then speaks with it. It also becomes the voice&#39;s description.">i</span>'
+    ? 'The voice in words<span class="tip" tabindex="0" data-tip="Age, gender, timbre, pace, mood and accent, in English.\nFor example: &quot;a woman in her forties, smooth low alto, calm and dry, neutral American accent&quot;.\n\nQwen3-TTS reads the sample once in that voice, and the engine below then speaks with it.\n\nIt also becomes the voice&#39;s description.">i</span>'
     : 'Description<span class="opt">optional</span><span class="help">What it is, or what it is for</span>';
   $('mDesc').placeholder = from === 'design' ? 'e.g. a woman in her forties, smooth low alto, calm and dry, neutral American accent' : 'e.g. my own voice, for announcements';
   // A designed voice speaks best with Qwen3-TTS, which made it: picked when switching to Description.

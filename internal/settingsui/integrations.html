@@ -179,33 +179,39 @@ function renderGroups() {
 
 const stateText = { on: 'Set up', off: 'Off', missing: 'Not installed', partly: 'Needs a step', error: 'Problem', planned: 'Coming later' };
 
-// The [i] beside a card's title: its details (what it is good at), then the
-// facts in short lines. Info and settings has the same and more: the state,
-// the settings, every language and sound by name, and the link.
+// The [i] beside a card's title: its details (what it is good at) as the
+// first paragraph, then the facts as a list with bold labels, then what keeps
+// it from this PC. Info and settings has the same and more: the state, the
+// settings, every language and sound by name, and the link.
 const sizeText = s => /\d[BM]$/.test(s) ? s + ' parameters' : s;
-function soundsText(x) {
+// "an NVIDIA graphics card" -> "NVIDIA graphics card", as Info and settings shows it.
+const capFirst = s => s.replace(/^./, c => c.toUpperCase());
+function soundsFacts(x) {
   const sounds = x.sounds || [], moods = (x.moods || []).filter(m => m !== 'any');
   const noMood = x.emotion === 'none' || !x.emotion;
-  if (!sounds.length && noMood) return 'Plain speech: sound tags and moods are left out.';
+  if (!sounds.length && noMood) return ['- **Sounds and moods:** none, plain speech (sound tags and moods are left out)'];
   const tags = sounds.slice(0, 4).map(n => '{' + n + '}');
   const s = !sounds.length ? 'none' : sounds.length > 4 ? tags.join(', ') + ' and ' + (sounds.length - 4) + ' more' : andList(tags);
   const m = noMood ? 'none' : x.emotion === 'instruct' ? 'any, by instruction'
     : (moods.length ? moods.length : 'some') + (x.emotion === 'intensity' ? ', set as intensity' : x.emotion === 'labels' ? ', as labels' : '');
-  return 'Sounds: ' + s + '; moods: ' + m + '.';
+  return ['- **Sounds:** ' + s, '- **Moods:** ' + m];
 }
 function tipText(it) {
-  const facts = [];
-  if (it.status.state === 'planned') facts.push('Coming later: not in voice yet, so there is nothing to install.');
-  if (it.runs_on) facts.push('Runs on ' + it.runs_on + '.');
-  if (it.vram) facts.push('Takes about ' + it.vram + ' GB of graphics memory while loaded.');
-  if (it.size) facts.push('Size: ' + sizeText(it.size) + '.');
+  const facts = [], caveats = [];
+  if (it.runs_on) facts.push('- **Runs on:** ' + capFirst(it.runs_on.replace(/^an? /, '')));
+  if (it.vram) facts.push('- **Graphics memory:** about ' + it.vram + ' GB while loaded');
+  if (it.size) facts.push('- **Size:** ' + sizeText(it.size));
   const langs = it.languages || [];
-  if (langs.includes('*')) facts.push('Languages: nearly every language.');
-  else if (langs.length > 12) facts.push('Languages: ' + langs.length + '; Info lists them.');
-  else if (langs.length) facts.push('Languages: ' + andList(langs.map(langName)) + '.');
-  if (it.expressive) facts.push(soundsText(it.expressive));
-  if (it.license) facts.push('License: ' + it.license + '.');
-  return [it.details, facts.join('\n')].filter(Boolean).join('\n\n');
+  if (langs.includes('*')) facts.push('- **Languages:** nearly every language');
+  else if (langs.length > 12) facts.push('- **Languages:** ' + langs.length + ', Info and settings lists them');
+  else if (langs.length) facts.push('- **Languages:** ' + andList(langs.map(langName)));
+  if (it.expressive) facts.push(...soundsFacts(it.expressive));
+  if (it.license) facts.push('- **License:** ' + it.license);
+  if (it.status.state === 'planned') caveats.push('**Coming later:** not in voice yet, so there is nothing to install.');
+  // An install this PC's graphics card cannot run says why ("Needs an NVIDIA graphics card").
+  const blocked = (it.status.actions || []).find(a => a.disabled && a.why && /^Needs /.test(a.why));
+  if (blocked) caveats.push('**Not on this PC:** it ' + blocked.why.replace(/^N/, 'n') + ', so it cannot be installed here.');
+  return [it.details, facts.join('\n'), caveats.join('\n\n')].filter(Boolean).join('\n\n');
 }
 
 function renderMain() {

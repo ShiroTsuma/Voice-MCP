@@ -196,7 +196,9 @@
           <label class="lab" for="gImm">Immersion<span class="tip" tabindex="0" id="gImmTip">i</span></label>
           <select id="gImm"></select>
           <p class="levelnote" id="gNote"></p>
-          <label class="lab" for="gGuide">Reminders<span class="tip" tabindex="0" data-tip="How often an agent is reminded of its character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change. A character can choose its own.">i</span></label>
+          <label class="lab" for="gGuide">Reminders<span class="tip" tabindex="0" data-tip="How often an agent is reminded of its character, counted in your messages, not in the agent's steps.
+
+The whole description always goes out at the start and after a change. A character can choose its own.">i</span></label>
           <div class="pair"><select id="gGuide"></select><input class="text num" type="number" id="gGuideN" min="1" max="100" hidden></div>
         </div>
         <div class="hold">
@@ -264,7 +266,10 @@ Voices differ: listen with Hear it. On Qwen3-TTS fast it costs almost nothing; o
         <summary><b>How it behaves</b> <span class="tuned" id="behaveSum"></span></summary>
         <div class="inner">
         <div class="row col">
-          <label class="lab" for="speaks">Speaks<span class="tip" tabindex="0" data-tip="The language it speaks aloud and announces in; its agent is told to speak it. Like the others: the Speaking language in the settings. Voices in languages other than English sound noticeably worse.">i</span></label>
+          <label class="lab" for="speaks">Speaks<span class="tip" tabindex="0" data-tip="The language it speaks aloud and announces in; its agent is told to speak it.
+- **Like the others:** the Speaking language in the settings.
+
+Voices in languages other than English sound noticeably worse.">i</span></label>
           <div class="pair"><select id="speaks"></select></div>
         </div>
         <div class="row col">
@@ -278,7 +283,9 @@ Voices differ: listen with Hear it. On Qwen3-TTS fast it costs almost nothing; o
           <p class="levelnote" id="aloudNote"></p>
         </div>
         <div class="row col">
-          <label class="lab" for="guide">Reminders<span class="tip" tabindex="0" id="guideTip" data-tip="How often its agent is reminded of the character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change.">i</span></label>
+          <label class="lab" for="guide">Reminders<span class="tip" tabindex="0" id="guideTip" data-tip="How often its agent is reminded of the character, counted in your messages, not in the agent's steps.
+
+The whole description always goes out at the start and after a change.">i</span></label>
           <div class="pair"><select id="guide"></select><input class="text num" type="number" id="guideN" min="1" max="100" hidden></div>
           <p class="levelnote" id="guideCost"></p>
         </div>
@@ -746,7 +753,7 @@ const LEVELS = [
   [4, 'Role-play', 'It behaves as the person described, helpful or not: describe what it does ("never writes code for others; only reviews") for it to act on it. It never harms the work or your files and never lies about what it did; start a message with "<name>, out of character:" for a plain answer.', 'Acts as described, even unhelpfully; never harms the work.'],
 ];
 // The [i] of an Immersion list: every level, the chosen one first.
-const levelsTip = own => LEVELS.map(l => l[1] + ': ' + l[2]).join('\n\n') + (own ? '' : '\n\nA character can choose its own.');
+const levelsTip = own => 'How strongly a character steers its agent.\n' + LEVELS.map(l => '- **' + l[1] + ':** ' + l[2]).join('\n') + (own ? '' : '\n\nA character can choose its own.');
 const GUIDES = [[0, 'Only at the start'], [1, 'Every message you send'], [3, 'Every 3 of your messages'], [5, 'Every 5 of your messages'], [10, 'Every 10 of your messages']];
 const levelName = v => (LEVELS.find(l => l[0] === v) || LEVELS[1])[1];
 const guideName = v => (GUIDES.find(g => g[0] === v) || [v, 'Every ' + v + ' of your messages'])[1];
@@ -788,8 +795,8 @@ const ALOUD = [
   [3, 'Nearly all', 'It says nearly all of each reply aloud, as it would tell you in person. Only code, paths, links and raw output stay on screen. Long replies take a while to hear, and the agent writes a little more slowly while it speaks.', 'Almost the whole reply; code and raw output stay on screen.'],
 ];
 const aloudName = v => (ALOUD.find(l => l[0] === v) || ALOUD[0])[1];
-const aloudTip = own => ALOUD.map(l => l[1] + ': ' + l[2]).join('\n\n') + '\n\nThe agent is told at the start, after you change it and with the reminders.' +
-  (own ? '' : ' Sessions without a character, or with characters off, follow this one; a character can choose its own.');
+const aloudTip = own => 'How much of each reply the agent says aloud.\n' + ALOUD.map(l => '- **' + l[1] + ':** ' + l[2]).join('\n') + '\n\nThe agent is told at the start, after you change it and with the reminders.' +
+  (own ? '' : '\n\nSessions without a character, or with characters off, follow this one; a character can choose its own.');
 function fillAloud(sel, cur, perChar) {
   sel.textContent = '';
   const opts = (perChar ? [[0, 'Like the others (' + aloudName(state.serve.character_aloud) + ')']] : []).concat(ALOUD.map(l => [l[0], l[1]]));
@@ -824,7 +831,7 @@ const ALOUD_NOTE = {
 };
 const WORK = 'It shapes only how you talk, never the work: stay correct, complete, honest and safe, and keep helping even when the character is mean or teasing. ';
 const tokens = s => Math.max(1, Math.round(s.length / 4));
-const REM_TIP = "How often its agent is reminded of the character, counted in your messages, not in the agent's steps. The whole description always goes out at the start and after a change.";
+const REM_TIP = "How often its agent is reminded of the character, counted in your messages, not in the agent's steps.\n\nThe whole description always goes out at the start and after a change.";
 var costShort = ''; // guideCost's figure, short, for the How it behaves line
 function guideCost() {
   if (sel < 0) return;
@@ -844,9 +851,9 @@ function guideCost() {
   // What the character costs stays in sight on the closed How it behaves line too.
   costShort = every === 0 ? '≈ ' + start + ' tokens at the start' : '≈ ' + per + ' tokens a message';
   foldSums();
-  $('guideTip').dataset.tip = REM_TIP + '\n\nA reminder here is ' + (level >= 3 ? 'the whole description' : 'one line with its name and traits') + (note ? ' and how much to say aloud' : '') +
+  $('guideTip').dataset.tip = REM_TIP + '\n\nFor this character:\n- A reminder is ' + (level >= 3 ? 'the whole description' : 'one line with its name and traits') + (note ? ' and how much to say aloud' : '') +
     ', ≈ ' + each + ' tokens' + (level >= 3 ? ', since the character steers fully' : '') +
-    (every === 0 ? '; with "Only at the start" none is sent.' : ', every ' + (every === 1 ? 'message you send' : every + ' of your messages') + '. The description at the start is ≈ ' + start + ' tokens.');
+    (every === 0 ? '; with "Only at the start" none is sent.' : ', every ' + (every === 1 ? 'message you send' : every + ' of your messages') + '.\n- The description at the start is ≈ ' + start + ' tokens.');
 }
 for (const id of ['guide', 'guideN', 'desc', 'name']) $(id).addEventListener('input', guideCost);
 $('guide').addEventListener('change', guideCost);
