@@ -244,7 +244,9 @@ func NewVAD(model string, minSilence float32) (*VAD, error) {
 	c.f32(p+"silero_vad.min_silence_duration", minSilence)
 	c.f32(p+"silero_vad.min_speech_duration", 0.25)
 	c.i32(p+"silero_vad.window_size", VADWindow)
-	c.f32(p+"silero_vad.max_speech_duration", 30)
+	// A longer stretch without a pause is cut here, so a segment always fits
+	// in one piece for the recognizer (Whisper hears 30 s; listen.maxPiece).
+	c.f32(p+"silero_vad.max_speech_duration", 20)
 	c.i32(p+"sample_rate", 16000)
 	c.i32(p+"num_threads", 1)
 	c.str(p+"provider", "cpu")

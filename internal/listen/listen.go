@@ -141,7 +141,8 @@ func (l *Listener) Close() {
 	}
 }
 
-// Transcribe recognizes complete audio at any sample rate.
+// Transcribe recognizes complete audio at any sample rate. Audio longer than
+// a piece is cut at its pauses first (see recognizePieces).
 func (l *Listener) Transcribe(pcm []float32, sampleRate int) (text, lang string, err error) {
 	defer l.hold()()
 	r, err := l.recognizer()
@@ -149,10 +150,88 @@ func (l *Listener) Transcribe(pcm []float32, sampleRate int) (text, lang string,
 		return "", "", err
 	}
 	langs := l.languages()
+	pcm = audio.Resample(pcm, sampleRate, rate)
+	segments := [][]float32{pcm}
+	if len(pcm) > maxPiece {
+		if segs, err := speechSegments(pcm); err == nil && len(segs) > 0 {
+			segments = segs
+		}
+	}
 	recMu.Lock()
-	text, lang, err = recognize(r, pad(audio.Resample(pcm, sampleRate, rate)), langs)
+	text, lang, err = recognizePieces(r, segments, langs)
 	recMu.Unlock()
 	return strings.TrimSpace(text), lang, err
+}
+
+// maxPiece is the most audio given to the recognizer at once. Whisper hears
+// 30 seconds and drops the rest (ending the text with "..."); Parakeet takes
+// more, but pieces cost it nothing. Speech segments are at most 20 s
+// (sherpa.NewVAD's max_speech_duration), so a piece always holds one.
+const maxPiece = 25 * rate
+
+// recognizePieces transcribes speech segments (16 kHz), joined with short
+// gaps into pieces of at most maxPiece, cut only between segments, i.e. at
+// pauses; a segment longer than a piece is cut hard. The texts are joined;
+// the language is the one of the longest piece.
+func recognizePieces(rec *sherpa.Recognizer, segments [][]float32, langs []string) (string, string, error) {
+	var texts []string
+	lang, longest := "", 0
+	for _, p := range toPieces(segments) {
+		t, l, err := recognize(rec, pad(p), langs)
+		if err != nil {
+			return "", "", err
+		}
+		if t = strings.TrimSpace(t); t != "" {
+			texts = append(texts, t)
+			if len(p) > longest {
+				lang, longest = l, len(p)
+			}
+		}
+	}
+	return strings.Join(texts, " "), lang, nil
+}
+
+// toPieces joins segments with 0.2 s gaps into pieces of at most maxPiece.
+func toPieces(segments [][]float32) [][]float32 {
+	gap := make([]float32, rate/5)
+	var pieces [][]float32
+	var cur []float32
+	for _, s := range segments {
+		for len(s) > maxPiece {
+			if len(cur) > 0 {
+				pieces, cur = append(pieces, cur), nil
+			}
+			pieces, s = append(pieces, s[:maxPiece]), s[maxPiece:]
+		}
+		if len(cur) > 0 && len(cur)+len(gap)+len(s) > maxPiece {
+			pieces, cur = append(pieces, cur), nil
+		}
+		if len(cur) > 0 {
+			cur = append(cur, gap...)
+		}
+		cur = append(cur, s...)
+	}
+	if len(cur) > 0 {
+		pieces = append(pieces, cur)
+	}
+	return pieces
+}
+
+// speechSegments cuts recorded audio (16 kHz) into its speech segments, as
+// Listen gets them from the microphone.
+func speechSegments(pcm []float32) ([][]float32, error) {
+	vad, err := sherpa.NewVAD(filepath.Join(engine.Dirs.Models, "silero-vad", "silero_vad.onnx"), 0.25)
+	if err != nil {
+		return nil, err
+	}
+	defer vad.Close()
+	var out [][]float32
+	for i := 0; i+sherpa.VADWindow <= len(pcm); i += sherpa.VADWindow {
+		vad.Accept(pcm[i : i+sherpa.VADWindow])
+		out = append(out, vad.Segments()...)
+	}
+	vad.Flush()
+	return append(out, vad.Segments()...), nil
 }
 
 // SetInputDevice sets the microphone; the next recording opens it, so it
@@ -486,21 +565,29 @@ func (l *Listener) Listen(ctx context.Context, opts Options) (Result, error) {
 	out.Play(ctx, audio.Chime("heard", audio.DeviceRate))
 	release()
 
-	var pcm []float32
-	gap := make([]float32, rate/5)
-	for i, s := range segments {
-		if i > 0 {
-			pcm = append(pcm, gap...)
-		}
-		pcm = append(pcm, s...)
+	var speechLen int
+	for _, s := range segments {
+		speechLen += len(s)
 	}
-	res := Result{Seconds: float64(len(pcm)) / rate}
-	if len(pcm) == 0 {
+	res := Result{Seconds: float64(speechLen) / rate}
+	if speechLen == 0 {
 		res.Reason = "no speech"
 		return res, nil
 	}
+	// The segments above close only at a long pause (end silence, 2 s in
+	// dictation), so a long recording is cut again at its short pauses: a
+	// piece then ends between sentences, not inside a word.
+	if speechLen > maxPiece {
+		var all []float32
+		for _, s := range segments {
+			all = append(all, s...)
+		}
+		if segs, err := speechSegments(all); err == nil && len(segs) > 0 {
+			segments = segs
+		}
+	}
 	recMu.Lock()
-	text, lang, err := recognize(rec, pad(pcm), l.languages())
+	text, lang, err := recognizePieces(rec, segments, l.languages())
 	recMu.Unlock()
 	if err != nil {
 		return Result{}, err
