@@ -554,7 +554,7 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 		if a.ID != "" {
 			t, ok := sp.Track(a.ID)
 			if !ok {
-				return nil, userErr("no utterance %q: voice keeps the last 100, and ids start again when voice restarts", a.ID)
+				return nil, userErr("no utterance %q: voice keeps the last 100, and forgets them when it restarts", a.ID)
 			}
 			return t, nil
 		}

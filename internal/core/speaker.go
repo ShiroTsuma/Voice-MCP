@@ -179,9 +179,13 @@ type Speaker struct {
 	active      string
 	muted       bool
 	nextID      int
-	lastErr     string
-	gone        map[string]bool // presets whose missing voice was already reported
-	tracks      []*Track        // the last utterances, oldest first
+	// idRun tells this run's utterance ids from an earlier run's: the
+	// transcript and the reading window outlive a restart and find a line by
+	// its id, so "v3" of a new run must not light up an old run's "v3".
+	idRun   string
+	lastErr string
+	gone    map[string]bool // presets whose missing voice was already reported
+	tracks  []*Track        // the last utterances, oldest first
 	// The sentence playing: its loudness every levelStep, from levelAt.
 	levels  []float32
 	levelAt time.Time
@@ -236,6 +240,15 @@ func (s *Speaker) OpenOutput() error {
 // of playing it. Call before the first Speak.
 func (s *Speaker) RecordTo(path string) { s.out.Record = path }
 
+// runTag is a short tag for one run of voice, from its start time: three
+// letters that repeat after about three weeks, then a dash ("vkq3-12").
+func runTag(at time.Time) string {
+	const letters = "abcdefghijkmnpqrstuvwxyz" // no l and o: they read as 1 and 0
+	n := at.Unix() / 2 % int64(len(letters)*len(letters)*len(letters))
+	b := []byte{letters[n%24], letters[n/24%24], letters[n/576%24], '-'}
+	return string(b)
+}
+
 func NewSpeaker(cfg *preset.Config) *Speaker {
 	s := &Speaker{
 		cfg:     cfg,
@@ -245,6 +258,7 @@ func NewSpeaker(cfg *preset.Config) *Speaker {
 		active:  cfg.DefaultPreset,
 		wake:    make(chan struct{}, 1),
 		closed:  make(chan struct{}),
+		idRun:   runTag(time.Now()),
 	}
 	s.out.Device = cfg.Device
 	go s.loop()
@@ -386,7 +400,7 @@ func (s *Speaker) Speak(req Request) (Ticket, error) {
 	}
 	s.endTurnLocked(req.Owner)
 	s.nextID++
-	it := &item{id: "v" + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead, grouped: s.renderFirst(req.Mode, req.SaveTo, parts),
+	it := &item{id: "v" + s.idRun + strconv.Itoa(s.nextID), text: text, intent: intent, lang: lang, preset: parts[0].preset, parts: parts, lead: lead, grouped: s.renderFirst(req.Mode, req.SaveTo, parts),
 		cache: req.Cache && req.SaveTo == "" && len(parts) == 1, saveTo: req.SaveTo, owner: req.Owner, done: make(chan Result, 1)}
 	if turn && !it.grouped {
 		it.turn, it.open, it.grew = req.Turn, true, make(chan struct{}, 1)
