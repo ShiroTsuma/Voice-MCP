@@ -38,6 +38,15 @@ var voicesPage []byte
 //go:embed reader.html
 var readerPage []byte
 
+// What the windows share: common.css (colours, base controls, tips) and
+// common.js (dialogs, drawn select menus, the API call, tips).
+//
+//go:embed common.css
+var commonCSS []byte
+
+//go:embed common.js
+var commonJS []byte
+
 type Deps struct {
 	Token        string
 	SettingsPath string
@@ -116,6 +125,20 @@ func Register(mux *http.ServeMux, d Deps) {
 	servePage("/settings/integrations", integrationsPage)
 	servePage("/settings/voices", voicesPage)
 	servePage("/settings/reader", readerPage)
+	// The shared parts the pages link; nothing secret, but only for the windows.
+	serveShared := func(path, ctype string, body []byte) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if !authed(r) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			w.Header().Set("Content-Type", ctype)
+			w.Header().Set("Cache-Control", "no-store")
+			w.Write(body)
+		})
+	}
+	serveShared("/settings/common.css", "text/css; charset=utf-8", commonCSS)
+	serveShared("/settings/common.js", "text/javascript; charset=utf-8", commonJS)
 	// Character pictures, by the names saveAvatar gives them.
 	mux.HandleFunc("/settings/avatar/", func(w http.ResponseWriter, r *http.Request) {
 		path, err := avatarPath(d.AvatarDir, strings.TrimPrefix(r.URL.Path, "/settings/avatar/"))
