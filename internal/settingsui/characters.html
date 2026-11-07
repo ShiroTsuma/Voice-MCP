@@ -482,9 +482,14 @@ function open(i) {
   box.append(addChip(box));
   // The list offers base voices; a character's tuned voice (voice-...) shows as its base plus the tuning.
   const sp = $('preset'); sp.textContent = '';
+  const groups = {}; // an engine's own voices under its name, after the presets
   for (const p of [{ name: '' }].concat((state.options.presets || []).filter(p => !p.extends))) {
-    const o = document.createElement('option'); o.value = p.name; o.textContent = p.name || 'Default voice'; sp.append(o);
+    const o = document.createElement('option'); o.value = p.name; o.textContent = p.label || p.name || 'Default voice';
+    if (!p.group) { sp.append(o); continue; }
+    if (!groups[p.group]) { groups[p.group] = document.createElement('optgroup'); groups[p.group].label = p.group; }
+    groups[p.group].append(o);
   }
+  Object.values(groups).forEach(g => sp.append(g));
   const tunedP = presetOf(c.preset);
   tunedFrom = tunedP && tunedP.extends ? c.preset : '';
   sp.value = tunedFrom ? tunedP.extends : (c.preset || '');

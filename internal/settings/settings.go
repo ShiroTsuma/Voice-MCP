@@ -40,6 +40,10 @@ type Settings struct {
 	// Servers holds the speech servers' addresses set in the Integrations
 	// window ([servers] higgs = "http://...").
 	Servers map[string]string `toml:"servers,omitempty" json:"servers,omitempty"`
+	// VoicesOff are the engine voices the user turned off in the Voices
+	// window (kokoro/af_bella, or kokoro/* for a whole engine): the pickers
+	// leave them out. New voices are on until turned off.
+	VoicesOff *[]string `toml:"voices_off,omitempty" json:"voices_off,omitempty"`
 }
 
 // Preset is a tuned voice: what it changes on the preset it extends.

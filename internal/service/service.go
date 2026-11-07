@@ -205,6 +205,9 @@ type Service struct {
 	// RenamePreset makes the stored settings that name the voice preset old
 	// (characters, the default voice) name new, and applies them; nil skips it.
 	RenamePreset func(old, new string) error
+	// Voices lists the engine voices on and ready here (list_voices): each
+	// one's id works as a voice or preset; nil where voice keeps no catalog.
+	Voices func() any
 
 	recMu   sync.Mutex
 	recStop chan struct{} // closed by the clone action stop: the recording ends early
@@ -605,6 +608,11 @@ func (s *Service) Control(_ context.Context, a ControlArgs) (any, error) {
 	case "unmute":
 		sp.SetMuted(false)
 		return "unmuted", nil
+	case "list_voices":
+		if s.Voices == nil {
+			return nil, userErr("voice lists engine voices only in its background process; list_presets shows the presets")
+		}
+		return s.Voices(), nil
 	case "list_presets":
 		rows := [][]string{}
 		for _, name := range s.Config.PresetNames() {

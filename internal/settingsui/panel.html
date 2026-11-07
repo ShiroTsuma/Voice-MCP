@@ -796,11 +796,15 @@ let lastStatus = {}, sessions = [], transcript = [], line = null;
 
 function fill(select, items, current, extra) {
   select.innerHTML = '';
+  const groups = {}; // items with a group (an engine's own voices) go under it, after the rest
   for (const it of (extra || []).concat(items)) {
     const o = document.createElement('option');
     o.value = it.value; o.textContent = it.label;
-    select.appendChild(o);
+    if (!it.group) { select.appendChild(o); continue; }
+    if (!groups[it.group]) { groups[it.group] = document.createElement('optgroup'); groups[it.group].label = it.group; }
+    groups[it.group].appendChild(o);
   }
+  Object.values(groups).forEach(g => select.appendChild(g));
   select.value = current;
   if (select.value !== current && current) {
     const o = document.createElement('option'); o.value = current; o.textContent = current + ' (not found)';
@@ -1777,7 +1781,7 @@ function render(s) {
   if (!$('myWords').contains(document.activeElement)) renderMyWords((s.listen && s.listen.words) || []);
   renderLangs(s.languages || []);
   // Base voices in the list; a tuned default (voice-default) shows as its base plus the tuning.
-  const presets = o.presets.filter(p => !p.extends).map(p => ({ value: p.name, label: p.name }));
+  const presets = o.presets.filter(p => !p.extends).map(p => ({ value: p.name, label: p.label || p.name, group: p.group }));
   const tunedDefault = o.presets.find(p => p.name === s.default_preset && p.extends);
   fill($('preset'), presets, tunedDefault ? tunedDefault.extends : s.default_preset);
   if (!tuneTouched) { tune = fromPreset(tunedDefault || presetOf($('preset').value)); showTune(); }

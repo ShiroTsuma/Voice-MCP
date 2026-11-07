@@ -204,6 +204,7 @@ func runServe(args []string) error {
 	}
 
 	svc := &service.Service{Speaker: sp, Config: cfg, Listener: l, Agents: agents, ListenView: ctl.agentListening}
+	svc.Voices = func() any { return voicesOn(voiceCatalog(b.cfg, b.windowsVoices)) }
 	go svc.KeepWarmLoop(ctx) // voices of sessions registered with keep_warm
 	// A renamed cloned voice: the characters and voices that named it follow.
 	svc.RenamePreset = func(old, name string) error {
@@ -271,6 +272,9 @@ type backend struct {
 	// reloading keeps the windows' saves and the file watcher from applying
 	// the files at the same time.
 	reloading sync.Mutex
+
+	sapiOnce sync.Once // windowsVoices' one look
+	sapiList []engine.VoiceInfo
 }
 
 func (b *backend) save(fn func(*settings.Settings)) {
@@ -326,6 +330,13 @@ func (b *backend) trayActions() tray.Actions {
 		Restart:      b.restart,
 		Quit:         b.stop,
 	}
+}
+
+// windowsVoices are the voices Windows has, read once: the windows ask for
+// the voice catalog often, and the list changes only when Windows installs one.
+func (b *backend) windowsVoices() []engine.VoiceInfo {
+	b.sapiOnce.Do(func() { b.sapiList = sapiVoices(b.sp.Engine)() })
+	return b.sapiList
 }
 
 // setAutostart adds or removes the login shortcut to this installation's voice.exe.
@@ -446,6 +457,32 @@ func (b *backend) state() map[string]any {
 			presets = append(presets, p)
 		}
 	}
+	// The engines' own voices, as presets the pickers offer by engine: those
+	// on and ready here, and any a character or the default voice still uses.
+	catalog := voiceCatalog(cfg, b.windowsVoices)
+	used := map[string]bool{cfg.DefaultPreset: true}
+	for _, ch := range cfg.Characters {
+		used[ch.Preset] = true
+		if base := cfg.PresetExtends(ch.Preset); base != "" {
+			used[base] = true
+		}
+	}
+	if base := cfg.PresetExtends(cfg.DefaultPreset); base != "" {
+		used[base] = true
+	}
+	for _, g := range catalog {
+		for _, v := range g.Voices {
+			if !(v.On && v.Ready) && !used[v.ID] {
+				continue
+			}
+			label := v.Name
+			if !v.On {
+				label += " (turned off)"
+			}
+			presets = append(presets, map[string]any{"name": v.ID, "label": label, "group": g.Title, "description": g.Title + " · " + v.Name,
+				"engine": strings.SplitN(v.ID, "/", 2)[0], "speed": 1.0, "pitch": 0.0, "dsp": []string{}, "flow": ""})
+		}
+	}
 	outputs, _ := audio.Devices()
 	inputs, _ := audio.InputDevices()
 	volume := 1.0
@@ -494,8 +531,9 @@ func (b *backend) state() map[string]any {
 			"summary_sentences": cfg.Hooks.SummaryLength(), "summary_from": cfg.Hooks.SummaryPart(),
 			"codex_goal_wait": cfg.Hooks.GoalWait().Seconds(),
 		},
-		"options": map[string]any{"presets": presets, "outputs": outputs, "inputs": inputs, "models": asrModels(), "themes": overlayThemes(), "traits": cfg.TraitChoices(), "clone_engines": cloneEngines(), "voice_design": voiceDesign()},
-		"notes":   b.ctl.hotkeyErrors(),
+		"options": map[string]any{"presets": presets, "outputs": outputs, "inputs": inputs, "models": asrModels(), "themes": overlayThemes(), "traits": cfg.TraitChoices(), "clone_engines": cloneEngines(), "voice_design": voiceDesign(),
+			"voices": catalog},
+		"notes": b.ctl.hotkeyErrors(),
 		// The GPU voices' memory: the card, the budget, what the voices in use take.
 		"gpu": gpuOverview(cfg),
 		// The sessions dictation can reach: name, client, project, busy, waiting messages.

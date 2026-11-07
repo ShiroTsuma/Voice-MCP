@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>voice · Voice design</title>
+<title>voice · Voices</title>
 <!--
   Voice design: the voices the user made, designed from words or cloned from a recording, in
   their own groups on the left; on the right the one picked, or a new one being made. In the
@@ -67,6 +67,11 @@
   .item .use { font: 11.5px var(--ui-small); color: var(--ink-3); white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
   .item.new b { color: var(--ink-2); font-weight: 400; }
   .flat .item { padding-left: 10px; }
+  /* The engines' own voices, under the user's: a switch per engine and per voice. */
+  .section { margin: 14px 6px 4px; padding-top: 10px; border-top: 1px solid var(--rule); font: 600 11px/1.3 var(--ui-small); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+  .ghead .switch { transform: scale(.8); margin-right: 2px; }
+  .item.off b, .item.off small { color: var(--ink-3); }
+  .grp.unready .items .item { opacity: .55; }
   aside footer { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--rule); }
 
   /* ── The one open on the right ─────────────────────────────── */
@@ -104,12 +109,12 @@
 <body>
 <aside>
   <header>
-    <h1>Voice design</h1>
-    <p class="help">Voices you made, in your groups<span class="tip" tabindex="0" data-tip="Every voice here is a preset: give it to a character or make it the default voice in Speaking.
-- Drag a voice onto a group to move it.
-- Folded groups stay folded.
+    <h1>Voices</h1>
+    <p class="help">Yours in your groups, then each engine's<span class="tip" tabindex="0" data-tip="Every voice here can be a character's voice or the default voice.
+- **Yours**: made from a recording or a description, in your own groups. Drag one onto a group to move it.
+- **Engines**: the voices each engine brings. Switch off an engine or a voice to leave it out of the voice pickers.
 
-Agents see the groups and descriptions too (voice_clone).">i</span></p>
+Folded groups stay folded. Agents see the same voices (voice_clone, list_voices).">i</span></p>
   </header>
   <div class="list" id="list"></div>
   <footer>
@@ -149,6 +154,24 @@ Renaming it moves the characters, the default voice and the tunings that use it 
       <span class="grow"></span><span id="status"></span>
       <button class="btn primary" id="vSave" type="submit">Save</button>
     </div>
+  </form>
+
+  <!-- An engine's own voice: what it is, whether the pickers offer it, and how it sounds. -->
+  <form id="ev" hidden autocomplete="off">
+    <div class="scroll"><div class="fields">
+      <h2 id="evName"></h2>
+      <p class="help" id="evAbout"></p>
+      <div class="row">
+        <label class="lab" for="evOn">In the voice pickers<span class="help">For characters and the default voice</span></label>
+        <label class="switch"><input type="checkbox" id="evOn"><span></span></label>
+      </div>
+      <div class="row col">
+        <label class="lab" for="evSample">Hear it<span class="opt">optional text</span></label>
+        <div class="pair"><input class="text" type="text" id="evSample" maxlength="300" placeholder="Hi, this is how I sound."><button class="btn" id="evHear" type="button"><svg viewBox="0 0 12 12" fill="currentColor"><path d="M3 1.5v9l7.5-4.5z"/></svg>Hear it</button></div>
+      </div>
+      <dl class="facts" id="evFacts"></dl>
+    </div></div>
+    <div class="bar"><span class="grow"></span><span id="evStatus"></span></div>
   </form>
 
   <!-- A new voice: from words, from the microphone, or from a sound file. -->
@@ -235,6 +258,7 @@ async function load(keep) {
   groups = l.groups || [];
   fillGroups($('vGroup')); fillGroups($('mGroup')); fillEngines(); fromChanged();
   if (keep === '+new') showMake();
+  else if (keep && keep.includes('/') && findEngineVoice(keep).length) showEngineVoice(keep);
   else if (keep && voices.some(v => v.name === keep)) showVoice(keep);
   else showNothing();
 }
@@ -286,6 +310,7 @@ function list() {
     voices.forEach(v => flat.append(item(v)));
     if (!voices.length && open !== '+new') { const h = document.createElement('div'); h.className = 'empty'; h.textContent = 'No voices yet.'; flat.append(h); }
     box.append(flat);
+    engineSections(box, who);
     return;
   }
   const lower = s => (s || '').toLowerCase();
@@ -336,7 +361,111 @@ function list() {
   };
   for (const g of groups) box.append(section(g, voices.filter(v => lower(v.group) === lower(g))));
   box.append(section('', voices.filter(v => !v.group)));
+  engineSections(box, who);
 }
+
+// ── The engines' own voices ─────────────────────────────────
+// Their switches keep a list of what is off (voices_off): a voice's id
+// (kokoro/af_bella) or a whole engine (kokoro/*). New voices are on.
+const catalog = () => (state && state.options && state.options.voices) || [];
+const offList = () => (state && state.voices_off) || [];
+const langText = l => l ? langWord(l.split('-')[0]) + (l === 'en-us' ? ' (US)' : l === 'en-gb' ? ' (UK)' : '') : 'Many languages';
+async function saveOff(off) {
+  try {
+    const r = await api('save', { voices_off: off, voices_rev: state.voices_rev });
+    state = r.state || state;
+  } catch (e) { tell(e.message); await load(open).catch(() => {}); return; }
+  list(); if (open && open.includes('/')) showEngineVoice(open);
+}
+// The group's switch: off adds engine/* for each of its engines; on clears them and its voices' own entries.
+function setGroup(g, on) {
+  const ids = new Set(g.voices.map(v => v.id.toLowerCase())), stars = new Set(g.engines.map(e => (e + '/*').toLowerCase()));
+  let off = offList().filter(x => !stars.has(x.toLowerCase()) && !ids.has(x.toLowerCase()));
+  if (!on) off = off.concat(g.engines.map(e => e + '/*'));
+  saveOff(off);
+}
+// A voice's switch; on inside an engine that is off turns the engine back on, its other voices staying off.
+function setVoice(g, v, on) {
+  const stars = new Set(g.engines.map(e => (e + '/*').toLowerCase()));
+  let off = offList().filter(x => x.toLowerCase() !== v.id.toLowerCase());
+  if (on && off.some(x => stars.has(x.toLowerCase()))) {
+    off = off.filter(x => !stars.has(x.toLowerCase())).concat(g.voices.filter(o => o.id !== v.id).map(o => o.id));
+  }
+  if (!on) off.push(v.id);
+  saveOff([...new Set(off)]);
+}
+function switchEl(on, label, fn, disabled) {
+  const s = document.createElement('label'); s.className = 'switch'; s.title = label;
+  const i = document.createElement('input'); i.type = 'checkbox'; i.checked = on; i.disabled = !!disabled; i.setAttribute('aria-label', label);
+  i.addEventListener('click', e => e.stopPropagation());
+  i.addEventListener('change', () => fn(i.checked));
+  s.append(i, document.createElement('span'));
+  s.addEventListener('click', e => e.stopPropagation());
+  return s;
+}
+function engineSections(box, who) {
+  const cat = catalog();
+  if (!cat.length) return;
+  const head = document.createElement('div'); head.className = 'section'; head.textContent = 'Engines'; box.append(head);
+  for (const g of cat) {
+    const key = 'engine:' + g.key, anyOn = g.voices.some(v => v.on);
+    const sec = document.createElement('div'); sec.className = 'grp' + (shut.has(key) ? ' shut' : '') + (g.ready ? '' : ' unready');
+    const hd = document.createElement('div'); hd.className = 'ghead';
+    const fold = document.createElement('button'); fold.type = 'button'; fold.className = 'fold';
+    fold.innerHTML = '<b></b><span class="n"></span>';
+    fold.querySelector('b').textContent = g.title;
+    fold.querySelector('.n').textContent = g.voices.filter(v => v.on).length + ' / ' + g.voices.length;
+    fold.title = g.ready ? g.about : g.needs;
+    fold.setAttribute('aria-expanded', String(!shut.has(key)));
+    fold.addEventListener('click', () => { const s = sec.classList.toggle('shut'); s ? shut.add(key) : shut.delete(key); saveShut(); fold.setAttribute('aria-expanded', String(!s)); });
+    hd.append(fold, switchEl(anyOn, (anyOn ? 'Leave out ' : 'Offer ') + g.title + ' in the voice pickers', on => setGroup(g, on)));
+    const items = document.createElement('div'); items.className = 'items';
+    if (!g.ready) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = g.needs; items.append(h); }
+    for (const v of g.voices) {
+      const it = document.createElement('div'); it.className = 'item' + (v.id === open ? ' sel' : '') + (v.on ? '' : ' off');
+      it.innerHTML = '<div class="who"><b></b><small></small></div><span class="use"></span>';
+      it.querySelector('b').textContent = v.name;
+      it.querySelector('small').textContent = [v.lang ? langText(v.lang) : '', v.gender].filter(Boolean).join(' · ') || g.title;
+      it.querySelector('.use').textContent = (who[v.id] || []).join(', ');
+      it.addEventListener('click', () => showEngineVoice(v.id));
+      items.append(it);
+    }
+    sec.append(hd, items);
+    box.append(sec);
+  }
+}
+function findEngineVoice(id) {
+  for (const g of catalog()) { const v = g.voices.find(x => x.id === id); if (v) return [g, v]; }
+  return [];
+}
+function showEngineVoice(id) {
+  const [g, v] = findEngineVoice(id); if (!v) return showNothing();
+  if (open !== id) say('evStatus', '');
+  open = id;
+  $('empty').hidden = true; $('voice').hidden = true; $('make').hidden = true; $('ev').hidden = false;
+  $('evName').textContent = v.name;
+  $('evAbout').textContent = g.title + (g.ready ? '' : ' · ' + g.needs);
+  $('evOn').checked = v.on;
+  $('evOn').onchange = () => setVoice(g, v, $('evOn').checked);
+  $('evHear').disabled = !g.ready; $('evHear').title = g.ready ? '' : g.needs;
+  const who = users()[v.id] || [];
+  const facts = [
+    ['Engine', g.title],
+    ['Language', v.lang ? langText(v.lang) : 'The one each sentence asks for'],
+    v.gender ? ['Voice', v.gender] : null,
+    ['Used by', who.length ? andList(who) + (v.on ? '' : '; it keeps speaking for them while off') : 'nobody yet; pick it for a character in Characters'],
+    ['Id', v.id],
+  ].filter(Boolean);
+  const dl = $('evFacts'); dl.textContent = '';
+  for (const [k, t] of facts) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = t; dl.append(dt, dd); }
+  list();
+}
+$('evHear').addEventListener('click', async () => {
+  const [, v] = findEngineVoice(open); if (!v) return;
+  say('evStatus', 'Playing ' + v.name + '…');
+  try { await api('test', { Preset: v.id, Text: $('evSample').value.trim() || 'Hi, this is ' + v.name + '. This is how I sound.' }); say('evStatus', ''); }
+  catch (e) { say('evStatus', e.message, true); }
+});
 
 // A group's title as a field: Enter or leaving it renames, Escape keeps the name.
 function renameGroup(hd, g) {
@@ -375,12 +504,12 @@ function fillGroups(sel) {
 }
 
 // ── A voice ─────────────────────────────────────────────────
-function showNothing() { open = null; $('voice').hidden = true; $('make').hidden = true; $('empty').hidden = false; list(); }
+function showNothing() { open = null; $('voice').hidden = true; $('make').hidden = true; $('ev').hidden = true; $('empty').hidden = false; list(); }
 function showVoice(name) {
   const v = voices.find(x => x.name === name); if (!v) return showNothing();
   if (open !== name) say('status', '');
   open = name;
-  $('empty').hidden = true; $('make').hidden = true; $('voice').hidden = false;
+  $('empty').hidden = true; $('make').hidden = true; $('ev').hidden = true; $('voice').hidden = false;
   $('vName').value = v.name;
   $('vDesc').value = v.description || '';
   $('vDesc').placeholder = 'e.g. warm narrator for bedtime stories';
@@ -427,7 +556,7 @@ $('vDel').addEventListener('click', async () => {
 // ── A new voice ─────────────────────────────────────────────
 function showMake() {
   open = '+new';
-  $('empty').hidden = true; $('voice').hidden = true; $('make').hidden = false;
+  $('empty').hidden = true; $('voice').hidden = true; $('ev').hidden = true; $('make').hidden = false;
   if (!segValue('mFrom')) seg('mFrom', design().ready ? 'design' : 'record');
   fromChanged(); list();
   $('mName').focus();

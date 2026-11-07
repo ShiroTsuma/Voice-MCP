@@ -195,6 +195,14 @@ func Register(mux *http.ServeMux, d Deps) {
 					st["characters"] = *s.Characters
 				}
 				st["characters_rev"] = charactersRev(s.Characters)
+				// The voices turned off, as stored, with their revision: the
+				// Voices window saves its whole list against it.
+				off := []string{}
+				if s.VoicesOff != nil {
+					off = *s.VoicesOff
+				}
+				st["voices_off"] = off
+				st["voices_rev"] = listRev(off)
 			}
 		}
 		return st
@@ -266,7 +274,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		}
 		var in settings.Settings
 		var guard struct {
-			Rev *string `json:"characters_rev"`
+			Rev       *string `json:"characters_rev"`
+			VoicesRev *string `json:"voices_rev"`
 		}
 		if err := json.Unmarshal(body, &in); err != nil {
 			reply(w, nil, err)
@@ -279,6 +288,16 @@ func Register(mux *http.ServeMux, d Deps) {
 				stale = true
 				return
 			}
+			if in.VoicesOff != nil && guard.VoicesRev != nil {
+				cur := []string{}
+				if s.VoicesOff != nil {
+					cur = *s.VoicesOff
+				}
+				if *guard.VoicesRev != listRev(cur) {
+					stale = true
+					return
+				}
+			}
 			merge(s, in)
 		})
 		if err != nil {
@@ -287,7 +306,11 @@ func Register(mux *http.ServeMux, d Deps) {
 		}
 		if stale {
 			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{"error": "The characters were changed elsewhere since this window loaded them; they are reloaded now, so make your change again", "state": state()})
+			what := "The characters were"
+			if in.Characters == nil {
+				what = "The voices turned off were"
+			}
+			json.NewEncoder(w).Encode(map[string]any{"error": what + " changed elsewhere since this window loaded them; they are reloaded now, so make your change again", "state": state()})
 			return
 		}
 		restart, err := d.Reload()
@@ -401,6 +424,14 @@ func charactersRev(chars *[]settings.Character) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// listRev identifies a stored list (the voices turned off) the way
+// charactersRev does the characters.
+func listRev(list []string) string {
+	b, _ := json.Marshal(list)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8])
+}
+
 // merge copies the fields the page sent over the stored ones.
 func merge(s *settings.Settings, in settings.Settings) {
 	set := func(dst **string, src *string) {
@@ -435,6 +466,13 @@ func merge(s *settings.Settings, in settings.Settings) {
 	set(&s.Serve.DictateTheme, in.Serve.DictateTheme)
 	if in.Characters != nil {
 		s.Characters = in.Characters
+	}
+	if in.VoicesOff != nil {
+		if len(*in.VoicesOff) == 0 {
+			s.VoicesOff = nil
+		} else {
+			s.VoicesOff = in.VoicesOff
+		}
 	}
 	// Only the windows' own tuned voices; a preset of the user's in
 	// config.toml is never touched from here.

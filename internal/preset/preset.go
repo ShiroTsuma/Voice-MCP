@@ -53,11 +53,14 @@ type Config struct {
 	// set in the Integrations window: [servers] higgs = "http://...". It
 	// replaces only that engine's url, keeping the rest of its table.
 	Servers map[string]string `toml:"servers"`
-	Presets map[string]Preset `toml:"presets"`
-	Hooks   Hooks             `toml:"hooks"`
-	Listen  Listen            `toml:"listen"`
-	Clients map[string]string `toml:"clients"` // client name substring -> preset
-	Serve   Serve             `toml:"serve"`
+	// VoicesOff are the engine voices turned off in the Voices window
+	// (kokoro/af_bella, kokoro/*); a later layer's list replaces it.
+	VoicesOff []string          `toml:"voices_off"`
+	Presets   map[string]Preset `toml:"presets"`
+	Hooks     Hooks             `toml:"hooks"`
+	Listen    Listen            `toml:"listen"`
+	Clients   map[string]string `toml:"clients"` // client name substring -> preset
+	Serve     Serve             `toml:"serve"`
 	// Characters are who agent sessions become, in order: a new session takes
 	// the first one no other session has. A later layer's list replaces it.
 	Characters []Character `toml:"characters"`
@@ -496,6 +499,9 @@ func (c *Config) merge(o *Config) {
 			c.Sidecar[name][k] = v
 		}
 	}
+	if o.VoicesOff != nil {
+		c.VoicesOff = o.VoicesOff
+	}
 	for k, v := range o.Servers {
 		if c.Servers == nil {
 			c.Servers = map[string]string{}
@@ -548,11 +554,15 @@ func (c *Config) PresetDef(name string) (Preset, bool) {
 	return p, ok
 }
 
-// HasPreset reports whether a preset exists.
+// HasPreset reports whether a preset exists, an engine's own voice
+// (kokoro/af_bella) included.
 func (c *Config) HasPreset(name string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	_, ok := c.Presets[name]
+	if _, ok := c.Presets[name]; ok {
+		return true
+	}
+	_, ok := c.engineVoiceLocked(name)
 	return ok
 }
 
@@ -584,6 +594,42 @@ func (c *Config) ReplacePresets(from *Config, keep ...string) {
 	c.Presets = next
 }
 
+// VoiceOn reports whether an engine voice (kokoro/af_bella) is offered in the
+// pickers: neither it nor its whole engine (kokoro/*) is turned off.
+func (c *Config) VoiceOn(id string) bool {
+	eng, _, _ := strings.Cut(id, "/")
+	for _, off := range c.VoicesOff {
+		if strings.EqualFold(off, id) || strings.EqualFold(off, eng+"/*") {
+			return false
+		}
+	}
+	return true
+}
+
+// EngineVoice splits an engine voice's id (kokoro/af_bella) into its engine
+// and voice; ok is false for a preset's name, which has no slash.
+func EngineVoice(id string) (engineName, voice string, ok bool) {
+	engineName, voice, ok = strings.Cut(id, "/")
+	return engineName, voice, ok && engineName != "" && voice != ""
+}
+
+// engineVoiceLocked is the preset an engine voice's id stands for: that
+// engine with that voice, falling back to Windows' own voices when the engine
+// cannot speak (not downloaded). The caller holds c.mu.
+func (c *Config) engineVoiceLocked(id string) (Preset, bool) {
+	eng, v, ok := EngineVoice(id)
+	if !ok {
+		return Preset{}, false
+	}
+	if _, known := c.Engines[eng]; !known {
+		return Preset{}, false
+	}
+	none := "none"
+	p := Preset{Engine: eng, Chime: &none, Fallback: []string{"sapi"}}
+	p.Voice.Name = v
+	return p, true
+}
+
 func (c *Config) resolveLocked(name string) (Resolved, error) {
 	if name == "" {
 		name = c.DefaultPreset
@@ -604,6 +650,11 @@ func (c *Config) resolveLocked(name string) (Resolved, error) {
 					cur = bare
 				}
 			}
+		}
+		if !ok {
+			// An engine's own voice, named engine/voice (kokoro/af_bella,
+			// supertonic/3): a preset of its own without being written down.
+			p, ok = c.engineVoiceLocked(cur)
 		}
 		if !ok {
 			if cur == name {

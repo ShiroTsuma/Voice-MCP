@@ -53,6 +53,30 @@ var kokoroV1Speakers = []string{
 	"em_santa",
 }
 
+// KokoroVoice is one of Kokoro's voices with its language and gender, read
+// from its name (af_bella: American English, female).
+type KokoroVoice struct{ Name, Lang, Gender string }
+
+// KokoroVoices lists the voices of kokoro-multi-lang-v1_0, without loading
+// the model: the Voices window and the pickers list them on any PC.
+func KokoroVoices() []KokoroVoice {
+	out := make([]KokoroVoice, 0, len(kokoroV1Speakers))
+	for _, n := range kokoroV1Speakers {
+		lang := kokoroLang(n, "")
+		switch n[0] {
+		case 'a':
+			lang = "en-us"
+		case 'b':
+			lang = "en-gb"
+		}
+		out = append(out, KokoroVoice{Name: n, Lang: lang, Gender: kokoroGender(n)})
+	}
+	return out
+}
+
+// SupertonicVoices is how many voices Supertonic 3 has, by number 0..n-1.
+const SupertonicVoices = 10
+
 // kokoroSpeakers returns voice names in sid order, from the model's
 // speaker_names metadata when present.
 func kokoroSpeakers(dir string) []string {
