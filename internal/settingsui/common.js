@@ -138,7 +138,8 @@ function showTip(t) {
   renderTip(tipbox, t.dataset.tip); tipbox.hidden = !tipbox.textContent;
   const r = t.getBoundingClientRect(), w = tipbox.offsetWidth, h = tipbox.offsetHeight;
   tipbox.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - 12)) + 'px';
-  tipbox.style.top = (r.bottom + 6 + h > innerHeight - 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
+  // Under the [i], or above it near the window's bottom, never past the top.
+  tipbox.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
 }
 document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('.tip'); if (t) showTip(t); });
 document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.tip')) tipbox.hidden = true; });
@@ -146,8 +147,9 @@ document.addEventListener('focusin', e => { if (e.target.classList && e.target.c
 document.addEventListener('focusout', () => { tipbox.hidden = true; });
 // Scrolling carries the box along with its [i].
 document.addEventListener('scroll', () => { if (!tipbox.hidden && tipFor) showTip(tipFor); }, true);
-// A click on [i] inside a label shows it, without opening the list.
-document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); showTip(e.target); } });
+// A click on [i] inside a label shows it, without opening the list or flipping
+// the switch it labels: caught first and kept from the label.
+document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); e.stopPropagation(); showTip(e.target); } }, true);
 
 // A language's English name ("pl" -> "Polish"); "auto" is detected from the text.
 var langName = code => { if (code === 'auto') return 'Detect from text'; try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };

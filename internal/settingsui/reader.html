@@ -128,77 +128,14 @@
   <div id="hint"><select id="who" aria-label="Session shown"></select><span id="hintText"></span></div>
   <div id="grip" title="Drag to resize"></div>
 </div>
+<!-- Only the script is shared (the drawn select menu); common.css is not linked: its body, select and
+     base rules would change this window's layout and its themes. -->
+<script src="/settings/common.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-// A select's list drawn by the page in the window's own look; the select itself stays and keeps its
-// value, so the code that fills and reads it is unchanged. Arrow keys on a closed select still step.
-(() => {
-  let menu = null, owner = null, items = [], act = -1;
-  const close = () => { if (!menu) return; menu.remove(); menu = null; owner = null; removeEventListener('resize', close); };
-  const pick = i => {
-    const it = items[i]; if (!it || it.dis) return;
-    const sel = owner; close();
-    if (sel.value !== it.value) { sel.value = it.value; sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
-    sel.focus();
-  };
-  const mark = i => {
-    if (act >= 0 && items[act]) items[act].el.classList.remove('hl');
-    act = i;
-    if (items[i]) { items[i].el.classList.add('hl'); items[i].el.scrollIntoView({ block: 'nearest' }); }
-  };
-  const step = d => { let i = act; for (let n = 0; n < items.length; n++) { i = (i + d + items.length) % items.length; if (!items[i].dis) return mark(i); } };
-  function open(sel) {
-    close();
-    if (sel.disabled || !sel.options.length) return;
-    owner = sel; items = []; act = -1;
-    menu = document.createElement('div'); menu.className = 'vmenu'; menu.setAttribute('role', 'listbox');
-    const add = o => {
-      const el = document.createElement('div'); el.className = 'vopt'; el.setAttribute('role', 'option'); el.textContent = o.textContent;
-      if (o.disabled) el.setAttribute('aria-disabled', 'true');
-      if (o.selected) { el.classList.add('sel'); el.setAttribute('aria-selected', 'true'); }
-      const i = items.length; items.push({ el, value: o.value, dis: o.disabled });
-      el.addEventListener('mousemove', () => { if (act !== i && !o.disabled) mark(i); });
-      el.addEventListener('click', () => pick(i));
-      menu.append(el);
-    };
-    for (const c of sel.children) {
-      if (c.tagName === 'OPTGROUP') { const g = document.createElement('div'); g.className = 'vgrp'; g.textContent = c.label; menu.append(g); [...c.children].forEach(add); }
-      else if (c.tagName === 'OPTION') add(c);
-    }
-    document.body.append(menu);
-    const r = sel.getBoundingClientRect(), below = innerHeight - r.bottom - 8, above = r.top - 8;
-    const down = below >= Math.min(240, menu.scrollHeight) || below >= above;
-    menu.style.minWidth = r.width + 'px'; menu.style.maxWidth = Math.max(r.width, innerWidth - r.left - 8) + 'px';
-    menu.style.left = Math.max(4, Math.min(r.left, innerWidth - menu.offsetWidth - 4)) + 'px';
-    menu.style.maxHeight = Math.max(120, Math.min(320, down ? below : above)) + 'px';
-    if (down) menu.style.top = (r.bottom + 4) + 'px'; else menu.style.bottom = (innerHeight - r.top + 4) + 'px';
-    mark(Math.max(0, items.findIndex(it => it.el.classList.contains('sel'))));
-    addEventListener('resize', close);
-  }
-  // Open on a press of the select, or Space, Enter, Alt+Down and F4 on it.
-  document.addEventListener('mousedown', e => {
-    const sel = e.target.closest && e.target.closest('select');
-    if (sel && !sel.multiple && sel.size <= 1) { e.preventDefault(); sel.focus(); if (owner === sel) close(); else open(sel); return; }
-    if (menu && !menu.contains(e.target)) close();
-  }, true);
-  document.addEventListener('keydown', e => {
-    if (menu) {
-      const k = e.key;
-      if (k === 'ArrowDown' || k === 'ArrowUp') step(k === 'ArrowDown' ? 1 : -1);
-      else if (k === 'Home') { act = -1; step(1); } else if (k === 'End') { act = 0; step(-1); }
-      else if (k === 'Enter' || k === ' ') pick(act);
-      else if (k === 'Escape' || k === 'Tab') { const s = owner; close(); if (k === 'Escape') s.focus(); else return; }
-      else if (k.length === 1) { const i = items.findIndex((it, n) => n > act && !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); const j = i >= 0 ? i : items.findIndex(it => !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); if (j >= 0) mark(j); }
-      else return;
-      e.preventDefault(); e.stopPropagation(); return;
-    }
-    const sel = e.target.tagName === 'SELECT' ? e.target : null;
-    if (sel && !sel.multiple && (e.key === ' ' || e.key === 'Enter' || e.key === 'F4' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); open(sel); }
-  }, true);
-  document.addEventListener('scroll', e => { if (menu && !menu.contains(e.target)) close(); }, true);
-  addEventListener('blur', close);
-})();
 
+// Its own API call in place of common.js's: a reply that is not JSON throws here, so a poll that
+// goes wrong leaves the window as it was instead of drawing an empty status.
 async function api(path) {
   const res = await fetch('/settings/api/' + path);
   if (!res.ok) throw new Error(res.statusText);

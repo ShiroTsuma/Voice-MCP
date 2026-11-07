@@ -59,7 +59,8 @@ option { background: var(--field); color: var(--ink); }
 .btn { flex: none; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 600; }
 .btn svg { width: 11px; height: 11px; flex: none; }
 .btn.wide { width: 100%; }
-.btn:disabled { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); cursor: default; }
+/* :hover too, so a window's own .btn:hover, which comes later, never lights a disabled button. */
+.btn:disabled, .btn:disabled:hover { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); cursor: default; }
 .btn.primary { min-width: 84px; background: var(--ink); color: var(--ground); }
 .btn.primary:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
 main { flex: 1; min-width: 0; display: flex; flex-direction: column; }

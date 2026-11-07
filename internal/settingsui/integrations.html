@@ -11,6 +11,7 @@
   each with its state, what it gives, and its one or two actions. Long actions show their log in place.
   Every entry comes from a file in integrations\ (integrations/README.md).
 -->
+<link rel="stylesheet" href="/settings/common.css">
 <style>
   :root {
     --ground:   oklch(21.5% 0.003 260);
@@ -30,18 +31,11 @@
     --ui-small: "Segoe UI Variable Small", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     --mono: "Cascadia Mono", Consolas, monospace;
   }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  html { background: var(--ground); }
-  body { margin: 0; display: flex; overflow: hidden; font: 14px/1.4 var(--ui); color: var(--ink); background: var(--ground); user-select: none; cursor: default; }
   button { font: inherit; color: inherit; cursor: pointer; }
-  [hidden] { display: none !important; }
-  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
   /* ── Groups ───────────────────────────────────────────────── */
   aside { width: 260px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--rule); }
   aside header { padding: 18px 20px 10px; }
-  aside h1 { margin: 0 0 6px; font: 600 20px/1.3 var(--ui-display); letter-spacing: -.01em; }
   aside header p { margin: 0; font: 12.5px/1.4 var(--ui-small); color: var(--ink-2); }
   nav { flex: 1; overflow-y: auto; padding: 6px 8px; }
   nav button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 12px; border-radius: 6px; }
@@ -52,7 +46,7 @@
   aside footer { padding: 12px 20px 14px; border-top: 1px solid var(--rule); font: 12px/1.45 var(--ui-small); color: var(--ink-3); }
 
   /* ── A group's integrations ───────────────────────────────── */
-  main { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 32px 32px; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; }
+  main { display: block; flex: 1; min-width: 0; overflow-y: auto; padding: 22px 32px 32px; scrollbar-width: thin; scrollbar-color: var(--field-hi) transparent; }
   main h2 { margin: 0 0 2px; font: 600 18px/1.3 var(--ui-display); }
   main > p { margin: 0 0 16px; font: 13px/1.4 var(--ui-small); color: var(--ink-2); }
   .it { display: grid; grid-template-columns: 1fr auto; column-gap: 18px; padding: 14px 0; border-top: 1px solid var(--rule); }
@@ -68,17 +62,6 @@
   .state.planned::before { background: transparent; border: 1.5px dashed var(--ink-3); box-sizing: border-box; }
   .it.planned h3 > span:first-child, .it.planned .about { color: var(--ink-2); }  /* not in voice yet */
   .about { margin: 3px 0 0; font: 13px/1.45 var(--ui-small); color: var(--ink-2); }
-  /* [i]: the longer explanation, on hover or focus, in one box above the page so no panel clips it (as in the other windows). */
-  .tip { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; border-radius: 50%; vertical-align: 1px;
-    box-shadow: inset 0 0 0 1.2px var(--ink-3); color: var(--ink-2); font: 600 10px/1 var(--ui-small); cursor: help; }
-  .tip:hover, .tip:focus-visible { color: var(--ink); box-shadow: inset 0 0 0 1.2px var(--ink-2); outline: none; }
-  #tipbox { position: fixed; z-index: 50; max-width: 320px; padding: 9px 11px; border-radius: 6px; background: var(--field-hi); color: var(--ink);
-    font: 12.5px/1.45 var(--ui-small); box-shadow: 0 6px 24px rgb(0 0 0 / .35); pointer-events: none; }
-  #tipbox p { margin: 0; white-space: pre-line; }
-  #tipbox ul { margin: 0; padding-left: 16px; }
-  #tipbox li + li { margin-top: 3px; }
-  #tipbox :is(p, ul) + :is(p, ul) { margin-top: 7px; }
-  #tipbox b { font-weight: 600; }
   .expr { margin: 3px 0 0; font: 12px/1.6 var(--ui-small); color: var(--ink-3, var(--ink-2)); }
   .expr .tok { font: 11.5px/1 ui-monospace, Consolas, monospace; color: var(--ink); background: var(--field); border-radius: 4px; padding: 1px 5px; }
   .detail { margin: 3px 0 0; font: 12.5px/1.45 var(--ui-small); color: var(--ink-3); user-select: text; }
@@ -87,22 +70,21 @@
   .btn { height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--field); font: 600 13px var(--ui); white-space: nowrap; }
   .btn:hover { background: var(--field-hi); }
   .btn.primary { background: var(--ink); color: var(--ground); }
-  .btn.primary:hover { background: color-mix(in oklab, var(--ink) 86%, var(--ground)); }
+  /* As common.css, again after this window's .btn.primary, so a disabled main button looks disabled. */
   .btn:disabled { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); cursor: default; }
   .log { grid-column: 1 / -1; margin-top: 10px; }
   .log summary { font: 12.5px var(--ui-small); color: var(--ink-2); cursor: pointer; }
   .log pre { margin: 6px 0 0; max-height: 180px; overflow: auto; padding: 8px 10px; border-radius: 6px; background: var(--sheet);
     font: 12px/1.45 var(--mono); color: var(--ink-2); white-space: pre-wrap; user-select: text; }
   .log .fail { color: var(--err); }
-  .empty { margin-top: 30px; color: var(--ink-2); }
+  /* Not common.css's centred empty state: a quiet line under the group's heading. */
+  .empty { margin: 30px 0 0; padding: 0; font: inherit; text-align: start; color: var(--ink-2); }
   .langs { margin: 3px 0 0; font: 12.5px/1.45 var(--ui-small); color: var(--ink-2); }
   .langs.miss { color: var(--part); }
   /* A setting of the integration, such as a model size. */
   .pick { margin: 8px 0 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 12.5px var(--ui-small); color: var(--ink-2); }
   .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); }
   .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 5px; background: none; font: 600 12.5px var(--ui); color: var(--ink-2); }
-  .seg button:hover { color: var(--ink); background: var(--field-hi); }
-  .seg button.on { background: var(--ink); color: var(--ground); }
   .pick .note { flex-basis: 100%; color: var(--ink-3); }
   .field input { flex: 1; min-width: 180px; max-width: 340px; height: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: var(--field);
     font: 12.5px var(--mono); color: var(--ink); user-select: text; }
@@ -135,23 +117,6 @@
   .toks .tok { font: 11.5px/1.5 ui-monospace, Consolas, monospace; color: var(--ink); background: var(--field); border-radius: 4px; padding: 1px 6px; }
   .infobox .vdlg-row { margin-top: 12px; }
   .actmenu .vopt.danger { color: var(--err); }
-  /* The page's own dialogs: the browser's would show voice's address and port. */
-  .vdlg { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: color-mix(in oklab, #000 55%, transparent); }
-  .vdlg-box { max-width: min(420px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
-    padding: 18px 18px 14px; box-shadow: 0 12px 40px #0008; font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
-  .vdlg-box p { margin: 0 0 14px; white-space: pre-wrap; }
-  .vdlg-row { display: flex; justify-content: flex-end; gap: 8px; }
-  .vdlg-btn { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
-  .vdlg-ok { background: color-mix(in oklab, var(--ink) 14%, var(--field)); }
-  /* A select's list, drawn by the page: the browser's own is light grey and out of place. */
-  .vmenu { position: fixed; z-index: 1001; overflow-y: auto; padding: 4px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px;
-    box-shadow: 0 10px 30px #0009; font: 13.5px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; scrollbar-width: thin; }
-  .vopt { position: relative; padding: 7px 10px 7px 26px; border-radius: 5px; color: var(--ink); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vopt.hl { background: var(--field-hi, var(--field)); }
-  .vopt.sel::before { content: ""; position: absolute; left: 10px; top: 50%; width: 8px; height: 4px; margin-top: -4px;
-    border: solid var(--ink); border-width: 0 0 1.6px 1.6px; transform: rotate(-45deg); }
-  .vopt[aria-disabled="true"] { color: var(--ink-3, var(--ink-2)); cursor: default; }
-  .vgrp { padding: 8px 10px 3px; font-size: 11.5px; color: var(--ink-3, var(--ink-2)); }
 </style>
 </head>
 <body>
@@ -165,115 +130,19 @@
 </aside>
 <main id="main" aria-live="polite"></main>
 
+<script src="/settings/common.js"></script>
 <script>
-// The page's own dialogs: the browser's confirm and alert would show voice's address and port.
-// dialog resolves true for ok; Esc, a click outside or cancel resolve false.
-function dialog(text, ok, cancel) {
-  return new Promise(done => {
-    const bg = document.createElement('div'); bg.className = 'vdlg';
-    const box = document.createElement('div'); box.className = 'vdlg-box'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
-    const p = document.createElement('p'); p.textContent = text;
-    const row = document.createElement('div'); row.className = 'vdlg-row';
-    const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(false); } };
-    const close = v => { bg.remove(); document.removeEventListener('keydown', key, true); done(v); };
-    const mk = (label, v, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = () => close(v); row.append(b); return b; };
-    const no = cancel ? mk(cancel, false, 'vdlg-btn') : null;
-    const yes = mk(ok, true, 'vdlg-btn vdlg-ok');
-    box.append(p, row); bg.append(box);
-    bg.addEventListener('click', e => { if (e.target === bg) close(false); });
-    document.body.append(bg); document.addEventListener('keydown', key, true);
-    (no || yes).focus(); // a question starts on Cancel, so Enter never deletes by accident
-  });
-}
-const askYes = (text, ok = 'Delete') => dialog(text, ok, 'Cancel');
-const tell = text => dialog(text, 'OK');
-
-// A select's list drawn by the page in the window's own look; the select itself stays and keeps its
-// value, so the code that fills and reads it is unchanged. Arrow keys on a closed select still step.
-(() => {
-  let menu = null, owner = null, items = [], act = -1;
-  const close = () => { if (!menu) return; menu.remove(); menu = null; owner = null; removeEventListener('resize', close); };
-  const pick = i => {
-    const it = items[i]; if (!it || it.dis) return;
-    const sel = owner; close();
-    if (sel.value !== it.value) { sel.value = it.value; sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
-    sel.focus();
-  };
-  const mark = i => {
-    if (act >= 0 && items[act]) items[act].el.classList.remove('hl');
-    act = i;
-    if (items[i]) { items[i].el.classList.add('hl'); items[i].el.scrollIntoView({ block: 'nearest' }); }
-  };
-  const step = d => { let i = act; for (let n = 0; n < items.length; n++) { i = (i + d + items.length) % items.length; if (!items[i].dis) return mark(i); } };
-  function open(sel) {
-    close();
-    if (sel.disabled || !sel.options.length) return;
-    owner = sel; items = []; act = -1;
-    menu = document.createElement('div'); menu.className = 'vmenu'; menu.setAttribute('role', 'listbox');
-    const add = o => {
-      const el = document.createElement('div'); el.className = 'vopt'; el.setAttribute('role', 'option'); el.textContent = o.textContent;
-      if (o.disabled) el.setAttribute('aria-disabled', 'true');
-      if (o.selected) { el.classList.add('sel'); el.setAttribute('aria-selected', 'true'); }
-      const i = items.length; items.push({ el, value: o.value, dis: o.disabled });
-      el.addEventListener('mousemove', () => { if (act !== i && !o.disabled) mark(i); });
-      el.addEventListener('click', () => pick(i));
-      menu.append(el);
-    };
-    for (const c of sel.children) {
-      if (c.tagName === 'OPTGROUP') { const g = document.createElement('div'); g.className = 'vgrp'; g.textContent = c.label; menu.append(g); [...c.children].forEach(add); }
-      else if (c.tagName === 'OPTION') add(c);
-    }
-    document.body.append(menu);
-    const r = sel.getBoundingClientRect(), below = innerHeight - r.bottom - 8, above = r.top - 8;
-    const down = below >= Math.min(240, menu.scrollHeight) || below >= above;
-    menu.style.minWidth = r.width + 'px'; menu.style.maxWidth = Math.max(r.width, innerWidth - r.left - 8) + 'px';
-    menu.style.left = Math.max(4, Math.min(r.left, innerWidth - menu.offsetWidth - 4)) + 'px';
-    menu.style.maxHeight = Math.max(120, Math.min(320, down ? below : above)) + 'px';
-    if (down) menu.style.top = (r.bottom + 4) + 'px'; else menu.style.bottom = (innerHeight - r.top + 4) + 'px';
-    mark(Math.max(0, items.findIndex(it => it.el.classList.contains('sel'))));
-    addEventListener('resize', close);
-  }
-  // Open on a press of the select, or Space, Enter, Alt+Down and F4 on it.
-  document.addEventListener('mousedown', e => {
-    const sel = e.target.closest && e.target.closest('select');
-    if (sel && !sel.multiple && sel.size <= 1) { e.preventDefault(); sel.focus(); if (owner === sel) close(); else open(sel); return; }
-    if (menu && !menu.contains(e.target)) close();
-  }, true);
-  document.addEventListener('keydown', e => {
-    if (menu) {
-      const k = e.key;
-      if (k === 'ArrowDown' || k === 'ArrowUp') step(k === 'ArrowDown' ? 1 : -1);
-      else if (k === 'Home') { act = -1; step(1); } else if (k === 'End') { act = 0; step(-1); }
-      else if (k === 'Enter' || k === ' ') pick(act);
-      else if (k === 'Escape' || k === 'Tab') { const s = owner; close(); if (k === 'Escape') s.focus(); else return; }
-      else if (k.length === 1) { const i = items.findIndex((it, n) => n > act && !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); const j = i >= 0 ? i : items.findIndex(it => !it.dis && it.el.textContent.toLowerCase().startsWith(k.toLowerCase())); if (j >= 0) mark(j); }
-      else return;
-      e.preventDefault(); e.stopPropagation(); return;
-    }
-    const sel = e.target.tagName === 'SELECT' ? e.target : null;
-    if (sel && !sel.multiple && (e.key === ' ' || e.key === 'Enter' || e.key === 'F4' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); open(sel); }
-  }, true);
-  document.addEventListener('scroll', e => { if (menu && !menu.contains(e.target)) close(); }, true);
-  addEventListener('blur', close);
-})();
 const $ = id => document.getElementById(id);
 // The log's open state: what the user chose wins; untouched, it is open while the action runs.
 let data = { groups: [], items: [] }, group = 'agents', timer = 0, logOpen = new Map();
-
-async function api(path, body) {
-  const r = await fetch('/settings/api/' + path, body === undefined ? {} :
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || r.statusText);
-  return j;
-}
 
 // An integration shows in its group and in the ones it names in also (a GPU
 // voice that clones is under Cloning too).
 const inGroup = (i, g) => i.group === g || (i.also || []).includes(g);
 
 // Language names from the browser, and what speaks the user's languages.
-const langName = code => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
+// Overrides common.js's langName, which also names "auto".
+langName = code => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch { return code; } };
 const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
 const emotionText = { none: 'None', intensity: 'As intensity', labels: 'As labels', instruct: 'Any mood, by instruction' };
 function languagesLine(it) {
@@ -579,47 +448,6 @@ function fieldRow(it) {
 }
 
 function render() { renderGroups(); renderMain(); }
-
-// [i]: its data-tip in a box under it (above, near the bottom), kept inside the window; as in the other windows.
-const tipbox = document.createElement('div'); tipbox.id = 'tipbox'; tipbox.hidden = true; tipbox.setAttribute('role', 'tooltip'); document.body.append(tipbox);
-let tipFor = null;
-// A tip is plain text with a little markup, the same in every window: a blank
-// line starts a paragraph, a line "- …" is a point of a list, **…** is bold.
-// Built from text nodes, never parsed as HTML.
-function renderTip(box, text) {
-  box.textContent = '';
-  const inline = (el, s) => s.split(/\*\*(.+?)\*\*/).forEach((part, i) => {
-    if (!part) return;
-    if (i % 2) { const b = document.createElement('b'); b.textContent = part; el.append(b); } else el.append(part);
-  });
-  for (const block of String(text || '').trim().split(/\n\s*\n/)) {
-    let list = null, para = null;
-    for (const line of block.split('\n')) {
-      const point = line.match(/^\s*[-•]\s+(.*)$/);
-      if (point) {
-        if (!list) { list = box.appendChild(document.createElement('ul')); para = null; }
-        inline(list.appendChild(document.createElement('li')), point[1]);
-      } else if (line.trim()) {
-        if (!para) { para = box.appendChild(document.createElement('p')); list = null; } else para.append('\n');
-        inline(para, line.trim());
-      }
-    }
-  }
-}
-function showTip(t) {
-  tipFor = t;
-  renderTip(tipbox, t.dataset.tip); tipbox.hidden = !tipbox.textContent;
-  const r = t.getBoundingClientRect(), w = tipbox.offsetWidth, h = tipbox.offsetHeight;
-  tipbox.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - 12)) + 'px';
-  tipbox.style.top = (r.bottom + 6 + h > innerHeight - 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
-}
-document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('.tip'); if (t) showTip(t); });
-document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.tip')) tipbox.hidden = true; });
-document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('tip')) showTip(e.target); });
-document.addEventListener('focusout', () => { tipbox.hidden = true; });
-// Scrolling carries the box along with its [i].
-document.addEventListener('scroll', () => { if (!tipbox.hidden && tipFor) showTip(tipFor); }, true);
-document.addEventListener('click', e => { if (e.target.classList && e.target.classList.contains('tip')) { e.preventDefault(); showTip(e.target); } });
 
 async function refresh() {
   clearTimeout(timer);
