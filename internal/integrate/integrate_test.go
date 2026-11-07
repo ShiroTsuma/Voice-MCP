@@ -278,6 +278,14 @@ func TestHasCodexNotifyWrapped(t *testing.T) {
 	if !HasCodexNotify(path) {
 		t.Fatal("voice's notify inside computer use's was not seen")
 	}
+	// Remove takes voice out of the wrapper and keeps the wrapper.
+	if changed, err := RemoveCodex(path); err != nil || !changed || HasCodexNotify(path) {
+		b, _ := os.ReadFile(path)
+		t.Fatalf("remove from the wrapper: %v %v\n%s", changed, err, b)
+	}
+	if b, _ := os.ReadFile(path); !strings.Contains(string(b), "codex-computer-use.exe") {
+		t.Fatalf("the wrapper itself was removed:\n%s", b)
+	}
 	os.WriteFile(path, []byte(`notify = [ "C:/cua/codex-computer-use.exe", "turn-ended", "--previous-notify", "[\"other.exe\"]" ]`+"\n"), 0o644)
 	if HasCodexNotify(path) {
 		t.Fatal("another program's notify counted as voice's")

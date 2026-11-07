@@ -2,6 +2,7 @@ package sherpa
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -113,7 +114,7 @@ func ptr(u uintptr) unsafe.Pointer { return *(*unsafe.Pointer)(unsafe.Pointer(&u
 
 type Engine struct {
 	name     string
-	family   string // kokoro | vits | pocket | zipvoice
+	family   string // kokoro | vits | pocket | zipvoice | supertonic
 	lang     string
 	steps    int32
 	refs     map[string]refAudio // decoded reference clips by path
@@ -130,12 +131,13 @@ type Engine struct {
 // New loads a model. Config keys:
 //
 //	model    model directory (relative to the models dir)
-//	family   kokoro | vits | pocket | zipvoice (default: detected from files)
-//	lang     Kokoro language, e.g. en-us, en-gb (default en-us)
+//	family   kokoro | vits | pocket | zipvoice | supertonic (default: detected from files)
+//	lang     Kokoro language, e.g. en-us, en-gb (default en-us); for
+//	         Supertonic the language when a request names none (default en)
 //	lexicon  lexicon file(s) inside the model dir, comma-separated
 //	threads  inference threads (default 4)
 //	voice    default voice name; for cloning models a reference clip path
-//	steps    flow-matching steps for ZipVoice (default 4)
+//	steps    flow-matching steps for ZipVoice (default 4) and Supertonic (default 8)
 func New(name string, cfg engine.Config) (engine.Engine, error) {
 	l, err := load()
 	if err != nil {
@@ -451,14 +453,12 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 	var keepExtra []byte
 	if e.family == "supertonic" {
 		// The language goes with each request: the call's, else the engine's.
-		lang := strings.ToLower(strings.SplitN(strings.TrimSpace(req.Lang), "-", 2)[0])
-		if lang == "" || lang == "auto" {
-			lang = strings.ToLower(strings.SplitN(e.lang, "-", 2)[0])
+		lang, err := supertonicLang(req.Lang, e.lang)
+		if err != nil {
+			return fmt.Errorf("engine %q: %w", e.name, err)
 		}
-		if lang == "" {
-			lang = "en"
-		}
-		keepExtra = append([]byte(`{"lang":"`+lang+`"}`), 0)
+		js, _ := json.Marshal(map[string]string{"lang": lang})
+		keepExtra = append(js, 0)
 		gen.Extra = uintptr(unsafe.Pointer(&keepExtra[0]))
 		gen.NumSteps = e.steps
 	}

@@ -245,12 +245,17 @@ func RemoveCodex(configPath string) (bool, error) {
 			continue
 		}
 		var v struct{ Notify []string }
-		if _, err := toml.Decode(l, &v); err != nil || !isVoiceNotify(v.Notify) {
+		if _, err := toml.Decode(l, &v); err != nil || !runsVoiceNotify(v.Notify) {
 			return false, err
 		}
-		if len(v.Notify) > 4 && v.Notify[3] == "--chain" {
+		switch {
+		case !isVoiceNotify(v.Notify):
+			// Another program's notify that calls voice's after it (Codex's
+			// computer use): it stays, without voice inside.
+			lines[i] = "notify = " + tomlArray(unnest(v.Notify))
+		case len(v.Notify) > 4 && v.Notify[3] == "--chain":
 			lines[i] = "notify = " + tomlArray(v.Notify[4:])
-		} else {
+		default:
 			lines = append(lines[:i], lines[i+1:]...)
 		}
 		return writeIfChanged(configPath, old, []byte(strings.Join(lines, nl)+nl))

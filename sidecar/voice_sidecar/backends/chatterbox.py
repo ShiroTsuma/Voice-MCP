@@ -36,11 +36,13 @@ class Backend:
             from chatterbox.mtl_tts import ChatterboxMultilingualTTS as Model, Conditionals
 
             t3 = options.get("t3", "v3")
-            try:
+            import inspect
+
+            if "t3_model" in inspect.signature(Model.from_pretrained).parameters:
                 self.model = Model.from_pretrained(device=dev, t3_model=t3)
-            except TypeError:  # chatterbox-tts 0.1.7: the original checkpoint only
+            else:  # chatterbox-tts 0.1.7: the original checkpoint only
                 print("chatterbox: this environment predates Multilingual V3; speaking with the original model. "
-                      "Reinstall Chatterbox in the Integrations window to update it.", file=sys.stderr, flush=True)
+                      "Update Chatterbox in the Integrations window to get it.", file=sys.stderr, flush=True)
                 self.model = Model.from_pretrained(device=dev)
                 t3 = "v2"
             print(f"chatterbox: multilingual {t3}", file=sys.stderr, flush=True)

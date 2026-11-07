@@ -4,6 +4,7 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"math"
@@ -240,12 +241,17 @@ func (s *Speaker) OpenOutput() error {
 // of playing it. Call before the first Speak.
 func (s *Speaker) RecordTo(path string) { s.out.Record = path }
 
-// runTag is a short tag for one run of voice, from its start time: three
-// letters that repeat after about three weeks, then a dash ("vkq3-12").
-func runTag(at time.Time) string {
+// runTag is a short tag for one run of voice: four random letters and a
+// dash ("vkqzt-12"), one in about 330,000 runs alike, so a restart at any
+// time numbers its utterances apart from the run before.
+func runTag() string {
 	const letters = "abcdefghijkmnpqrstuvwxyz" // no l and o: they read as 1 and 0
-	n := at.Unix() / 2 % int64(len(letters)*len(letters)*len(letters))
-	b := []byte{letters[n%24], letters[n/24%24], letters[n/576%24], '-'}
+	b := make([]byte, 5)
+	rand.Read(b[:4])
+	for i := range 4 {
+		b[i] = letters[int(b[i])%len(letters)]
+	}
+	b[4] = '-'
 	return string(b)
 }
 
@@ -258,7 +264,7 @@ func NewSpeaker(cfg *preset.Config) *Speaker {
 		active:  cfg.DefaultPreset,
 		wake:    make(chan struct{}, 1),
 		closed:  make(chan struct{}),
-		idRun:   runTag(time.Now()),
+		idRun:   runTag(),
 	}
 	s.out.Device = cfg.Device
 	go s.loop()

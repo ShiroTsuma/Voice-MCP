@@ -38,7 +38,7 @@ You run several agent sessions and none of them is on screen. voice gives each o
 
 voice is an [MCP](https://modelcontextprotocol.io) server: any MCP client can use its tools to speak (`voice_speak`), play a scene in several voices (`voice_scene`), ask and listen for a spoken answer (`voice_listen`), control playback and characters and read the transcript (`voice_control`) and clone voices (`voice_clone`); see [MCP tools](#mcp-tools). For Claude Code and Codex it adds hooks and a Claude Code mod, so announcements and dictation work even when the agent does not call a tool. Any other agent gets the same through the [session API](docs/http-api.md), with [examples/agent.py](examples/agent.py) as a starting point.
 
-Everything runs on your PC. Speech synthesis (Kokoro, Piper, Pocket) and recognition (Parakeet, Whisper) run on the CPU through sherpa-onnx; nothing you say leaves the machine. One Go binary that installs itself.
+Everything runs on your PC. Speech synthesis (Kokoro, Piper, Supertonic, Pocket) and recognition (Parakeet, Whisper) run on the CPU through sherpa-onnx; nothing you say leaves the machine. One Go binary that installs itself.
 
 | You want to | voice does |
 | --- | --- |
@@ -253,7 +253,7 @@ Variables: `--ground`, `--ink`, `--ink-2`, `--ink-3`, `--you`, `--plain`, `--ui`
 
 A voice comes in three layers, each in `config.toml` next to `voice.exe` (create it from `config.example.toml`):
 
-1. An **engine** makes the sound. Kokoro, Piper, Windows SAPI and the Python sidecar's backends (Chatterbox Multilingual V3, Chatterbox Turbo, XTTS, F5, Qwen3-TTS, Qwen3-TTS fast, OmniVoice on the GPU; Chatterbox Nano on the processor) are built in. Any program that writes a WAV file can be another one (`type = "exec"`), and so can any server that speaks voice's HTTP protocol (`type = "http"`).
+1. An **engine** makes the sound. Kokoro, Piper, Supertonic 3, Windows SAPI and the Python sidecar's backends (Chatterbox Multilingual V3, Chatterbox Turbo, XTTS, F5, Qwen3-TTS, Qwen3-TTS fast, OmniVoice on the GPU; Chatterbox Nano on the processor) are built in. Any program that writes a WAV file can be another one (`type = "exec"`), and so can any server that speaks voice's HTTP protocol (`type = "http"`).
 2. A **preset** picks an engine and tunes it: voice, speed, pitch, effects, another engine or voice for another language. The built-in `calm-mature` is Kokoro's `af_nicole`, slower and lower.
 3. A **character** speaks with a preset. Pick it in the Characters window (Voice), or set `preset` in its `[[characters]]` entry.
 
@@ -477,7 +477,7 @@ English is the default language (`default_lang`, Speaking language in the settin
 
 Announcements (a turn finished, a question, a permission prompt) say the agent's own words when they are in the voice's language, else a phrase in that language. The phrases come from one JSON file per language, built in for English and Polish; a file of your own in the data folder's `phrases` folder (`de.json`, or `pl.json` to replace a list) adds a language. Keys: `done`, `input`, `permission`, `permission_tool` (`{tool}` is the tool), `question`; a language without a key falls back to English. `[hooks.phrases]` in `config.toml` replaces a kind in every language.
 
-Engine types: `sherpa` (Kokoro, Piper/VITS, Pocket, ZipVoice in process), `http` (sidecar or any server speaking its protocol), `exec` (any program that writes WAV; `{ref}` and `{ref_text}` placeholders for cloning) and `sapi`.
+Engine types: `sherpa` (Kokoro, Piper/VITS, Supertonic, Pocket, ZipVoice in process), `http` (sidecar or any server speaking its protocol), `exec` (any program that writes WAV; `{ref}` and `{ref_text}` placeholders for cloning) and `sapi`.
 
 ### Cloning
 
@@ -530,7 +530,7 @@ The easiest way is the Integrations window (settings window → Integrations →
 
 **Qwen3-TTS fast** (`qwen3_fast`, NVIDIA only) is the same model and the same voices run with CUDA graphs through [faster-qwen3-tts](https://github.com/andimarafioti/faster-qwen3-tts): on an RTX 5080 a sentence takes about 0.9 s instead of about 11, so speech starts about a second after it is asked for. It reads the voice prompts Qwen3-TTS makes and makes the same ones, so a cloned voice moves between the two by picking its engine. It has its own environment (`voice sidecar setup qwen3_fast`). If it does not run on a PC, Qwen3-TTS stays the choice.
 
-GPUs: NVIDIA gets CUDA PyTorch (`-cuda cu128` default, needed for RTX 50). AMD gets AMD's ROCm PyTorch for Windows from a profile in `sidecar\profiles` (`amd-rocm-windows`: ROCm 7.2.1, PyTorch 2.9.1, Python 3.12, for Radeon RX 9070/9070 XT/9060 XT, RX 7900 XTX, RX 7700 and AI PRO R9700; driver 26.2.2 or newer). A newer ROCm release from [AMD's install page](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html) goes in as another profile (`-profile file.json`) or with `-torch-wheels`. F5-TTS needs `torch.distributed`, which AMD's Windows build lacks: setup checks that and skips f5 before downloading it. Tested pins for a backend go in `sidecar\requirements\<backend>-<gpu>.txt` (used as pip constraints). Everything outside the sidecar (Kokoro, Piper, Pocket cloning, Parakeet/Whisper listening) runs on the CPU and works the same on AMD and NVIDIA.
+GPUs: NVIDIA gets CUDA PyTorch (`-cuda cu128` default, needed for RTX 50). AMD gets AMD's ROCm PyTorch for Windows from a profile in `sidecar\profiles` (`amd-rocm-windows`: ROCm 7.2.1, PyTorch 2.9.1, Python 3.12, for Radeon RX 9070/9070 XT/9060 XT, RX 7900 XTX, RX 7700 and AI PRO R9700; driver 26.2.2 or newer). A newer ROCm release from [AMD's install page](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html) goes in as another profile (`-profile file.json`) or with `-torch-wheels`. F5-TTS needs `torch.distributed`, which AMD's Windows build lacks: setup checks that and skips f5 before downloading it. Tested pins for a backend go in `sidecar\requirements\<backend>-<gpu>.txt` (used as pip constraints). Everything outside the sidecar (Kokoro, Piper, Supertonic, Pocket cloning, Parakeet/Whisper listening) runs on the CPU and works the same on AMD and NVIDIA.
 
 Model licenses vary (Pocket, F5 weights and XTTS are non-commercial); check them before any commercial use.
 

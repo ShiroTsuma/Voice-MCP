@@ -760,7 +760,7 @@ func sidecarStatus(name string) integrations.Status {
 			// (Chatterbox before Multilingual V3): it keeps working as it is,
 			// and Reinstall brings the new one.
 			if have, _ := st["source"].(string); sb.SourceKey() != "" && have != sb.SourceKey() {
-				detail = "An older build is installed; it works as it is, and Update installs the newer one this version of voice brings (your voices stay)"
+				detail += ". An older build is installed: it works as it is, and Update installs the newer one this version of voice brings (your voices stay)"
 				acts[1].Label, acts[1].Primary = "Update", true
 				return integrations.Status{State: integrations.On, Label: "Update available", Detail: detail, Actions: acts}
 			}

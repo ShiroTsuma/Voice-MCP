@@ -3,11 +3,40 @@ package sherpa
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// supertonicLangs are the languages Supertonic 3 speaks.
+var supertonicLangs = map[string]bool{"en": true, "ko": true, "ja": true, "ar": true, "bg": true, "cs": true, "da": true,
+	"de": true, "el": true, "es": true, "et": true, "fi": true, "fr": true, "hi": true, "hr": true, "hu": true, "id": true,
+	"it": true, "lt": true, "lv": true, "nl": true, "pl": true, "pt": true, "ro": true, "ru": true, "sk": true, "sl": true,
+	"sv": true, "tr": true, "uk": true, "vi": true}
+
+// supertonicLang is the language a Supertonic request is said in: the
+// request's ("pl", "pl-PL", "pl_PL"), else the engine's, else English; an
+// error for one it does not speak, rather than a request it would mangle.
+func supertonicLang(req, engine string) (string, error) {
+	base := func(s string) string {
+		s = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(s, "_", "-")))
+		s, _, _ = strings.Cut(s, "-")
+		return s
+	}
+	lang := base(req)
+	if lang == "" || lang == "auto" {
+		lang = base(engine)
+	}
+	if lang == "" || lang == "auto" {
+		lang = "en"
+	}
+	if !supertonicLangs[lang] {
+		return "", fmt.Errorf("Supertonic does not speak %q", lang)
+	}
+	return lang, nil
+}
 
 // kokoroV1Speakers is the speaker order of kokoro-multi-lang-v1_0 (sid =
 // index), used when the model metadata cannot be read. The first letter of a
