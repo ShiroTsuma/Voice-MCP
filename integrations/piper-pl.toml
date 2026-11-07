@@ -1,0 +1,17 @@
+id = "piper-pl"
+group = "speech"
+order = 30
+title = "Piper Polish"
+about = "Polish voices, used when a request asks for Polish."
+details = """
+Small and quick Piper voices on the processor, Polish only, plain speech without sounds or moods. voice picks one when a request asks for Polish.
+
+- **Gosia** and **Justyna**: female voices.
+- **Darkman**: a male voice.
+
+Each is its own download; take the ones you want.
+"""
+size = "64 MB each"
+languages = ["pl"]
+uses = "model"
+models = ["piper-pl-gosia", "piper-pl-justyna", "piper-pl-darkman"]

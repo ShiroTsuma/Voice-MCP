@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -59,9 +60,12 @@ type integrationFile struct {
 	Uses     string   `toml:"uses"`     // a handler: claude-hooks, claude-mod, codex, session-api, model, sidecar, python, builtin, planned
 	Requires []string `toml:"requires"` // integrations installed first (their ids)
 	Model    string   `toml:"model"`    // uses = "model": the name in `voice models`
-	Backend  string   `toml:"backend"`  // uses = "sidecar": a name in sidecar/backends.json
-	Engine   string   `toml:"engine"`   // uses = "speech-server": the engine (an [engines.<name>] of type openai)
-	Guide    string   `toml:"guide"`    // uses = "speech-server": how to set its server up (a web page), offered as an action
+	// Models: uses = "model" for a family of voices, each its own download
+	// (Piper's Polish voices), in place of Model.
+	Models  []string `toml:"models"`
+	Backend string   `toml:"backend"` // uses = "sidecar": a name in sidecar/backends.json
+	Engine  string   `toml:"engine"`  // uses = "speech-server": the engine (an [engines.<name>] of type openai)
+	Guide   string   `toml:"guide"`   // uses = "speech-server": how to set its server up (a web page), offered as an action
 	// uses = "speech-server": commands that start and stop its server (Start
 	// server, Stop server); the start runs on in the background.
 	Start []string `toml:"start"`
@@ -449,6 +453,9 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 
 		"model": {
 			status: func(f integrationFile) integrations.Status {
+				if len(f.Models) > 0 {
+					return modelsStatus(f)
+				}
 				m, ok := models.Find(f.Model)
 				if !ok {
 					return integrations.Status{State: integrations.Error, Detail: fmt.Sprintf("no model %q in `voice models`", f.Model)}
@@ -463,7 +470,16 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 				return integrations.Status{State: integrations.Missing, Actions: []integrations.Action{{ID: "download", Label: "Download", Long: true, Primary: true}}}
 			},
 			do: func(ctx context.Context, f integrationFile, action string, log func(string)) error {
-				m, _ := models.Find(f.Model)
+				name := f.Model
+				if len(f.Models) > 0 {
+					// A family's actions name their voice: download:<model>, remove:<model>.
+					verb, which, _ := strings.Cut(action, ":")
+					if !slices.Contains(f.Models, which) {
+						return fmt.Errorf("%s has no voice %q", f.Title, which)
+					}
+					action, name = verb, which
+				}
+				m, _ := models.Find(name)
 				if action == "remove" {
 					dir := filepath.Join(engine.Dirs.Models, m.Dir)
 					log("Removing " + dir)
@@ -597,6 +613,43 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 			},
 		},
 	}
+}
+
+// modelsStatus is a family of voices on one card: each one downloaded or
+// removed on its own, the card on while any is there.
+func modelsStatus(f integrationFile) integrations.Status {
+	var have, acts []integrations.Action
+	var names []string
+	for _, name := range f.Models {
+		m, ok := models.Find(name)
+		if !ok {
+			return integrations.Status{State: integrations.Error, Detail: fmt.Sprintf("no model %q in `voice models`", name)}
+		}
+		label := voiceLabel(name)
+		if models.Installed(m, engine.Dirs.Models, engine.Dirs.Runtime) {
+			names = append(names, label)
+			have = append(have, integrations.Action{ID: "remove:" + name, Label: "Remove " + label})
+		} else {
+			acts = append(acts, integrations.Action{ID: "download:" + name, Label: fmt.Sprintf("Download %s (%d MB)", label, m.SizeMB), Long: true})
+		}
+	}
+	if len(names) == 0 {
+		if len(acts) > 0 {
+			acts[0].Primary = true
+		}
+		return integrations.Status{State: integrations.Missing, Detail: "Download the voices you want", Actions: acts}
+	}
+	return integrations.Status{State: integrations.On, Detail: "Downloaded: " + strings.Join(names, ", "), Actions: append(acts, have...)}
+}
+
+// voiceLabel names a family's voice by the end of its model name:
+// piper-pl-gosia is Gosia.
+func voiceLabel(model string) string {
+	part := model[strings.LastIndex(model, "-")+1:]
+	if part == "" {
+		return model
+	}
+	return strings.ToUpper(part[:1]) + part[1:]
 }
 
 // sidecarOptions and saveSidecarOption reach the settings of the voice that

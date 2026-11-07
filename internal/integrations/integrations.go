@@ -140,7 +140,7 @@ type Group struct {
 // Groups orders the window's sections.
 var Groups = []Group{
 	{"agents", "Agents", "The programs voice talks for and takes dictation to"},
-	{"speech", "Speaking", "Voices for what agents say"},
+	{"speech", "CPU voices", "Voices on the processor, for any PC"},
 	{"gpu", "GPU voices", "Larger voices and cloning in more languages, on a graphics card"},
 	{"cloning", "Cloning", "Engines that make a voice from a recording"},
 	{"listening", "Listening", "Speech recognition for dictation and answers"},

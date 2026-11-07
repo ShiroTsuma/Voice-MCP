@@ -1,9 +1,0 @@
-id = "piper-pl-darkman"
-group = "speech"
-order = 32
-title = "Piper Polish: Darkman"
-about = "A Polish male voice."
-details = "A Piper voice: small (64 MB) and quick, Polish only, plain speech without sounds or moods."
-languages = ["pl"]
-uses = "model"
-model = "piper-pl-darkman"

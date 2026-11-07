@@ -28,7 +28,7 @@ An integration either names a handler that does the work in voice's code:
 | `claude-mod` | | the `voice@voice` Claude Code mod |
 | `codex` | | Codex notify, hooks and the `$character` skill |
 | `session-api` | | lists agents connected through the [session API](../docs/http-api.md) |
-| `model` | `model = "kokoro"` | a model from `voice models`: its state and a Download button |
+| `model` | `model = "kokoro"`, or `models = [...]` for a family | a model from `voice models`: its state and a Download button; with `models`, one card for several voices (Piper's Polish ones), each downloaded or removed on its own |
 | `sidecar` | `backend = "chatterbox"` | a GPU backend: its state and an Install button (`voice sidecar setup`) |
 | `python` | | the Python voice brings for the GPU backends |
 | `builtin` | | always there, nothing to do |
