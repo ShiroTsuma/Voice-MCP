@@ -350,6 +350,24 @@ func isVoiceNotify(cmd []string) bool {
 	return base == "voice.exe" || base == "voice"
 }
 
+// runsVoiceNotify reports whether a notify command runs voice's: itself, or
+// another program's that calls voice's after it, holding it as an argument
+// (Codex's computer use: "turn-ended --previous-notify [\"voice.exe\", ...]").
+// Only for telling whether voice is set up: such a wrapper is not voice's to
+// replace or remove.
+func runsVoiceNotify(cmd []string) bool {
+	if isVoiceNotify(cmd) {
+		return true
+	}
+	for _, arg := range cmd[min(1, len(cmd)):] {
+		var inner []string
+		if strings.HasPrefix(strings.TrimSpace(arg), "[") && json.Unmarshal([]byte(arg), &inner) == nil && runsVoiceNotify(inner) {
+			return true
+		}
+	}
+	return false
+}
+
 // Claude adds `voice hook claude` to the Notification, Stop, UserPromptSubmit
 // and PostToolUse hooks of
 // Claude Code's settings.json, replacing earlier voice entries and keeping
@@ -682,7 +700,7 @@ func HasCodexNotify(configPath string) bool {
 		}
 		if notifyKey.MatchString(l) {
 			var v struct{ Notify []string }
-			if _, err := toml.Decode(l, &v); err == nil && isVoiceNotify(v.Notify) {
+			if _, err := toml.Decode(l, &v); err == nil && runsVoiceNotify(v.Notify) {
 				return true
 			}
 		}

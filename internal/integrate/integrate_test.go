@@ -267,3 +267,19 @@ func TestHasHooks(t *testing.T) {
 		t.Fatalf("after remove: %v", err)
 	}
 }
+
+// Codex's computer use wraps voice's notify in its own and calls it after:
+// voice still runs, so the Codex card shows it set up.
+func TestHasCodexNotifyWrapped(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	wrapped := `notify = [ "C:/cua/codex-computer-use.exe", "turn-ended", "--previous-notify", "[\"C:/voice/voice.exe\",\"hook\",\"codex\",\"--chain\",\"C:/cua/codex-computer-use.exe\",\"turn-ended\"]" ]` + "\n"
+	os.WriteFile(path, []byte(wrapped), 0o644)
+	if !HasCodexNotify(path) {
+		t.Fatal("voice's notify inside computer use's was not seen")
+	}
+	os.WriteFile(path, []byte(`notify = [ "C:/cua/codex-computer-use.exe", "turn-ended", "--previous-notify", "[\"other.exe\"]" ]`+"\n"), 0o644)
+	if HasCodexNotify(path) {
+		t.Fatal("another program's notify counted as voice's")
+	}
+}
