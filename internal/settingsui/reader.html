@@ -76,6 +76,7 @@
 
   /* Words as they are said: the rest is not there yet. */
   .words .live .w.later { opacity: 0; }
+  .words .live .line.ahead { display: none; }
   .words .live .w.now { color: color-mix(in oklab, var(--light) 55%, var(--ink)); }
   /* The whole block at once: what is not said yet is quieter, the word being said is marked. */
   .block .live .w.later { color: var(--ink-3); }
@@ -521,8 +522,14 @@ function tick() {
     if (n >= 0) live.spans[n].classList.add('now');
     live.now = n;
   }
-  // The line of a scene being said now, and who says it, for themes.
+  // A scene's lines not reached yet wait unseen, who says them and what they do included, so a
+  // name or an action never shows before its line is said ("words" appears as it is heard).
   const ln = cur >= 0 ? live.lineOf[cur] : null;
+  const lines = [...new Set(live.lineOf.filter(Boolean))];
+  if (lines.length) {
+    const reached = ln ? lines.indexOf(ln) : -1;
+    lines.forEach((el, i) => el.classList.toggle('ahead', i > reached && !line.preparing));
+  }
   if (ln !== live.lineNow) {
     if (live.lineNow) live.lineNow.classList.remove('speaking');
     if (ln) ln.classList.add('speaking');
