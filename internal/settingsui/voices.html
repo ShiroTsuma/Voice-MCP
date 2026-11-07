@@ -112,7 +112,9 @@
     <h1>Voices</h1>
     <p class="help">Yours in your groups, then each engine's<span class="tip" tabindex="0" data-tip="Every voice here can be a character's voice or the default voice.
 - **Yours**: made from a recording or a description, in your own groups. Drag one onto a group to move it.
-- **Engines**: the voices each engine brings. Switch off an engine or a voice to leave it out of the voice pickers.
+- **Engines**: the voices each engine brings.
+
+Switch off a voice, or a whole engine, to leave it out of the voice pickers; one a character already uses keeps speaking for it.
 
 Folded groups stay folded. Agents see the same voices (voice_clone, list_voices).">i</span></p>
   </header>
@@ -142,6 +144,10 @@ Renaming it moves the characters, the default voice and the tunings that use it 
       <div class="row col">
         <label class="lab" for="vGroup">Group</label>
         <select id="vGroup"></select>
+      </div>
+      <div class="row">
+        <label class="lab" for="vOn">In the voice pickers<span class="help">For characters and the default voice</span></label>
+        <label class="switch"><input type="checkbox" id="vOn"><span></span></label>
       </div>
       <div class="row col">
         <label class="lab" for="vSample">Hear it<span class="opt">optional text</span></label>
@@ -287,7 +293,8 @@ function list() {
   const box = $('list'); box.textContent = '';
   const who = users();
   const item = v => {
-    const it = document.createElement('div'); it.className = 'item' + (v.name === open ? ' sel' : '');
+    const off = offList().some(x => x.toLowerCase() === v.name.toLowerCase());
+    const it = document.createElement('div'); it.className = 'item' + (v.name === open ? ' sel' : '') + (off ? ' off' : '');
     it.innerHTML = '<div class="who"><b></b><small></small></div><span class="use"></span>';
     it.querySelector('b').textContent = v.name;
     const about = v.description || v.designed_from || '';
@@ -514,6 +521,14 @@ function showVoice(name) {
   $('vDesc').value = v.description || '';
   $('vDesc').placeholder = 'e.g. warm narrator for bedtime stories';
   fillGroups($('vGroup')); $('vGroup').value = v.group || '';
+  // Its switch saves at once, as the engines' voices do; Save keeps the rest.
+  const isOff = () => offList().some(x => x.toLowerCase() === v.name.toLowerCase());
+  $('vOn').checked = !isOff();
+  $('vOn').onchange = () => {
+    const off = offList().filter(x => x.toLowerCase() !== v.name.toLowerCase());
+    if (!$('vOn').checked) off.push(v.name);
+    saveOff(off);
+  };
   const who = users()[v.name] || [];
   const facts = [
     ['Made from', v.designed_from ? 'a description: “' + v.designed_from + '”' : 'a recording' + (v.source ? ' (' + v.source + ')' : '')],

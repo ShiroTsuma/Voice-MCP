@@ -17,6 +17,7 @@ import (
 
 	"voice/internal/audio"
 	"voice/internal/autostart"
+	"voice/internal/clones"
 	"voice/internal/core"
 	"voice/internal/daemon"
 	"voice/internal/engine"
@@ -413,6 +414,7 @@ func (b *backend) applyFiles(keepActive bool) (bool, error) {
 	}
 	cur.DefaultLang, cur.Volume, cur.Serve, cur.Hooks = next.DefaultLang, next.Volume, next.Serve, next.Hooks
 	cur.LanguageNotice = next.LanguageNotice
+	cur.VoicesOff = next.VoicesOff // the voices the pickers leave out
 	// Voices tuned in the Characters window or written to the files by hand
 	// or by an agent; cloned voices come with them from the voices folder.
 	cur.ReplacePresets(next, settingsui.PreviewPreset)
@@ -436,7 +438,29 @@ func (b *backend) state() map[string]any {
 	cfg := b.cfg
 	// Each preset with what the windows tune: a tuned one (voice-...) also
 	// says which preset it extends.
+	// The voices a character or the default voice uses (and what a tuning of
+	// theirs extends): the pickers keep them even when turned off.
+	used := map[string]bool{cfg.DefaultPreset: true}
+	for _, ch := range cfg.Characters {
+		used[ch.Preset] = true
+		if base := cfg.PresetExtends(ch.Preset); base != "" {
+			used[base] = true
+		}
+	}
+	if base := cfg.PresetExtends(cfg.DefaultPreset); base != "" {
+		used[base] = true
+	}
+	// The user's own voices go under their groups, in the groups' order.
+	cloneGroup := map[string]string{}
+	for _, c := range clones.List() {
+		cloneGroup[c.Name] = c.Group
+	}
+	groupRank := map[string]int{}
+	for i, g := range clones.Groups() {
+		groupRank[strings.ToLower(g)] = i
+	}
 	presets := []map[string]any{}
+	var own []map[string]any
 	for _, name := range cfg.PresetNames() {
 		if name == settingsui.PreviewPreset {
 			continue
@@ -452,24 +476,33 @@ func (b *backend) state() map[string]any {
 			}
 			// A cloned or designed voice: the user's own, whatever its description says.
 			if def, ok := cfg.PresetDef(name); ok && core.IsClonePreset(def, name) {
-				p["cloned"] = true
+				// Turned off in the Voices window: left out unless something uses it.
+				on := cfg.VoiceOn(name)
+				if !on && !used[name] {
+					continue
+				}
+				p["cloned"], p["on"] = true, on
+				p["group"] = dirOr(cloneGroup[name], "Your voices")
+				if !on {
+					p["label"] = name + " (turned off)"
+				}
+				own = append(own, p)
+				continue
 			}
 			presets = append(presets, p)
 		}
 	}
+	rank := func(g string) int {
+		if r, ok := groupRank[strings.ToLower(g)]; ok {
+			return r
+		}
+		return len(groupRank) // "Your voices": the ones in no group, after the groups
+	}
+	sort.SliceStable(own, func(i, j int) bool { return rank(own[i]["group"].(string)) < rank(own[j]["group"].(string)) })
+	presets = append(presets, own...)
 	// The engines' own voices, as presets the pickers offer by engine: those
 	// on and ready here, and any a character or the default voice still uses.
 	catalog := voiceCatalog(cfg, b.windowsVoices)
-	used := map[string]bool{cfg.DefaultPreset: true}
-	for _, ch := range cfg.Characters {
-		used[ch.Preset] = true
-		if base := cfg.PresetExtends(ch.Preset); base != "" {
-			used[base] = true
-		}
-	}
-	if base := cfg.PresetExtends(cfg.DefaultPreset); base != "" {
-		used[base] = true
-	}
 	for _, g := range catalog {
 		for _, v := range g.Voices {
 			if !(v.On && v.Ready) && !used[v.ID] {
