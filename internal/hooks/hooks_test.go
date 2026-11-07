@@ -66,6 +66,15 @@ func TestFromCodex(t *testing.T) {
 	if _, ok, _ := FromCodex(`{"type":"other"}`); ok {
 		t.Error("other type announced")
 	}
+	// The turn that names a new thread answers with JSON; it is not said.
+	if _, ok, why := FromCodex(`{"type":"agent-turn-complete","last-assistant-message":"{\"title\":\"Respond to greeting\"}"}`); ok {
+		t.Error("a thread title was announced")
+	} else if why == "" {
+		t.Error("no reason given")
+	}
+	if _, ok, _ := FromCodex(`{"type":"agent-turn-complete","last-assistant-message":"{curly} braces in a sentence"}`); !ok {
+		t.Error("a reply starting with a brace was dropped")
+	}
 }
 
 func TestSummaryTakesTheChosenSentences(t *testing.T) {

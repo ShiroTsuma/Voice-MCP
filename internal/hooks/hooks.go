@@ -102,6 +102,15 @@ func FromCodex(payload string) (Event, bool, string) {
 	if in.Type != "agent-turn-complete" {
 		return Event{}, false, "notification not announced: " + in.Type
 	}
+	// Codex names a new thread in a turn of its own whose answer is JSON
+	// ({"title":"Respond to greeting"}), and notifies for it too; a reply
+	// that is only a JSON object is no answer to the user.
+	if s := strings.TrimSpace(in.Last); strings.HasPrefix(s, "{") {
+		var obj map[string]any
+		if json.Unmarshal([]byte(s), &obj) == nil {
+			return Event{}, false, "not an answer: a JSON object (thread title)"
+		}
+	}
 	cwd := in.Cwd
 	if cwd == "" {
 		cwd = in.CwdAlt
