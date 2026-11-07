@@ -1181,8 +1181,9 @@ function saidCue(who, what, when) { $('saidWho').textContent = who; $('saidWhat'
 const defaultVoice = () => lastStatus.preset || (state && state.default_preset) || 'voice';
 // A session that changed character since the line shows as the character it is now.
 const nameNow = l => (l.pid && sessionOf(l.pid) && sessionOf(l.pid).name) || l.name;
-const speakerName = l => l.pid ? (nameNow(l) || 'A session') : defaultVoice();
-const speakerWhere = l => l.pid ? whereOf(l.client, l.project) : 'the default voice';
+// A line without a session (a voice's preview, a test) is named by the voice that says it.
+const speakerName = l => l.pid ? (nameNow(l) || 'A session') : (l.voice || defaultVoice());
+const speakerWhere = l => l.pid ? whereOf(l.client, l.project) : (l.voice && l.voice !== defaultVoice() ? 'a voice' : 'the default voice');
 
 // The line being said fills in as it is heard: runes before done are said; the sentence [from, to) plays
 // from at for seconds, so its words light up in proportion to the time gone; after to, not yet.

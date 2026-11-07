@@ -89,7 +89,7 @@ func (b *backend) panelStatus() map[string]any {
 		out["loading"] = l
 	}
 	if l := st.Line; l != nil {
-		line := map[string]any{"id": l.ID, "text": l.Text, "done": l.Done, "from": l.From, "to": l.To, "at": l.At, "seconds": l.Seconds, "preparing": l.Preparing}
+		line := map[string]any{"id": l.ID, "text": l.Text, "done": l.Done, "from": l.From, "to": l.To, "at": l.At, "seconds": l.Seconds, "preparing": l.Preparing, "voice": l.Voice}
 		for i := len(transcript) - 1; i >= 0; i-- {
 			if transcript[i].ID == l.ID {
 				line["pid"], line["name"], line["client"], line["project"], line["source"] = transcript[i].PID, transcript[i].Name, transcript[i].Client, transcript[i].Project, transcript[i].Source

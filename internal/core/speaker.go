@@ -698,6 +698,9 @@ type Line struct {
 	Seconds float64   `json:"seconds"`
 	// Preparing: nothing of it plays yet; its voice is still rendering.
 	Preparing bool `json:"preparing"`
+	// Voice: the preset that says it, which a line without a session (a
+	// voice's preview) is named by instead of the default voice.
+	Voice string `json:"voice,omitempty"`
 }
 
 func (s *Speaker) Status() Status {
@@ -708,6 +711,7 @@ func (s *Speaker) Status() Status {
 		l := s.current.line
 		l.ID, l.Text = s.current.id, blankTags(s.current.text)
 		l.Preparing = l.At.IsZero()
+		l.Voice = s.current.preset.Name
 		st.Line = &l
 	}
 	return st
