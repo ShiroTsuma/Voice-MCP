@@ -1,16 +1,19 @@
 """VoxCPM2 (OpenBMB; Apache-2.0, code and weights): 2B parameters, 30
 languages with Polish among them, 48 kHz. It clones from a clip, closest when
-the clip's transcript comes with it, and takes the style in plain words in
-parentheses before the text ("(cheerful tone)Hello").
+the clip's transcript comes with it.
 
 Options: model=openbmb/VoxCPM2, device=cuda|cpu, steps=10 (diffusion steps
-per frame), cfg=2.0.
+per frame), cfg=2.0. Per request, extra may override steps and cfg.
 
 A voice with a transcript also continues from the clip and what it says,
 closer to the recording; one without clones from the clip's sound alone,
 which was heard as more natural. The voice decides: voice writes no
-transcript for this engine by itself. Per request, extra may override steps and cfg, and
-instruct is the style ("teasing tone"), from voice's moods.
+transcript for this engine by itself.
+
+No moods: the model takes a style in words in parentheses before the text
+("(teasing tone)Hello"), but on a cloned voice that pulled the pitch far off
+from take to take (60 Hz on a 146 Hz voice), and the user heard nearly every
+such take as wrong. So voice sends none.
 
 The language comes from the text itself; the model takes no language tag.
 
@@ -49,12 +52,8 @@ class Backend:
 
     def synthesize(self, req):
         extra = req.get("extra") or {}
-        text = req["text"].strip()
-        style = str(extra.get("instruct") or "").strip().strip("()")
-        if style and style.lower() != "neutral":
-            text = f"({style}){text}"
         kw = {
-            "text": text,
+            "text": req["text"].strip(),
             "cfg_value": float(extra.get("cfg", self.cfg)),
             "inference_timesteps": int(extra.get("steps", self.steps)),
         }

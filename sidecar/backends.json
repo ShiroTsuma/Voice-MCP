@@ -213,7 +213,7 @@
       "vram": 7,
       "gpus": ["nvidia"],
       "label": "VoxCPM2",
-      "note": "cloning in 30 languages from a clip, its transcript optional, with the mood said in words, at 48 kHz; about 3x real time on an RTX 5080, 7 GB of graphics memory; the first start compiles for a few minutes",
+      "note": "cloning in 30 languages from a clip, its transcript optional, at 48 kHz; about 3x real time on an RTX 5080, 7 GB of graphics memory; the first start compiles for a few minutes",
       "pip": ["voxcpm", "triton-windows<3.8"],
       "module": "voxcpm",
       "port": 8774,
@@ -221,11 +221,7 @@
       "transcript": false,
       "languages": ["ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "id", "it", "ja", "km", "ko", "lo", "ms", "my", "nl", "no", "pl", "pt", "ru", "sv", "sw", "th", "tl", "tr", "vi", "zh"],
       "start_timeout": 1800,
-      "prefetch": ["openbmb/VoxCPM2"],
-      "expressive": {
-        "emotion": "instruct",
-        "instruct": "{mood}"
-      }
+      "prefetch": ["openbmb/VoxCPM2"]
     },
     {
       "name": "test",
