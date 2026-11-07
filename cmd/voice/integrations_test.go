@@ -150,7 +150,7 @@ func TestSidecarStatusOlderSource(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(env, ".voice-setup.json"), []byte(`{"gpu": "nvidia", "backend": true, "backend:chatterbox_turbo": true}`), 0o644)
 	for _, name := range []string{"chatterbox", "chatterbox_turbo"} {
-		if st := sidecarStatus(name); st.State != integrations.On || !reinstall(st) || !strings.Contains(st.Detail, "Reinstall") {
+		if st := sidecarStatus(name); st.State != integrations.On || !reinstall(st) || st.Label != "Update available" || !strings.Contains(st.Detail, "Update") {
 			t.Fatalf("%s before the update: %+v", name, st)
 		}
 	}

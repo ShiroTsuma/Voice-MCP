@@ -32,6 +32,9 @@ try {
     New-Item -ItemType Directory -Force $sidecar | Out-Null
     Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'sidecar\voice_sidecar'), (Join-Path $PSScriptRoot 'sidecar\setup.ps1'), (Join-Path $PSScriptRoot 'sidecar\backends.json') $sidecar
     # The Integrations window's entries live next to voice.exe.
+    # Replaced whole, so a card voice no longer ships does not linger.
+    $cards = Join-Path (Split-Path $Output -Parent) 'integrations'
+    if (Test-Path $cards) { Remove-Item -Recurse -Force $cards }
     Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'integrations') (Split-Path $Output -Parent)
 # So do the word lists dictation can use.
 Copy-Item -Recurse -Force (Join-Path $PSScriptRoot 'wordlists') (Split-Path $Output -Parent)

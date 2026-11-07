@@ -41,7 +41,7 @@ var Catalog = []Item{
 	{Name: "asr-whisper", Description: "Whisper large-v3 turbo speech recognition, ~100 languages", URL: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2", SizeMB: 538, Dir: "sherpa-onnx-whisper-turbo"},
 	{Name: "vad", Description: "Silero voice activity detection (needed for listening)", SizeMB: 2, Dir: "silero-vad",
 		Extra: map[string]string{"silero_vad.onnx": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx"}},
-	{Name: "supertonic3", Description: "Supertonic 3, 10 voices in 31 languages incl. Polish, fast on the processor (OpenRAIL-M weights)", URL: modelsURL + "sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2", SizeMB: 123, Dir: "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"},
+	{Name: "supertonic3", Description: "Supertonic 3, 10 voices in 31 languages, fast on the processor (OpenRAIL-M weights)", URL: modelsURL + "sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2", SizeMB: 123, Dir: "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"},
 	{Name: "piper-pl-gosia", Description: "Piper Polish female (gosia)", URL: modelsURL + "vits-piper-pl_PL-gosia-medium.tar.bz2", SizeMB: 64, Dir: "vits-piper-pl_PL-gosia-medium"},
 	{Name: "piper-pl-justyna", Description: "Piper Polish female (justyna)", URL: modelsURL + "vits-piper-pl_PL-justyna_wg_glos-medium.tar.bz2", SizeMB: 64, Dir: "vits-piper-pl_PL-justyna_wg_glos-medium"},
 	{Name: "piper-pl-darkman", Description: "Piper Polish male (darkman)", URL: modelsURL + "vits-piper-pl_PL-darkman-medium.tar.bz2", SizeMB: 64, Dir: "vits-piper-pl_PL-darkman-medium"},

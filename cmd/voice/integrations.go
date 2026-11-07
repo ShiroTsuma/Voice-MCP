@@ -100,16 +100,26 @@ type handler struct {
 	do     func(ctx context.Context, f integrationFile, action string, log func(string)) error
 }
 
+// retiredCards are cards voice no longer ships: their files may linger next
+// to voice.exe after an update that copied the new ones over the old.
+var retiredCards = map[string]bool{
+	"piper-pl-gosia": true, "piper-pl-justyna": true, "piper-pl-darkman": true, // now one Piper Polish card
+}
+
 // newIntegrations loads the integration files and gives each its handler.
 func newIntegrations(agents *service.Agents) *integrations.Registry {
 	handlers := builtinHandlers(agents)
 	files := map[string]integrationFile{}
 	var order []string
-	for _, dir := range []string{filepath.Join(exeDir(), "integrations"), filepath.Join(core.DataDir(), "integrations")} {
+	shipped := filepath.Join(exeDir(), "integrations")
+	for _, dir := range []string{shipped, filepath.Join(core.DataDir(), "integrations")} {
 		paths, _ := filepath.Glob(filepath.Join(dir, "*.toml"))
 		sort.Strings(paths)
 		for _, p := range paths {
 			f := readIntegrationFile(p)
+			if dir == shipped && retiredCards[f.ID] {
+				continue // an older voice's card left behind by an update copied over it
+			}
 			if _, seen := files[f.ID]; !seen {
 				order = append(order, f.ID)
 			}
@@ -512,7 +522,7 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					return integrations.Status{State: integrations.On, Detail: "Python " + pyruntime.Version + " in " + pyruntime.Dir(httpengine.SidecarDir),
 						Actions: []integrations.Action{{ID: "remove", Label: "Remove"}}}
 				}
-				return integrations.Status{State: integrations.Missing, Actions: []integrations.Action{{ID: "install", Label: "Download", Long: true, Primary: true}}}
+				return integrations.Status{State: integrations.Missing, Actions: []integrations.Action{{ID: "install", Label: "Install", Long: true, Primary: true}}}
 			},
 			do: func(ctx context.Context, _ integrationFile, action string, log func(string)) error {
 				if action == "remove" {
@@ -618,7 +628,9 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 // modelsStatus is a family of voices on one card: each one downloaded or
 // removed on its own, the card on while any is there.
 func modelsStatus(f integrationFile) integrations.Status {
-	var have, acts []integrations.Action
+	// One action per voice, in the card's order, so the list does not shift
+	// under the pointer when a voice comes or goes.
+	var acts []integrations.Action
 	var names []string
 	for _, name := range f.Models {
 		m, ok := models.Find(name)
@@ -628,7 +640,7 @@ func modelsStatus(f integrationFile) integrations.Status {
 		label := voiceLabel(name)
 		if models.Installed(m, engine.Dirs.Models, engine.Dirs.Runtime) {
 			names = append(names, label)
-			have = append(have, integrations.Action{ID: "remove:" + name, Label: "Remove " + label})
+			acts = append(acts, integrations.Action{ID: "remove:" + name, Label: "Remove " + label})
 		} else {
 			acts = append(acts, integrations.Action{ID: "download:" + name, Label: fmt.Sprintf("Download %s (%d MB)", label, m.SizeMB), Long: true})
 		}
@@ -639,7 +651,7 @@ func modelsStatus(f integrationFile) integrations.Status {
 		}
 		return integrations.Status{State: integrations.Missing, Detail: "Download the voices you want", Actions: acts}
 	}
-	return integrations.Status{State: integrations.On, Detail: "Downloaded: " + strings.Join(names, ", "), Actions: append(acts, have...)}
+	return integrations.Status{State: integrations.On, Detail: "Downloaded: " + strings.Join(names, ", "), Actions: acts}
 }
 
 // voiceLabel names a family's voice by the end of its model name:
@@ -748,8 +760,13 @@ func sidecarStatus(name string) integrations.Status {
 			// (Chatterbox before Multilingual V3): it keeps working as it is,
 			// and Reinstall brings the new one.
 			if have, _ := st["source"].(string); sb.SourceKey() != "" && have != sb.SourceKey() {
-				detail = "Works, but this voice has a newer version of it: Reinstall updates it (your voices stay)"
-				acts[1].Primary = true
+				detail = "An older build is installed; it works as it is, and Update installs the newer one this version of voice brings (your voices stay)"
+				acts[1].Label, acts[1].Primary = "Update", true
+				return integrations.Status{State: integrations.On, Label: "Update available", Detail: detail, Actions: acts}
+			}
+			// Load now needs an engine that uses it (a preset or a voice).
+			if _, ok := gpuEngine(name); !ok && acts[0].ID == "load" {
+				acts = acts[1:]
 			}
 			return integrations.Status{State: integrations.On, Detail: detail, Actions: acts}
 		}

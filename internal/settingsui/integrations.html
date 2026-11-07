@@ -249,8 +249,9 @@ function renderMain() {
       left.append(l);
     }
     // What it does, its size and settings are in Info and settings (the
-    // button's menu); the row keeps what needs attention.
-    if (it.status.detail && (it.status.state === 'error' || it.status.state === 'partly')) {
+    // button's menu); the row keeps what needs attention: an error, a step
+    // left, what to download, an update.
+    if (it.status.detail && (it.status.state === 'error' || it.status.state === 'partly' || it.status.state === 'missing' || it.status.label)) {
       const d = document.createElement('p'); d.className = 'detail'; d.textContent = it.status.detail;
       left.append(d);
     }
@@ -301,8 +302,11 @@ function picker(it) {
 // actionButton is an integration's actions as one button: the main one (the
 // primary, else the first: Install, Start server, Load now, Turn on) and, on
 // its arrow, the others in a menu, so the row's text keeps its width.
+// A removal: the integration's own, or one of its voices' (remove:<model>).
+const isRemove = a => a.id === 'remove' || a.id.startsWith('remove:');
 async function runAction(it, a, b) {
-  if (a.id === 'remove' && !(await askYes('Remove ' + it.title + '? Its files are deleted; you can download or install it again later.', 'Remove'))) return;
+  const what = a.id === 'remove' ? it.title : a.label.replace(/^Remove /, '') + ' from ' + it.title;
+  if (isRemove(a) && !(await askYes('Remove ' + what + '? Its files are deleted; you can download or install it again later.', 'Remove'))) return;
   if (b) b.disabled = true;
   try { await api('integration', { id: it.id, action: a.id }); logOpen.delete(it.id); } catch (e) { tell(e.message); }
   refresh();
@@ -315,7 +319,7 @@ function actionButton(it) {
   const info = { id: 'info', label: 'Info and settings' };
   // Without an action of its own, the button is its info.
   // Remove is never the main button: one click too close to Load now.
-  const main = acts.find(a => a.primary) || acts.find(a => a.id !== 'remove') || info;
+  const main = acts.find(a => a.primary) || acts.find(a => !isRemove(a)) || info;
   const rest = acts.filter(a => a !== main);
   if (main !== info) rest.push(info);
   const split = document.createElement('div'); split.className = 'split' + (main.primary ? ' primary' : '');
@@ -333,7 +337,7 @@ function actionButton(it) {
       closeActMenu();
       const m = document.createElement('div'); m.className = 'vmenu actmenu'; m.setAttribute('role', 'menu'); m.owner = more;
       for (const a of rest) {
-        const o = document.createElement('div'); o.className = 'vopt' + (a.id === 'remove' ? ' danger' : ''); o.setAttribute('role', 'menuitem'); o.tabIndex = 0;
+        const o = document.createElement('div'); o.className = 'vopt' + (isRemove(a) ? ' danger' : ''); o.setAttribute('role', 'menuitem'); o.tabIndex = 0;
         o.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.click(); } };
         o.textContent = a.label;
         o.onmouseenter = () => o.classList.add('hl'); o.onmouseleave = () => o.classList.remove('hl');
