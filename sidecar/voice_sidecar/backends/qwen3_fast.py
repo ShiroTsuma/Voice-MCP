@@ -12,10 +12,7 @@ Per request, extra may set temperature, top_p, top_k and repetition_penalty.
 import sys
 
 from . import VoicePrints
-from .qwen3 import SAMPLING, Backend as Qwen3
-
-# The model's longest output for one call, in codec steps (12 a second): about three minutes.
-MAX_STEPS = 2048
+from .qwen3 import SAMPLING, Backend as Qwen3, max_steps
 
 
 class Backend(Qwen3):
@@ -69,6 +66,6 @@ class Backend(Qwen3):
         ref_text = getattr(prompt[0], "ref_text", None) or ""
         audio, rate = self.fast.generate_voice_clone(text=req["text"], language=self.language(req.get("lang")),
                                                      voice_clone_prompt=prompt, ref_text=ref_text,
-                                                     max_new_tokens=MAX_STEPS, **params)
+                                                     max_new_tokens=max_steps([req["text"]]), **params)
         a = audio[0] if isinstance(audio, (list, tuple)) else audio
         return (a.float().cpu().numpy() if hasattr(a, "cpu") else a), rate

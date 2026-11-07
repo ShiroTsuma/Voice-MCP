@@ -32,6 +32,22 @@ LANGUAGES = {
 }
 SAMPLING = ("temperature", "top_p", "top_k", "repetition_penalty")
 
+# The codec runs 12 steps a second, and the model's own limit is 2048 steps
+# (about three minutes). A sentence the model fails to end (it sometimes
+# misses its stop and goes on babbling) would play for minutes, so each call
+# may run only as long as its longest text could take spoken slowly: 0.1 s a
+# character (about 10 a second, slower than speech), 0.3 s for Chinese,
+# Japanese and Korean characters, plus 4 s.
+STEPS_PER_SECOND = 12
+MAX_STEPS = 2048
+
+
+def max_steps(texts):
+    def seconds(t):
+        wide = sum(1 for c in t if "　" <= c <= "鿿" or "가" <= c <= "힯")
+        return 4 + 0.1 * (len(t) - wide) + 0.3 * wide
+    return min(MAX_STEPS, int(STEPS_PER_SECOND * max(seconds(t) for t in texts)))
+
 
 class Backend:
     clones = True
@@ -168,6 +184,7 @@ class Backend:
         if "top_k" in params:
             params["top_k"] = int(params["top_k"])
         lang = self.language(req.get("lang"))
+        params.setdefault("max_new_tokens", max_steps(texts))
         wavs, sr = self.model.generate_voice_clone(text=list(texts), language=[lang] * len(texts), voice_clone_prompt=prompt, **params)
         return wavs, sr
 
