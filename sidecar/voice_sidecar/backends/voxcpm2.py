@@ -1,0 +1,64 @@
+"""VoxCPM2 (OpenBMB; Apache-2.0, code and weights): 2B parameters, 30
+languages with Polish among them, 48 kHz. It clones from a clip, closest when
+the clip's transcript comes with it, and takes the style in plain words in
+parentheses before the text ("(cheerful tone)Hello").
+
+Options: model=openbmb/VoxCPM2, device=cuda|cpu, steps=10 (diffusion steps
+per frame), cfg=2.0. Per request, extra may override steps and cfg, and
+instruct is the style ("teasing tone"), from voice's moods.
+
+The language comes from the text itself; the model takes no language tag.
+
+Speed comes from torch.compile, which needs Triton (triton-windows, installed
+with it): about 3x real time on an RTX 5080 instead of 0.45x. The first start
+compiles for about three minutes; later ones take about half a minute from
+the compile cache, kept in the server's folder (compile-cache) rather than in
+%TEMP%, where a cleanup would cost the next start those minutes again.
+Without Triton it still speaks, slowly.
+"""
+
+import os
+import sys
+
+from . import device
+
+
+class Backend:
+    clones = True
+
+    def __init__(self, options):
+        os.environ.setdefault("TORCHINDUCTOR_CACHE_DIR", os.path.join(os.getcwd(), "compile-cache"))
+        from voxcpm import VoxCPM
+
+        dev = device(options)
+        self.model_id = options.get("model", "openbmb/VoxCPM2")
+        self.steps = int(options.get("steps", 10))
+        self.cfg = float(options.get("cfg", 2.0))
+        kw = {"load_denoiser": False}
+        try:
+            self.model = VoxCPM.from_pretrained(self.model_id, device=dev, **kw)
+        except TypeError:  # a release without the device argument picks the card itself
+            self.model = VoxCPM.from_pretrained(self.model_id, **kw)
+        self.rate = int(getattr(self.model.tts_model, "sample_rate", 48000))
+        print(f"voxcpm2: {self.model_id} on {dev}, {self.rate} Hz", file=sys.stderr, flush=True)
+
+    def synthesize(self, req):
+        extra = req.get("extra") or {}
+        text = req["text"].strip()
+        style = str(extra.get("instruct") or "").strip().strip("()")
+        if style and style.lower() != "neutral":
+            text = f"({style}){text}"
+        kw = {
+            "text": text,
+            "cfg_value": float(extra.get("cfg", self.cfg)),
+            "inference_timesteps": int(extra.get("steps", self.steps)),
+        }
+        if req.get("ref_audio"):
+            kw["reference_wav_path"] = req["ref_audio"]
+            if req.get("ref_text"):
+                # The clip and what it says, as the start the model continues
+                # from: closest to the voice.
+                kw["prompt_wav_path"] = req["ref_audio"]
+                kw["prompt_text"] = req["ref_text"]
+        wav = self.model.generate(**kw)
+        return wav, self.rate
