@@ -76,6 +76,13 @@ model = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
 # starts a server on first use; it exits after 10 minutes without requests,
 # freeing GPU memory, and starts again when needed.
 
+# Supertonic 3 on the processor: 10 voices (0-9) in 31 languages, the
+# language taken from each request.
+[engines.supertonic]
+type = "sherpa"
+model = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"
+voice = "0"
+
 [engines.piper-gosia]
 type = "sherpa"
 model = "vits-piper-pl_PL-gosia-medium"

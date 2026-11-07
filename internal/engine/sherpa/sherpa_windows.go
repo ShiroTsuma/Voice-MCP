@@ -234,6 +234,20 @@ func New(name string, cfg engine.Config) (engine.Engine, error) {
 			TargetRMS:     0.1,
 			GuidanceScale: 1.0,
 		}
+	case "supertonic":
+		// Supertonic 3: 31 languages, chosen per request; ten speakers by sid.
+		c.Model.Supertonic = cSupertonic{
+			DurationPredictor: file("duration_predictor*.onnx"),
+			TextEncoder:       file("text_encoder*.onnx"),
+			VectorEstimator:   file("vector_estimator*.onnx"),
+			Vocoder:           file("vocoder*.onnx"),
+			TTSJSON:           file("tts.json"),
+			UnicodeIndexer:    file("unicode_indexer.bin"),
+			VoiceStyle:        file("voice.bin"),
+		}
+		if _, ok := cfg["steps"].(int64); !ok {
+			e.steps = 8 // the model's own default
+		}
 	default:
 		return nil, fmt.Errorf("engine %q: unsupported family %q", name, e.family)
 	}
@@ -252,7 +266,14 @@ func New(name string, cfg engine.Config) (engine.Engine, error) {
 	}
 	e.rate = int(int32(call(l.sampleRate, e.tts)))
 	n := int(int32(call(l.numSpeakers, e.tts)))
-	if e.family != "kokoro" {
+	switch {
+	case e.family == "supertonic" && n > 1:
+		// Its speakers have numbers only; voices name them 0..n-1.
+		e.speakers = make([]string, n)
+		for i := range e.speakers {
+			e.speakers[i] = fmt.Sprint(i)
+		}
+	case e.family != "kokoro":
 		e.speakers = []string{"default"}
 	}
 	if e.family == "kokoro" && n != len(e.speakers) {
@@ -427,6 +448,20 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 		}
 		gen.Sid = int32(sid)
 	}
+	var keepExtra []byte
+	if e.family == "supertonic" {
+		// The language goes with each request: the call's, else the engine's.
+		lang := strings.ToLower(strings.SplitN(strings.TrimSpace(req.Lang), "-", 2)[0])
+		if lang == "" || lang == "auto" {
+			lang = strings.ToLower(strings.SplitN(e.lang, "-", 2)[0])
+		}
+		if lang == "" {
+			lang = "en"
+		}
+		keepExtra = append([]byte(`{"lang":"`+lang+`"}`), 0)
+		gen.Extra = uintptr(unsafe.Pointer(&keepExtra[0]))
+		gen.NumSteps = e.steps
+	}
 
 	e.mu.Lock()
 	if e.tts == 0 {
@@ -438,6 +473,7 @@ func (e *Engine) Synthesize(ctx context.Context, req engine.Request, sink func(e
 	runtime.KeepAlive(&gen)
 	runtime.KeepAlive(keepRef)
 	runtime.KeepAlive(keepText)
+	runtime.KeepAlive(keepExtra)
 	e.mu.Unlock()
 	if audio == 0 {
 		return fmt.Errorf("engine %q: generation failed", e.name)
@@ -587,6 +623,8 @@ func detectFamily(dir string) string {
 		return len(m) > 0
 	}
 	switch {
+	case has("vector_estimator*.onnx"):
+		return "supertonic"
 	case has("voices.bin"):
 		return "kokoro"
 	case has("lm_main*.onnx"):
