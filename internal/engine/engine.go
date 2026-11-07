@@ -19,7 +19,26 @@ type Request struct {
 	// Extra are per-request settings for engines that take them (the
 	// sidecar's "extra"), over the engine's own; others ignore them.
 	Extra map[string]any
+	// Flow, set on a voice that asks for it, has an engine that can carry
+	// a sentence's tone into the next speak this one from Prev, the sentence
+	// just said in the same voice: "clip" with the voice's own clip beside it,
+	// "previous" from Prev alone. Engines that cannot ignore both.
+	Flow string
+	Prev *Said
 }
+
+// Said is a sentence just spoken: its text and its audio.
+type Said struct {
+	Text string
+	PCM  []float32
+	Rate int
+}
+
+// Flow modes (Request.Flow, a preset's flow).
+const (
+	FlowClip     = "clip"
+	FlowPrevious = "previous"
+)
 
 // Voice selects a voice. Engines that do not support mixing use the heaviest
 // component; Ref is a reference clip for cloning engines, RefText its

@@ -545,6 +545,13 @@ func (e *Engine) payload(req engine.Request) map[string]any {
 			payload["voice_prompt"] = v.Prompt
 		}
 	}
+	// The sentence just said, for a backend that speaks the next one from it
+	// (backends.json "flow"); 24 kHz is plenty for a reference and half the size.
+	if p := req.Prev; req.Flow != "" && p != nil && len(p.PCM) > 0 && p.Rate > 0 {
+		payload["flow"] = req.Flow
+		payload["prev_text"] = p.Text
+		payload["prev_audio"] = base64.StdEncoding.EncodeToString(audio.EncodeWAV(audio.Resample(p.PCM, p.Rate, 24000), 24000))
+	}
 	return payload
 }
 

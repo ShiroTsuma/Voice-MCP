@@ -49,6 +49,9 @@ type Preset struct {
 	Speed       *float64 `toml:"speed,omitempty" json:"speed,omitempty"`
 	Pitch       *float64 `toml:"pitch,omitempty" json:"pitch,omitempty"`
 	DSP         []string `toml:"dsp,omitempty" json:"dsp,omitempty"`
+	// Flow: each sentence spoken from the one before (clip or previous),
+	// where the voice's engine can; empty speaks each on its own.
+	Flow *string `toml:"flow,omitempty" json:"flow,omitempty"`
 }
 
 // TunedPrefix starts the names of the presets the windows tune.

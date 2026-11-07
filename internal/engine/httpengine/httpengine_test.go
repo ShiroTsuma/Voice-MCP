@@ -57,6 +57,30 @@ func TestProtocol(t *testing.T) {
 	}
 }
 
+// A voice that flows sends the sentence just said, as a 24 kHz WAV with its
+// text; without flow, or without a sentence before, nothing extra goes.
+func TestFlowPayload(t *testing.T) {
+	e := &Engine{name: "qwen3_fast"}
+	prev := &engine.Said{Text: "Oh, you're back.", PCM: make([]float32, 4800), Rate: 48000}
+	p := e.payload(engine.Request{Text: "Come here.", Flow: engine.FlowClip, Prev: prev})
+	if p["flow"] != "clip" || p["prev_text"] != "Oh, you're back." {
+		t.Fatalf("payload %v", p)
+	}
+	data, err := base64.StdEncoding.DecodeString(p["prev_audio"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcm, rate, err := audio.DecodeWAV(data)
+	if err != nil || rate != 24000 || len(pcm) < 2300 || len(pcm) > 2500 {
+		t.Fatalf("prev audio: %d samples at %d, %v", len(pcm), rate, err)
+	}
+	for _, r := range []engine.Request{{Text: "x", Prev: prev}, {Text: "x", Flow: engine.FlowClip}} {
+		if q := e.payload(r); q["flow"] != nil || q["prev_audio"] != nil {
+			t.Fatalf("sent flow for %+v", r)
+		}
+	}
+}
+
 func TestNoServerNoStart(t *testing.T) {
 	e, _ := New("t", engine.Config{"url": "http://127.0.0.1:1"})
 	if err := e.Synthesize(context.Background(), engine.Request{Text: "x"}, func(engine.Chunk) error { return nil }); err == nil {

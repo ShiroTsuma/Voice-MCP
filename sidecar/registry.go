@@ -44,8 +44,11 @@ type Backend struct {
 	Prompts    bool     `json:"prompts"`    // saves a voice prompt, so a clone speaks without its recording
 	// PromptsAs names the backend whose voice prompt files it reads and
 	// writes (the same model run another way); empty is its own.
-	PromptsAs string         `json:"prompts_as"`
-	Batch     bool           `json:"batch"`     // renders several sentences in one call (POST /synthesize_batch)
+	PromptsAs string `json:"prompts_as"`
+	Batch     bool   `json:"batch"` // renders several sentences in one call (POST /synthesize_batch)
+	// Flow: speaks a sentence from the one just said (/synthesize's flow,
+	// prev_audio, prev_text), so a voice can be set to carry its mood on.
+	Flow      bool           `json:"flow"`
 	Languages []string       `json:"languages"` // what it speaks: en, pl, ...
 	Hidden    bool           `json:"hidden"`    // not offered in the windows (test)
 	Extra     map[string]any `json:"extra"`     // per-request settings voice sends

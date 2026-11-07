@@ -462,7 +462,7 @@ notify = ['<dir>\voice.exe', "hook", "codex"]
 
 ### Voices
 
-Presets combine an engine, voice, speed, pitch, effects and per-language overrides; see `config.example.toml`. Built in:
+Presets combine an engine, voice, speed, pitch, effects and per-language overrides; see `config.example.toml`. A cloned voice on Qwen3-TTS or Qwen3-TTS fast can also **flow** (`flow = "clip"` or `"previous"`, or Tune → Flow in the Characters window): each sentence is spoken from the one just said, so the mood carries on instead of starting fresh each time; `clip` keeps the voice's own clip beside it so the voice does not drift, `previous` flows more and can drift. Off by default, since voices differ. Built in:
 
 | Preset | Voice |
 |---|---|

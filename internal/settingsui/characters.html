@@ -331,6 +331,7 @@
               <span class="lab">Room</span><div class="span2"><div class="seg" id="tReverb" role="group" aria-label="Room"><button type="button" data-v="">None</button><button type="button" data-v="small">Small</button><button type="button" data-v="room">Room</button><button type="button" data-v="hall">Hall</button></div></div>
               <span class="lab">Evenness</span><div class="span2"><div class="seg" id="tCompress" role="group" aria-label="Compression"><button type="button" data-v="">Natural</button><button type="button" data-v="soft">Even</button><button type="button" data-v="medium">Steady</button></div></div>
               <span class="lab">Softer</span><div class="span2"><label class="switch"><input type="checkbox" id="tSoft"><span></span></label><span class="help">Takes the edge off high sounds</span></div>
+              <span class="lab flowrow">Flow<span class="tip" tabindex="0" data-tip="How a reply's sentences follow each other. Each on its own: every sentence starts fresh from the voice, as before. Carries on: each sentence is spoken from the one before and the voice's own clip, so the mood flows on without the voice drifting. Carries on freely: from the sentence before alone; it flows most, but can drift from the voice and grow more agitated. Voices differ: listen with Hear it. On Qwen3-TTS fast it costs almost nothing; on Qwen3-TTS the sentences render one after another instead of together, so the first sound comes later.">i</span></span><div class="span2 flowrow"><div class="seg" id="tFlow" role="group" aria-label="Flow"><button type="button" data-v="">Each on its own</button><button type="button" data-v="clip">Carries on</button><button type="button" data-v="previous">Carries on freely</button></div></div>
               <span></span><div class="span2"><button class="btn" id="tReset" type="button">Back to the voice as it is</button></div>
             </div>
           </details>
@@ -671,7 +672,7 @@ let tune = null, tunedFrom = '';
 const presetOf = name => (state.options.presets || []).find(p => p.name === name);
 function fromPreset(p) {
   const dsp = (p && p.dsp) || [];
-  const t = { speed: p ? p.speed : 1, pitch: p ? p.pitch : 0, reverb: '', compress: '', soft: false, other: [] };
+  const t = { speed: p ? p.speed : 1, pitch: p ? p.pitch : 0, reverb: '', compress: '', soft: false, flow: (p && p.flow) || '', other: [] };
   for (const d of dsp) {
     const [k, v] = d.split(':');
     if (k === 'reverb') t.reverb = v;
@@ -693,26 +694,33 @@ const baseName = () => $('preset').value || state.default_preset;
 function differs() {
   const b = fromPreset(presetOf(baseName()));
   return Math.abs(tune.speed - b.speed) > 0.001 || Math.abs(tune.pitch - b.pitch) > 0.001 ||
-    JSON.stringify(toDSP(tune)) !== JSON.stringify(toDSP(b));
+    JSON.stringify(toDSP(tune)) !== JSON.stringify(toDSP(b)) || (flows() && tune.flow !== b.flow);
 }
+// flows: the chosen voice's engine can carry a sentence's mood into the next.
+const flows = () => !!(presetOf(baseName()) || {}).flows;
 function fill(range) { range.style.setProperty('--p', ((range.value - range.min) / (range.max - range.min) * 100) + '%'); }
 function showTune() {
   $('tSpeed').value = tune.speed; $('vSpeed').textContent = (+tune.speed).toFixed(2) + '×'; fill($('tSpeed'));
   $('tPitch').value = tune.pitch; $('vPitch').textContent = (tune.pitch > 0 ? '+' : tune.pitch < 0 ? '−' : '±') + Math.abs(tune.pitch) + ' st'; fill($('tPitch'));
-  for (const [id, v] of [['tReverb', tune.reverb], ['tCompress', tune.compress]])
+  for (const [id, v] of [['tReverb', tune.reverb], ['tCompress', tune.compress], ['tFlow', tune.flow]])
     $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === (v || '')));
   $('tSoft').checked = tune.soft;
+  document.querySelectorAll('.flowrow').forEach(e => { e.hidden = !flows(); });
   $('tuned').textContent = differs() ? '· tuned' : '';
 }
 $('tSpeed').addEventListener('input', e => { tune.speed = +e.target.value; showTune(); });
 $('tPitch').addEventListener('input', e => { tune.pitch = +e.target.value; showTune(); });
-for (const [id, key] of [['tReverb', 'reverb'], ['tCompress', 'compress']])
+for (const [id, key] of [['tReverb', 'reverb'], ['tCompress', 'compress'], ['tFlow', 'flow']])
   $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tune[key] = b.dataset.v; showTune(); } });
 $('tSoft').addEventListener('change', e => { tune.soft = e.target.checked; showTune(); });
 $('tReset').addEventListener('click', () => { tune = fromPreset(presetOf(baseName())); showTune(); });
 // A tuned voice's preset: voice-<name>, extending the chosen voice.
 const tunedName = name => 'voice-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const tuning = () => ({ extends: baseName(), speed: tune.speed, pitch: tune.pitch, dsp: toDSP(tune) });
+const tuning = () => {
+  const t = { extends: baseName(), speed: tune.speed, pitch: tune.pitch, dsp: toDSP(tune) };
+  if (flows() && tune.flow) t.flow = tune.flow; // only where the engine can; else as the base
+  return t;
+};
 
 // hint says what the chosen voice sounds like, and when it alone takes more
 // graphics memory than the budget allows (it still speaks, alone).

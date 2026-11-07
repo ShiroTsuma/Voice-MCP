@@ -2,7 +2,10 @@
 
     python -m voice_sidecar --backend chatterbox --port 8765
 
-POST /synthesize  {"text", "lang", "voice", "ref_audio", "ref_text", "speed", "extra"} -> audio/wav
+POST /synthesize  {"text", "lang", "voice", "ref_audio", "ref_text", "speed", "extra"} -> audio/wav;
+                  a backend with "flow" in backends.json also takes "flow" (clip or
+                  previous), "prev_audio" (base64 WAV) and "prev_text": the sentence
+                  just said in this voice, to speak this one from
 GET  /health      {"backend", "ready", "clones", "options"}
 GET  /voices      [{"name", "lang", "gender"}]
 POST /shutdown    exits, so voice can start it with other options (a model size)

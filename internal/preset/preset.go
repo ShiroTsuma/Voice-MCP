@@ -175,17 +175,20 @@ type Listen struct {
 
 // Preset is one voice character. Unset fields inherit from Extends.
 type Preset struct {
-	Extends     string                  `toml:"extends"`
-	Description string                  `toml:"description"`
-	Engine      string                  `toml:"engine"`
-	Voice       Voice                   `toml:"voice"`
-	Speed       *float64                `toml:"speed"`
-	Volume      *float64                `toml:"volume"`
-	Pitch       *float64                `toml:"pitch"` // semitones, + is higher
-	DSP         []string                `toml:"dsp"`   // effect chain, see audio.ParseChain
-	Chime       *string                 `toml:"chime"`
-	Fallback    []string                `toml:"fallback"`
-	Lang        map[string]LangOverride `toml:"lang"`
+	Extends     string   `toml:"extends"`
+	Description string   `toml:"description"`
+	Engine      string   `toml:"engine"`
+	Voice       Voice    `toml:"voice"`
+	Speed       *float64 `toml:"speed"`
+	Volume      *float64 `toml:"volume"`
+	Pitch       *float64 `toml:"pitch"` // semitones, + is higher
+	DSP         []string `toml:"dsp"`   // effect chain, see audio.ParseChain
+	// Flow: each sentence spoken from the one before, where the engine can
+	// ("clip" or "previous", engine.Flow*); "" or "off" speaks each on its own.
+	Flow     *string                 `toml:"flow"`
+	Chime    *string                 `toml:"chime"`
+	Fallback []string                `toml:"fallback"`
+	Lang     map[string]LangOverride `toml:"lang"`
 }
 
 type LangOverride struct {
@@ -514,6 +517,7 @@ type Resolved struct {
 	Volume      float64
 	Pitch       float64
 	DSP         []string
+	Flow        string // engine.FlowClip, engine.FlowPrevious or ""
 	Chime       string
 	Fallback    []string
 	Lang        map[string]LangOverride
@@ -634,6 +638,14 @@ func (c *Config) resolveLocked(name string) (Resolved, error) {
 		if p.DSP != nil {
 			r.DSP = p.DSP
 		}
+		if p.Flow != nil {
+			switch f := strings.ToLower(strings.TrimSpace(*p.Flow)); f {
+			case engine.FlowClip, engine.FlowPrevious:
+				r.Flow = f
+			default: // "", "off", or a mode this version does not know
+				r.Flow = ""
+			}
+		}
 		if p.Chime != nil {
 			r.Chime = *p.Chime
 		}
@@ -672,6 +684,7 @@ type Choice struct {
 	Voice   engine.Voice
 	Speed   float64
 	Pitch   float64
+	Flow    string // the preset's flow, for its own engine
 }
 
 // For applies the language override. A voice chosen for the base engine is
@@ -679,11 +692,12 @@ type Choice struct {
 // a language routed to its own engine does not fall back to the base engine,
 // which may not speak that language; only the preset fallbacks remain.
 func (r Resolved) For(lang string) Choice {
-	ch := Choice{Engines: []string{r.Engine}, Voice: r.Voice, Speed: r.Speed, Pitch: r.Pitch}
+	ch := Choice{Engines: []string{r.Engine}, Voice: r.Voice, Speed: r.Speed, Pitch: r.Pitch, Flow: r.Flow}
 	if o, ok := r.Lang[lang]; ok {
 		if o.Engine != "" && o.Engine != r.Engine {
 			ch.Engines[0] = o.Engine
 			ch.Voice = engine.Voice{}
+			ch.Flow = "" // chosen for the base engine's voice
 		}
 		if !o.Voice.IsZero() {
 			ch.Voice = o.Voice.Voice

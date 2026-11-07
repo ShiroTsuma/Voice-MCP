@@ -228,7 +228,7 @@ func runServe(args []string) error {
 			Clone:        svc.Clone,
 			Integrations: newIntegrations(agents),
 			Preview: func(p settings.Preset) string {
-				b.cfg.SetPreset(settingsui.PreviewPreset, preset.Preset{Extends: p.Extends, Description: "Preview", Speed: p.Speed, Pitch: p.Pitch, DSP: p.DSP})
+				b.cfg.SetPreset(settingsui.PreviewPreset, preset.Preset{Extends: p.Extends, Description: "Preview", Speed: p.Speed, Pitch: p.Pitch, DSP: p.DSP, Flow: p.Flow})
 				return settingsui.PreviewPreset
 			},
 		})
@@ -431,7 +431,11 @@ func (b *backend) state() map[string]any {
 			continue
 		}
 		if r, err := cfg.Resolve(name); err == nil {
-			p := map[string]any{"name": name, "description": r.Description, "engine": r.Engine, "speed": r.Speed, "pitch": r.Pitch, "dsp": r.DSP}
+			p := map[string]any{"name": name, "description": r.Description, "engine": r.Engine, "speed": r.Speed, "pitch": r.Pitch, "dsp": r.DSP, "flow": r.Flow}
+			// Whether its engine can carry a sentence's mood into the next (Tune shows Flow).
+			if b, ok := sidecar.Find(r.Engine); ok && b.Flow {
+				p["flows"] = true
+			}
 			if strings.HasPrefix(name, settings.TunedPrefix) {
 				p["extends"] = cfg.PresetExtends(name)
 			}

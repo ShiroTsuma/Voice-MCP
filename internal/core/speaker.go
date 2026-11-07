@@ -1175,6 +1175,11 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 		// out, or the context ended). Its effects' tail is tail's.
 		renderPart := func(v *voiced, out func(rendered) bool) bool {
 			engines := v.choice.Engines
+			// A voice that flows speaks each sentence from the one before
+			// (engine.Request.Prev), so they render one after another, not in
+			// batches side by side.
+			flow := v.choice.Flow
+			var prev *engine.Said
 			send := func(pcm []float32, text string) bool {
 				// The quiet an engine pads a sentence with goes: the pause between
 				// sentences is voice's, the same for every engine.
@@ -1189,7 +1194,7 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 				// sentence on: speech starts a moment later and then flows, rather
 				// than a short sentence and a long silence. The next batch renders
 				// while this one plays. A batch that fails goes sentence by sentence.
-				if m := min(batchSize, len(v.sentences)-k); m > 1 && engines[0] == v.choice.Engines[0] {
+				if m := min(batchSize, len(v.sentences)-k); m > 1 && engines[0] == v.choice.Engines[0] && flow == "" {
 					if pcms, err := s.renderBatch(ctx, engines[0], v.pitch, it.lang, v.choice, v.sentences[k:k+m], v.mood, tu); err == nil {
 						noteUsed(engines[0])
 						for j, pcm := range pcms {
@@ -1201,11 +1206,17 @@ func (s *Speaker) play(ctx context.Context, it *item) Result {
 						continue
 					}
 				}
-				req := engine.Request{Text: v.sentences[k], Lang: it.lang, Voice: v.choice.Voice, Speed: v.choice.Speed / v.pitch}
+				req := engine.Request{Text: v.sentences[k], Lang: it.lang, Voice: v.choice.Voice, Speed: v.choice.Speed / v.pitch, Flow: flow, Prev: prev}
 				pcm, name, rest, err := s.render(ctx, engines, v.choice.Engines[0], v.pitch, req, v.mood, tu)
 				if err != nil {
 					out(rendered{err: err})
 					return false
+				}
+				if flow != "" {
+					// As the engine made it: the pitch voice applies by the
+					// rate it plays at is undone by naming that rate.
+					said := audio.TrimSilence(slices.Clone(pcm), audio.DeviceRate, sentenceLead, sentenceTail)
+					prev = &engine.Said{Text: v.sentences[k], PCM: said, Rate: int(math.Round(audio.DeviceRate / v.pitch))}
 				}
 				// Stay on the engine that worked so the voice does not change
 				// mid-line; later fallbacks remain for failures.

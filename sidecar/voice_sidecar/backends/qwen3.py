@@ -16,7 +16,12 @@ passes the transcript it has. The prepared voice prompt is kept (see
 VoicePrints): a new recording, transcript, model or mode makes a new one.
 """
 
+import base64
+import io
+import os
 import sys
+import tempfile
+import wave
 
 from . import VoicePrints, device
 
@@ -167,6 +172,9 @@ class Backend:
         return wavs, sr
 
     def _prompt(self, req):
+        flowed = self._flow_prompt(req)
+        if flowed is not None:
+            return flowed
         if req.get("voice_prompt"):
             # A saved prompt: no recording is read or even looked for.
             prompt = self.load_prompt(req["voice_prompt"])
@@ -175,3 +183,49 @@ class Backend:
         else:
             raise ValueError("qwen3 clones voices: it needs a cloned voice (ref_audio or voice_prompt)")
         return prompt
+
+    def _flow_prompt(self, req):
+        """A voice set to flow speaks this sentence from the one just said
+        (prev_audio, a base64 WAV, and prev_text), so its mood carries on:
+        "clip" puts the voice's own clip first, which keeps the voice from
+        drifting; "previous" uses the sentence alone, which flows more and can
+        drift. None when there is nothing to flow from; on any trouble the
+        voice's usual prompt speaks, never silence."""
+        mode, prev, prev_text = req.get("flow"), req.get("prev_audio"), (req.get("prev_text") or "").strip()
+        if mode not in ("clip", "previous") or not prev or not prev_text:
+            return None
+        import numpy as np
+
+        def read(data):
+            with wave.open(io.BytesIO(data)) as w:
+                rate, n, ch = w.getframerate(), w.getnframes(), w.getnchannels()
+                pcm = np.frombuffer(w.readframes(n), dtype="<i2").astype(np.float32) / 32767
+            return (pcm.reshape(-1, ch).mean(axis=1) if ch > 1 else pcm), rate
+
+        try:
+            pcm, rate = read(base64.b64decode(prev))
+            text = prev_text
+            clip = req.get("ref_audio") or ""
+            if mode == "clip" and clip and os.path.exists(clip) and (req.get("ref_text") or "").strip():
+                with open(clip, "rb") as f:
+                    c, crate = read(f.read())
+                if crate != rate:
+                    c = np.interp(np.linspace(0, len(c) - 1, int(len(c) * rate / crate)), np.arange(len(c)), c).astype(np.float32)
+                pcm = np.concatenate([c, np.zeros(int(0.3 * rate), dtype=np.float32), pcm])
+                text = req["ref_text"].strip() + " " + prev_text
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(rate)
+                w.writeframes((np.clip(pcm, -1, 1) * 32767).astype("<i2").tobytes())
+            fd, path = tempfile.mkstemp(suffix=".wav", prefix="voice-flow-")
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(buf.getvalue())
+                return self.model.create_voice_clone_prompt(ref_audio=path, ref_text=text, x_vector_only_mode=False)
+            finally:
+                os.remove(path)
+        except Exception as e:
+            print(f"qwen3: flow from the sentence before failed ({type(e).__name__}: {e}); the voice's own prompt speaks", file=sys.stderr, flush=True)
+            return None
