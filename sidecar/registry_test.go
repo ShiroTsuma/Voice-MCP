@@ -35,6 +35,18 @@ func TestRegistry(t *testing.T) {
 	if PromptFormat("chatterbox") != "" || PromptFormat("nope") != "" {
 		t.Fatal("an engine without prompts has a prompt format")
 	}
+	// Chatterbox Nano runs on the processor on any PC, an AMD one or one
+	// without a graphics card too, and takes no graphics memory.
+	n, ok := Find("chatterbox_nano")
+	if !ok || !n.CPU || n.VRAM != 0 || n.GPUNames() != "" || !n.RunsOn(map[string]bool{"intel": true}) || !n.RunsOn(map[string]bool{"amd": true}) || n.EnvName() != "chatterbox_nano" {
+		t.Fatalf("chatterbox_nano: %+v", n)
+	}
+	// Turbo shares Chatterbox's environment, so the two get the same build.
+	cb, _ := Find("chatterbox")
+	turbo, _ := Find("chatterbox_turbo")
+	if cb.SourceKey() == "" || turbo.SourceKey() != cb.SourceKey() || n.SourceKey() != cb.SourceKey() {
+		t.Fatal("the Chatterbox backends must install the same chatterbox-tts build")
+	}
 }
 
 func TestRunsOn(t *testing.T) {

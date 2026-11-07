@@ -20,7 +20,7 @@ func cloneEngineHelp() string {
 		}
 		gpu = append(gpu, s+")")
 	}
-	return "add/record: cloning engine. pocket (default, CPU, English) needs no transcript; zipvoice (CPU) needs one. On the GPU sidecar, when set up: " + strings.Join(gpu, "; ") + "."
+	return "add/record: cloning engine. pocket (default, CPU, English) needs no transcript; zipvoice (CPU) needs one. In the Python sidecar, when set up (on the GPU unless the note says the processor): " + strings.Join(gpu, "; ") + "."
 }
 
 var cloneSchema = map[string]any{

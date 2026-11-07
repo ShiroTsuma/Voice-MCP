@@ -1,11 +1,12 @@
 id = "chatterbox"
 group = "gpu"
 order = 10
-title = "Chatterbox"
-about = "Expressive speech and cloning in 23 languages."
-details = "Clones a voice from a short clip without its transcript and speaks it in 23 languages, Polish among them, with a mood set as intensity: calmer or livelier. Its makers stopped working on it in August 2026; it keeps working, and its successor, Chatterbox Multilingual V3, is listed under Coming later."
+title = "Chatterbox Multilingual V3"
+about = "Expressive speech and cloning in 23 languages, Polish among them."
+details = "Clones a voice from a short clip without its transcript and speaks it in 23 languages, Polish among them, with a mood set as intensity: calmer or livelier. V3 is the last Chatterbox: closer to the cloned voice and with fewer made-up words than the original model it replaces. Its makers retired Chatterbox in August 2026, so no further versions will come. Voices made with Chatterbox before keep working; if it was installed earlier, Reinstall updates it. Every sentence carries Resemble's inaudible watermark."
 license = "MIT"
-size = "5-10 GB"
+size = "about 3 GB of weights; about 4 GB of graphics memory"
+link = "https://huggingface.co/ResembleAI/chatterbox"
 also = ["cloning"]
 uses = "sidecar"
 backend = "chatterbox"

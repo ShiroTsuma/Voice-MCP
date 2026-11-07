@@ -252,6 +252,8 @@ function users() {
 }
 const engines = () => (state && state.options && state.options.clone_engines) || [];
 const engineLabel = n => (engines().find(e => e.name === n) || {}).label || n;
+// Where an engine loads: Chatterbox Nano on the processor, the other sidecar engines on the graphics card.
+const engineWhere = n => (engines().find(e => e.name === n) || {}).cpu ? 'on the processor' : 'on the graphics card';
 const design = () => (state && state.options && state.options.voice_design) || { ready: false, runs: true, needs: 'Qwen3-TTS' };
 // Why Description is off here: a card it does not run on, or the model not installed yet.
 const designWhy = () => { const d = design(); return d.runs === false ? 'needs ' + d.card + ' (' + d.needs + ')' : 'needs ' + d.needs + ', in Integrations'; };
@@ -462,7 +464,7 @@ function engineHelp() {
     + (missing.length ? '; not ' + andList(missing.map(langWord)) : '');
   $('mEngineTip').dataset.tip = e ? 'The engine the new voice speaks with.\n**' + e.label + ':** ' + e.note + '.'
     + (e.transcript ? '\n\nIt needs what the recording says; speech recognition writes it down.' : '')
-    + '\n\nEngines are installed in Integrations, GPU voices.' : 'The engines are installed in Integrations.';
+    + (e.cpu ? '\n\nIt runs on the processor; engines are installed in Integrations.' : '\n\nEngines are installed in Integrations, GPU voices.') : 'The engines are installed in Integrations.';
 }
 $('mEngine').addEventListener('change', engineHelp);
 
@@ -526,7 +528,7 @@ function working(on, text) {
     try {
       const st = await api('status');
       const l = st.loading;
-      say('mstatus', l ? 'Starting ' + engineLabel(l.engine) + ' on the graphics card… ' + Math.max(0, Math.round((Date.now() - Date.parse(l.since)) / 1000)) + ' s'
+      say('mstatus', l ? 'Starting ' + engineLabel(l.engine) + ' ' + engineWhere(l.engine) + '… ' + Math.max(0, Math.round((Date.now() - Date.parse(l.since)) / 1000)) + ' s'
         : text + ' ' + Math.round((Date.now() - t0) / 1000) + ' s');
     } catch (e) {}
   }, 1000);

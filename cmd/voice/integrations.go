@@ -142,6 +142,8 @@ func makeIntegration(f integrationFile, handlers map[string]handler) integration
 		// backends.json is what the install checks, so it wins over the file.
 		if g := b.GPUNames(); g != "" {
 			it.RunsOn = g
+		} else if b.CPU {
+			it.RunsOn = "the processor (CPU), on any PC"
 		}
 		it.VRAM = b.VRAM
 	}
@@ -549,14 +551,18 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					if !ok {
 						return fmt.Errorf("%s is not available in this voice", f.Title)
 					}
+					where, freed := "on the graphics card", "the graphics card is free"
+					if b, _ := sidecar.Find(f.Backend); b.CPU {
+						where, freed = "on the processor", "its memory is free"
+					}
 					if action == "unload" {
 						ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 						defer cancel()
 						e.Unload(ctx)
-						log("Unloaded: the graphics card is free; the next sentence in its voice loads it again")
+						log("Unloaded: " + freed + "; the next sentence in its voice loads it again")
 						return nil
 					}
-					log("Loading " + f.Title + " on the graphics card; the first time can take minutes")
+					log("Loading " + f.Title + " " + where + "; the first time can take minutes")
 					ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 					defer cancel()
 					if err := e.Warm(ctx); err != nil {
@@ -577,7 +583,11 @@ func builtinHandlers(agents *service.Agents) map[string]handler {
 					log("Removed. Model weights the backend downloaded stay in " + filepath.Join(httpengine.SidecarDir, "models"))
 					return nil
 				}
-				log("Setting up " + f.Title + ": a Python environment, PyTorch for this GPU, then the backend. This takes a while.")
+				torch := "PyTorch for this GPU"
+				if b, _ := sidecar.Find(f.Backend); b.CPU {
+					torch = "PyTorch for the processor"
+				}
+				log("Setting up " + f.Title + ": a Python environment, " + torch + ", then the backend. This takes a while.")
 				args := []string{"sidecar"}
 				if pyruntime.Installed(httpengine.SidecarDir) { // the Python voice brings, when it is there
 					args = append(args, "-python", pyruntime.Exe(httpengine.SidecarDir))
@@ -661,10 +671,14 @@ func sidecarStatus(name string) integrations.Status {
 		}
 		gpu, _ := st["gpu"].(string)
 		if on, _ := st[key].(bool); on {
+			sb, _ := sidecar.Find(name)
 			// Loaded or not: voice loads it on first use and frees the graphics
 			// card after the idle time; Load now and Unload do it by hand.
 			acts := []integrations.Action{{ID: "load", Label: "Load now", Long: true}, {ID: "install", Label: "Reinstall", Long: true}, remove}
 			detail := "Installed for " + gpu + "; it loads when a voice uses it and frees the graphics card when idle (General, Free idle models)"
+			if sb.CPU {
+				detail = "Installed; it loads when a voice uses it and frees the memory when idle (General, Free idle models)"
+			}
 			if e, ok := gpuEngine(name); ok {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				loaded := e.Loaded(ctx)
@@ -672,7 +686,17 @@ func sidecarStatus(name string) integrations.Status {
 				if loaded {
 					acts[0] = integrations.Action{ID: "unload", Label: "Unload"}
 					detail = "Loaded on the graphics card (" + gpu + "); it frees it when idle, or now with Unload"
+					if sb.CPU {
+						detail = "Loaded on the processor; it frees the memory when idle, or now with Unload"
+					}
 				}
+			}
+			// The environment has an older build than this voice installs
+			// (Chatterbox before Multilingual V3): it keeps working as it is,
+			// and Reinstall brings the new one.
+			if have, _ := st["source"].(string); sb.SourceKey() != "" && have != sb.SourceKey() {
+				detail = "Works, but this voice has a newer version of it: Reinstall updates it (your voices stay)"
+				acts[1].Primary = true
 			}
 			return integrations.Status{State: integrations.On, Detail: detail, Actions: acts}
 		}
@@ -843,7 +867,7 @@ func cloneEngines() []map[string]any {
 	for _, b := range sidecar.Backends() {
 		if b.Clones && !b.Hidden {
 			e := map[string]any{"name": b.Name, "label": b.Label, "note": b.Note,
-				"ready": sidecarStatus(b.Name).State == integrations.On, "transcript": b.Transcript, "languages": b.Languages, "runs": true}
+				"ready": sidecarStatus(b.Name).State == integrations.On, "transcript": b.Transcript, "languages": b.Languages, "runs": true, "cpu": b.CPU}
 			if !b.RunsOn(gpuKinds()) {
 				e["runs"], e["needs"] = false, b.GPUNames()
 			}

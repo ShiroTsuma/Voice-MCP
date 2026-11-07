@@ -5,9 +5,10 @@
       "name": "chatterbox",
       "vram": 4,
       "gpus": ["nvidia", "amd"],
-      "label": "Chatterbox",
-      "note": "expressive speech and cloning, on the GPU",
-      "pip": ["chatterbox-tts"],
+      "label": "Chatterbox Multilingual V3",
+      "note": "expressive speech and cloning in 23 languages, Polish included, on the GPU; the last Chatterbox before its makers retired it",
+      "pip": ["chatterbox-tts==0.1.7"],
+      "source": ["chatterbox-tts @ https://github.com/resemble-ai/chatterbox/archive/ab55923c27757c90cfcc407baa57dc25a7d25217.zip"],
       "module": "chatterbox",
       "port": 8765,
       "clones": true,
@@ -132,15 +133,41 @@
       "vram": 4,
       "gpus": ["nvidia", "amd"],
       "label": "Chatterbox Turbo",
-      "note": "English speech with laughs, sighs, coughs and a few emotions, and cloning from a clip over 5 seconds; lighter and faster than Chatterbox; runs in the Chatterbox environment",
+      "note": "English speech with laughs, sighs, coughs and a few emotions, and cloning from a clip over 5 seconds; lighter and faster than Chatterbox Multilingual V3; runs in its environment",
       "env": "chatterbox",
-      "pip": ["chatterbox-tts"],
+      "pip": ["chatterbox-tts==0.1.7"],
+      "source": ["chatterbox-tts @ https://github.com/resemble-ai/chatterbox/archive/ab55923c27757c90cfcc407baa57dc25a7d25217.zip"],
       "module": "chatterbox.tts_turbo",
       "port": 8770,
       "clones": true,
       "transcript": false,
       "languages": ["en"],
       "prefetch": ["ResembleAI/chatterbox-turbo"],
+      "expressive": {
+        "emotion": "labels",
+        "sounds": {
+          "laugh": "[laugh],", "chuckle": "[chuckle],", "giggle": "[chuckle],", "sigh": "[sigh],", "gasp": "[gasp],",
+          "cough": "[cough], [cough],", "clear_throat": "[clear throat],", "sniff": "[sniff],", "sob": "[crying],", "groan": "[groan],"
+        },
+        "moods": {
+          "happy": "[happy]", "excited": "[happy]", "sarcastic": "[sarcastic]", "teasing": "[sarcastic]",
+          "angry": "[angry]", "afraid": "[fear]", "surprised": "[surprised]", "sad": "[crying]", "tender": "[whispering]"
+        }
+      }
+    },
+    {
+      "name": "chatterbox_nano",
+      "cpu": true,
+      "label": "Chatterbox Nano",
+      "note": "English speech with laughs, sighs and coughs, and cloning from a clip over 5 seconds, on the processor: no graphics card needed",
+      "pip": ["chatterbox-tts==0.1.7"],
+      "source": ["chatterbox-tts @ https://github.com/resemble-ai/chatterbox/archive/ab55923c27757c90cfcc407baa57dc25a7d25217.zip"],
+      "module": "chatterbox.tts_turbo",
+      "port": 8773,
+      "clones": true,
+      "transcript": false,
+      "languages": ["en"],
+      "prefetch": ["ResembleAI/chatterbox-nano"],
       "expressive": {
         "emotion": "labels",
         "sounds": {

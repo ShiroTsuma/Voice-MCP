@@ -84,6 +84,10 @@ func TestMakeRoom(t *testing.T) {
 	if fakes["chatterbox"].unloaded+fakes["omnivoice"].unloaded != 0 {
 		t.Fatal("no limit: a voice was freed")
 	}
+	reset("one") // a voice on the processor needs no room on the card
+	if err := g.makeRoom(context.Background(), "chatterbox_nano"); err != nil || fakes["chatterbox"].unloaded+fakes["omnivoice"].unloaded != 0 {
+		t.Fatalf("chatterbox_nano freed GPU voices: %v", err)
+	}
 }
 
 // The card's real free memory counts too, whatever the budget: another

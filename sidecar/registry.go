@@ -33,10 +33,15 @@ type Option struct {
 }
 
 type Backend struct {
-	Name       string   `json:"name"`
-	Label      string   `json:"label"`
-	Note       string   `json:"note"`
-	Pip        []string `json:"pip"`
+	Name  string   `json:"name"`
+	Label string   `json:"label"`
+	Note  string   `json:"note"`
+	Pip   []string `json:"pip"`
+	// Source are packages setup installs after Pip without their
+	// dependencies: a newer build of one than its PyPI release (chatterbox-tts
+	// from its repository). The environment records what it got, and a
+	// changed Source makes setup install them again and the window offer it.
+	Source     []string `json:"source"`
 	Module     string   `json:"module"` // the import that proves it is installed
 	Port       int      `json:"port"`
 	Clones     bool     `json:"clones"`
@@ -68,6 +73,10 @@ type Backend struct {
 	// GPUs are the graphics cards it runs on (nvidia, amd); empty is any.
 	// The Integrations window greys out Install on a PC with none of them.
 	GPUs []string `json:"gpus"`
+	// CPU: it runs on the processor, on any PC. Setup gives it the CPU
+	// build of PyTorch whatever the card, and voice never counts it against
+	// graphics memory or frees GPU voices for it.
+	CPU bool `json:"cpu"`
 	// VRAM is about how much graphics memory it takes loaded, in GB: the
 	// starting estimate voice keeps GPU voices within a budget by, until it
 	// has measured the real use.
@@ -119,6 +128,10 @@ func (b Backend) RunsOn(found map[string]bool) bool {
 	}
 	return false
 }
+
+// SourceKey is what an environment records for the backend's Source, to
+// tell whether it has the current build: "" for none.
+func (b Backend) SourceKey() string { return strings.Join(b.Source, " ") }
 
 // EnvName is the environment the backend runs in.
 func (b Backend) EnvName() string {
@@ -227,6 +240,12 @@ func Check() error {
 			return fmt.Errorf("%s and %s share port %d", b.Name, other, b.Port)
 		}
 		ports[b.Port] = b.Name
+		if b.CPU && (len(b.GPUs) > 0 || b.VRAM > 0 || b.Env != "") {
+			return fmt.Errorf("%s runs on the processor: no gpus, no vram, and an environment of its own (it gets the CPU PyTorch)", b.Name)
+		}
+		if o, ok := Find(b.EnvName()); ok && o.SourceKey() != b.SourceKey() {
+			return fmt.Errorf("%s runs in %s's environment with another source build", b.Name, o.Name)
+		}
 		if b.PromptsAs != "" {
 			if o, ok := Find(b.PromptsAs); !ok || !o.Prompts || !b.Prompts {
 				return fmt.Errorf("%s: prompts_as %q needs both to keep prompts", b.Name, b.PromptsAs)

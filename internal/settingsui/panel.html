@@ -1219,19 +1219,22 @@ function fillTick() {
 }
 // A GPU engine's server starting and loading its model: the first sentence waits for it.
 // The GPU engines' names come with the clone engines (from sidecar/backends.json).
-const engineTitle = n => (((state && state.options.clone_engines) || []).find(x => x.name === n) || {}).label || n;
+const engineInfo = n => ((state && state.options.clone_engines) || []).find(x => x.name === n) || {};
+const engineTitle = n => engineInfo(n).label || n;
+// Chatterbox Nano loads on the processor; the other sidecar engines on the graphics card.
+const engineWhere = n => engineInfo(n).cpu ? 'on the processor' : 'on the graphics card';
 function loadingText() {
   const l = lastStatus.loading;
   if (!l) return '';
-  return 'Starting ' + engineTitle(l.engine) + ' on the graphics card… ' + Math.max(0, Math.round((Date.now() - ms(l.since)) / 1000)) + ' s';
+  return 'Starting ' + engineTitle(l.engine) + ' ' + engineWhere(l.engine) + '… ' + Math.max(0, Math.round((Date.now() - ms(l.since)) / 1000)) + ' s';
 }
 function renderSaid() {
   const muted = !!lastStatus.muted;
   if (!line && lastStatus.loading) {
     shown = 'loading';
-    saidCue('voice', loadingText().replace(/^Starting /, 'is starting ').replace(/ on the graphics card… .*/, ''), Math.round((Date.now() - ms(lastStatus.loading.since)) / 1000) + ' s');
+    saidCue('voice', loadingText().replace(/^Starting /, 'is starting ').replace(/ on the (graphics card|processor)… .*/, ''), Math.round((Date.now() - ms(lastStatus.loading.since)) / 1000) + ' s');
     $('line').className = 'line quiet'; $('line').title = '';
-    $('line').textContent = 'Loading the model on the graphics card; the first sentence follows. This takes a few seconds the first time, or after the idle time set under Listening and memory.';
+    $('line').textContent = 'Loading the model ' + engineWhere(lastStatus.loading.engine) + '; the first sentence follows. This takes a few seconds the first time, or after the idle time set under Listening and memory.';
     return;
   }
   // The voice is rendering what comes next (a GPU voice takes a while): say

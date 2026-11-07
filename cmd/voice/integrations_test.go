@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -126,6 +127,37 @@ func TestSidecarStatusReadsBOM(t *testing.T) {
 	os.WriteFile(filepath.Join(env, ".voice-setup.json"), []byte("\xEF\xBB\xBF{\"gpu\": \"nvidia\", \"backend\": true}"), 0o644)
 	if st := sidecarStatus("chatterbox"); st.State != integrations.On {
 		t.Fatalf("%+v", st)
+	}
+}
+
+// An environment set up before Chatterbox Multilingual V3 keeps working, and
+// the window offers Reinstall to update it; one with the current build does
+// not.
+func TestSidecarStatusOlderSource(t *testing.T) {
+	old := httpengine.SidecarDir
+	defer func() { httpengine.SidecarDir = old }()
+	httpengine.SidecarDir = t.TempDir()
+	env := filepath.Join(httpengine.SidecarDir, "envs", "chatterbox")
+	os.MkdirAll(env, 0o755)
+	cb, _ := sidecar.Find("chatterbox")
+	reinstall := func(st integrations.Status) bool {
+		for _, a := range st.Actions {
+			if a.ID == "install" {
+				return a.Primary
+			}
+		}
+		return false
+	}
+	os.WriteFile(filepath.Join(env, ".voice-setup.json"), []byte(`{"gpu": "nvidia", "backend": true, "backend:chatterbox_turbo": true}`), 0o644)
+	for _, name := range []string{"chatterbox", "chatterbox_turbo"} {
+		if st := sidecarStatus(name); st.State != integrations.On || !reinstall(st) || !strings.Contains(st.Detail, "Reinstall") {
+			t.Fatalf("%s before the update: %+v", name, st)
+		}
+	}
+	current, _ := json.Marshal(map[string]any{"gpu": "nvidia", "backend": true, "source": cb.SourceKey()})
+	os.WriteFile(filepath.Join(env, ".voice-setup.json"), current, 0o644)
+	if st := sidecarStatus("chatterbox"); st.State != integrations.On || reinstall(st) {
+		t.Fatalf("after the update: %+v", st)
 	}
 }
 

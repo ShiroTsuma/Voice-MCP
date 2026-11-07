@@ -120,7 +120,7 @@ func (g *gpuBudget) makeRoom(ctx context.Context, next string) error {
 	cfg := g.config()
 	mode, limit := budgetOf(cfg)
 	nb, ok := sidecar.Find(next)
-	if !ok {
+	if !ok || nb.CPU { // a voice on the processor takes no graphics memory and frees none
 		return nil
 	}
 	need, _ := g.size(nb, cfg)

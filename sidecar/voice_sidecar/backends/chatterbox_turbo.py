@@ -28,12 +28,17 @@ def tidy(text):
 
 class Backend:
     clones = True
+    nano = False  # Chatterbox Nano (chatterbox_nano.py) is this model, smaller
+    label = "Chatterbox Turbo"
 
     def __init__(self, options):
         from chatterbox.tts_turbo import ChatterboxTurboTTS, Conditionals
 
-        dev = device(options)
-        self.model = ChatterboxTurboTTS.from_pretrained(device=dev)
+        dev = self.device(options)
+        if self.nano:
+            self.model = ChatterboxTurboTTS.from_pretrained(device=dev, nano=True)
+        else:
+            self.model = ChatterboxTurboTTS.from_pretrained(device=dev)
         self.builtin = self.model.conds  # the model's own voice, for requests without a clip
 
         def compute(path, _text):
@@ -41,11 +46,14 @@ class Backend:
             return self.model.conds
 
         self.prints = VoicePrints(
-            "chatterbox-turbo",
+            "chatterbox-nano" if self.nano else "chatterbox-turbo",
             compute,
             save=lambda conds, file: conds.save(file),
             load=lambda file: Conditionals.load(file, map_location=dev).to(dev),
         )
+
+    def device(self, options):
+        return device(options)
 
     def synthesize(self, req):
         params = {}
@@ -54,6 +62,6 @@ class Backend:
                 params[k] = int(v) if k == "top_k" else float(v)
         self.model.conds = self.prints.get(req["ref_audio"]) if req.get("ref_audio") else self.builtin
         if self.model.conds is None:
-            raise ValueError("Chatterbox Turbo has no voice of its own here; give it a clip to clone")
+            raise ValueError(f"{self.label} has no voice of its own here; give it a clip to clone")
         wav = self.model.generate(tidy(req["text"]), **params)
         return to_numpy(wav), self.model.sr

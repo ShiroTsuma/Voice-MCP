@@ -45,7 +45,13 @@ foreach ($r in $registry.backends) {
     # A backend may run in another's environment (env): it installs there and
     # its stages are recorded under its own name.
     $envName = if ($r.env) { [string]$r.env } else { [string]$r.name }
-    $packages[$r.name] = @{ pip = @($r.pip); module = [string]$r.module; prefetch = @($r.prefetch | Where-Object { $_ }); env = $envName }
+    # source: packages installed after pip without their dependencies (a
+    # newer build than the PyPI release); the environment records them and
+    # installs them again when they change. cpu: runs on the processor, so it
+    # gets the CPU PyTorch whatever the card.
+    $source = @($r.source | Where-Object { $_ })
+    $packages[$r.name] = @{ pip = @($r.pip); source = $source; sourceKey = ($source -join ' '); cpu = [bool]$r.cpu
+        module = [string]$r.module; prefetch = @($r.prefetch | Where-Object { $_ }); env = $envName }
 }
 $names = @($registry.backends | ForEach-Object name)
 $usage = "usage: setup.ps1 -Backend $($names -join '|')[,...] [-Gpu auto|nvidia|amd|cpu] [-Cuda cu128] [-TorchProfile name|file.json] [-TorchWheels url,...] [-Python path] [-Target dir] [-Force]"
@@ -124,33 +130,37 @@ $tmp = Join-Path $Target '.tmp'
 New-Item -ItemType Directory -Force $tmp | Out-Null
 $env:TMP = $tmp
 $env:TEMP = $tmp
-$marker = @{ nvidia = '+cu'; amd = 'rocm'; cpu = '' }[$Gpu]
-if ($torchSet -and $torchSet.marker) { $marker = $torchSet.marker }
+# The PyTorch build an environment gets: the card's, or the CPU one for a
+# backend that runs on the processor.
+function Get-Marker([string]$g) {
+    if ($g -eq 'amd' -and $torchSet -and $torchSet.marker) { return [string]$torchSet.marker }
+    return @{ nvidia = '+cu'; amd = 'rocm'; cpu = '' }[$g]
+}
 
 function Invoke-Pip([string]$py, [string[]]$arguments, [string]$what) {
     & $py -m pip install --disable-pip-version-check @arguments
     if ($LASTEXITCODE) { throw "installing $what failed (rerun to resume; downloads are cached in $env:PIP_CACHE_DIR)" }
 }
-function Install-Torch([string]$py, [switch]$Again) {
+function Install-Torch([string]$py, [string]$g, [switch]$Again) {
     $extra = if ($Again) { @('--force-reinstall', '--no-deps') } else { @() }
-    switch ($Gpu) {
-        'nvidia' { Invoke-Pip $py (@($extra) + 'torch', 'torchaudio', '--index-url', "https://download.pytorch.org/whl/$Cuda") "PyTorch ($Gpu)" }
-        'amd'    { Invoke-Pip $py (@($extra) + $TorchWheels) "PyTorch ($Gpu)" }
-        'cpu'    { Invoke-Pip $py (@($extra) + 'torch', 'torchaudio', '--index-url', 'https://download.pytorch.org/whl/cpu') "PyTorch ($Gpu)" }
+    switch ($g) {
+        'nvidia' { Invoke-Pip $py (@($extra) + 'torch', 'torchaudio', '--index-url', "https://download.pytorch.org/whl/$Cuda") "PyTorch ($g)" }
+        'amd'    { Invoke-Pip $py (@($extra) + $TorchWheels) "PyTorch ($g)" }
+        'cpu'    { Invoke-Pip $py (@($extra) + 'torch', 'torchaudio', '--index-url', 'https://download.pytorch.org/whl/cpu') "PyTorch ($g)" }
     }
 }
 # Runs a real computation on the GPU: is_available() alone passes on broken drivers.
-$gpuTest = "import torch; ok = torch.cuda.is_available() and '$marker' in torch.__version__; print('torch', torch.__version__, 'gpu', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none'); x = torch.randn(1024, 1024, device='cuda') if ok else None; print('compute', 'ok' if ok and torch.isfinite((x @ x).sum()).item() else 'FAILED')"
-function Test-Torch([string]$py) {
+function Test-Torch([string]$py, [string]$marker) {
+    $gpuTest = "import torch; ok = torch.cuda.is_available() and '$marker' in torch.__version__; print('torch', torch.__version__, 'gpu', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none'); x = torch.randn(1024, 1024, device='cuda') if ok else None; print('compute', 'ok' if ok and torch.isfinite((x @ x).sum()).item() else 'FAILED')"
     $out = @(Invoke-Native { & $py -c $gpuTest 2>&1 })
     $out | ForEach-Object { Write-Host "  $_" }
     return ($LASTEXITCODE -eq 0) -and ($out -match '^compute ok')
 }
-$gpuHint = @{
+$gpuHints = @{
     amd    = 'Check: AMD graphics driver 26.2.2 or newer, Visual C++ 2015-2022 Redistributable, Smart App Control and Application Guard off, a supported Radeon (see profiles\amd-rocm-windows.json).'
     nvidia = 'Check: a current NVIDIA driver; RTX 50 cards need -Cuda cu128 or newer.'
     cpu    = ''
-}[$Gpu]
+}
 
 # Stages done per environment, so a rerun skips them (-Force redoes them).
 function Read-State([string]$envDir) {
@@ -171,54 +181,71 @@ foreach ($b in $Backend) {
     $own = $spec.env -eq $b
     $backendKey = if ($own) { 'backend' } else { "backend:$b" }
     $prefetchKey = if ($own) { 'prefetch' } else { "prefetch:$b" }
+    # A backend on the processor gets the CPU PyTorch whatever the card: it
+    # installs on an AMD card PyTorch does not support, or with none.
+    $g = if ($spec.cpu) { 'cpu' } else { $Gpu }
+    if ($spec.cpu -and $Gpu -ne 'cpu') { Write-Host "$b runs on the processor: PyTorch for the CPU" }
+    $marker = Get-Marker $g
     # Another PyTorch build: start over, and replace the installed torch (pip
     # keeps an installed build of the same version otherwise).
-    $switched = [bool]($state.gpu -and $state.gpu -ne $Gpu)
+    $switched = [bool]($state.gpu -and $state.gpu -ne $g)
     if ($switched) { $state = @{} }
     if (-not (Test-Path -LiteralPath $py)) {
         & $basePython -m venv $envDir
         if ($LASTEXITCODE) { throw "creating the environment $envDir failed" }
         $state = @{}; $switched = $false
     }
-    $state.gpu = $Gpu
+    $state.gpu = $g
     if (-not $state.pip) { Invoke-Pip $py @('--upgrade', 'pip') 'pip'; $state.pip = $true; Save-State $envDir $state }
     $needsTorch = $b -ne 'test'
     if ($needsTorch -and -not $state.torch) {
-        Install-Torch $py -Again:$switched
-        if ($marker -and -not (Test-Torch $py)) { throw "PyTorch ($Gpu) does not compute on the GPU. $gpuHint" }
+        Install-Torch $py $g -Again:$switched
+        if ($marker -and -not (Test-Torch $py $marker)) { throw "PyTorch ($g) does not compute on the GPU. $($gpuHints[$g])" }
         $state.torch = $true; Save-State $envDir $state
     }
     # A backend this PyTorch build cannot run is skipped before its downloads.
-    $reason = if ($torchSet -and $torchSet.skip -and $torchSet.skip.PSObject.Properties[$b]) { $torchSet.skip.$b } else { '' }
+    $reason = if ($g -eq 'amd' -and $torchSet -and $torchSet.skip -and $torchSet.skip.PSObject.Properties[$b]) { $torchSet.skip.$b } else { '' }
     if ($b -eq 'f5' -and $needsTorch) {
         Invoke-Native { & $py -c "import torch.distributed as d; d.ReduceOp" 2>$null }
         if ($LASTEXITCODE) { $reason = 'this PyTorch build has no torch.distributed.ReduceOp, which F5-TTS imports' } else { $reason = '' }
     }
     if ($reason) { Write-Warning "skipping ${b}: $reason"; $skipped += $b; continue }
+    # The environment has an older build of the backend's source packages
+    # (Chatterbox before Multilingual V3): install it again, even when it is
+    # recorded as done.
+    $staleSource = $spec.sourceKey -and ([string]$state.source -ne $spec.sourceKey)
     # In another backend's environment, what is there already is enough: pip
     # would only pull that package's old torch pin and put the GPU build back.
-    if (-not $own -and $spec.module -and -not $state[$backendKey]) {
+    if (-not $own -and $spec.module -and -not $state[$backendKey] -and -not $staleSource) {
         Invoke-Native { & $py -c "import $($spec.module)" 2>$null }
         if (-not $LASTEXITCODE) { $state[$backendKey] = $true; Save-State $envDir $state }
     }
-    if ($spec.pip -and -not $state[$backendKey]) {
+    if ($spec.pip -and (-not $state[$backendKey] -or $staleSource)) {
         # Tested pins, when the repository has them for this backend and GPU.
-        $constraints = Join-Path $PSScriptRoot "requirements\$b-$Gpu.txt"
+        $constraints = Join-Path $PSScriptRoot "requirements\$b-$g.txt"
         $extra = if (Test-Path -LiteralPath $constraints) { @('-c', $constraints) } else { @() }
         Invoke-Pip $py (@($spec.pip) + $extra) $b
+        if ($spec.source) {
+            # The release's dependencies came with pip above; the newer build
+            # replaces only the package itself.
+            Write-Host "Installing $($spec.source -join ', ')"
+            Invoke-Pip $py (@($spec.source) + '--no-deps', '--force-reinstall') "$b (source build)"
+        }
         if ($marker) {
             # Backends such as chatterbox-tts pin an old torch, and pip replaces the
             # GPU build with that CPU wheel. Put the GPU build back without
             # letting pip touch other packages.
             Invoke-Native { & $py -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() and '$marker' in torch.__version__ else 1)" 2>$null }
             if ($LASTEXITCODE) {
-                Install-Torch $py -Again
-                if (-not (Test-Torch $py)) { throw "PyTorch ($Gpu) does not compute on the GPU after installing $b. $gpuHint" }
+                Install-Torch $py $g -Again
+                if (-not (Test-Torch $py $marker)) { throw "PyTorch ($g) does not compute on the GPU after installing $b. $($gpuHints[$g])" }
             }
         }
         & $py -c "import $($spec.module)"
         if ($LASTEXITCODE) { throw "$b installed but does not import; see the error above" }
-        $state[$backendKey] = $true; Save-State $envDir $state
+        $state[$backendKey] = $true
+        if ($spec.sourceKey) { $state.source = $spec.sourceKey }
+        Save-State $envDir $state
     }
     # Model weights the backend loads on first use come now, into the
     # sidecar's models folder (where the engines look), with this progress.
