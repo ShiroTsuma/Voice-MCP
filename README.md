@@ -28,6 +28,10 @@
   <a href="#reference">Reference</a>
 </p>
 
+https://github.com/user-attachments/assets/1299386d-0130-4aa9-aef9-7610d0c5fef1
+
+<p align="center"><em>The demo (1:40, with sound): two agents at once, one of them out of sight, a reply by voice, the windows, voices and a scene in several voices. The agents' sessions are real recordings; the cast is made for the demo.</em></p>
+
 <p align="center">
   <img src="docs/images/settings.png" width="380" alt="The voice settings window: Anna is speaking a line that fills in word by word, your last dictated reply below it, and three sessions with their projects and states">
 </p>
