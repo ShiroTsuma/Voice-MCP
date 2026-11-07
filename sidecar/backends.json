@@ -193,6 +193,16 @@
       "transcript": true,
       "languages": ["ar", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hu", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sv", "tr", "uk", "vi", "zh"],
       "prefetch": ["k2-fsa/OmniVoice"],
+      "option": {
+        "key": "steps",
+        "label": "Quality steps",
+        "default": "32",
+        "choices": [
+          { "value": "16", "label": "16", "note": "about twice as fast; a Polish benchmark calls it the sweet spot" },
+          { "value": "32", "label": "32", "note": "the model's default" },
+          { "value": "64", "label": "64", "note": "about twice as slow; more steps were not heard to sound better" }
+        ]
+      },
       "expressive": {
         "emotion": "none",
         "sounds": { "laugh": "[laughter]", "chuckle": "[laughter]", "giggle": "[laughter]", "sigh": "[sigh]" }
