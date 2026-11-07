@@ -804,7 +804,7 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		if err != nil {
 			return nil, UserError{err.Error()}
 		}
-		p = s.autoTranscript(p)
+		p = s.autoTranscript(p, NeedsTranscript(p.Engine))
 		s.Config.SetPreset(core.ClonePresetName(p.Name), core.ClonePreset(p))
 		out := map[string]any{"name": p.Name, "preset": core.ClonePresetName(p.Name), "engine": p.Engine, "seconds": p.Duration, "transcript": p.Text}
 		if strings.TrimSpace(a.Group) != "" {
@@ -925,8 +925,9 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 	case "list":
 		rows := [][]any{}
 		for _, p := range clones.List() {
-			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Group, p.Description, p.Engine, p.Duration, p.Text != "", p.Source, p.Designed})
+			rows = append(rows, []any{p.Name, core.ClonePresetName(p.Name), p.Group, p.Description, p.Engine, p.Duration, p.Text, p.Source, p.Designed})
 		}
+		// transcript: what the clip says, "" when the voice has none.
 		return map[string]any{"columns": []string{"name", "preset", "group", "description", "engine", "seconds", "transcript", "source", "designed_from"}, "rows": rows,
 			"groups": clones.Groups()}, nil
 	case "preview":
@@ -942,13 +943,49 @@ func (s *Service) Clone(ctx context.Context, a CloneArgs) (any, error) {
 		}
 		return s.Speak(ctx, SpeakArgs{Text: sample, Preset: core.ClonePresetName(a.Name), Lang: "en"})
 	case "set_transcript":
-		if err := need("name", "transcript"); err != nil {
+		// Empty clears it: an engine that can work either way then clones from
+		// the clip alone (VoxCPM2 sounds freer so).
+		if err := need("name"); err != nil {
 			return nil, err
+		}
+		p, err := clones.Get(a.Name)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		if strings.TrimSpace(a.Transcript) == "" && NeedsTranscript(p.Engine) {
+			return nil, userErr("%s needs the transcript; give the words the clip says, or switch the voice to another engine first", p.Engine)
 		}
 		if err := clones.SetText(a.Name, a.Transcript); err != nil {
 			return nil, UserError{err.Error()}
 		}
+		if p, err = clones.Get(a.Name); err == nil {
+			s.Config.SetPreset(core.ClonePresetName(p.Name), core.ClonePreset(p))
+		}
+		if strings.TrimSpace(a.Transcript) == "" {
+			return "transcript cleared; " + a.Name + " clones from the clip alone", nil
+		}
 		return "transcript stored", nil
+	case "set_engine":
+		// The engine a voice speaks with: any cloning engine. The recording,
+		// transcript and saved prompt stay, so switching back is the same call.
+		if err := need("name"); err != nil {
+			return nil, err
+		}
+		if !CanClone(a.Engine) {
+			return nil, userErr("set_engine needs engine, one of the cloning engines: %s", strings.Join(CloneEngineNames(), ", "))
+		}
+		p, err := clones.SetEngine(a.Name, a.Engine)
+		if err != nil {
+			return nil, UserError{err.Error()}
+		}
+		out := map[string]any{"name": p.Name, "engine": p.Engine}
+		if NeedsTranscript(p.Engine) && p.Text == "" {
+			if p = s.autoTranscript(p, true); p.Text == "" {
+				out["warning"] = p.Engine + " needs a transcript; call set_transcript"
+			}
+		}
+		s.Config.SetPreset(core.ClonePresetName(p.Name), core.ClonePreset(p))
+		return out, nil
 	case "remove":
 		if err := need("name"); err != nil {
 			return nil, err
@@ -1196,10 +1233,33 @@ func NeedsTranscript(engine string) bool {
 	return ok && b.Transcript
 }
 
+// CanClone reports whether engine clones from a recording: Pocket, ZipVoice
+// and the sidecar backends marked so (sidecar/backends.json).
+func CanClone(engine string) bool {
+	if engine == "pocket" || engine == "zipvoice" {
+		return true
+	}
+	b, ok := sidecar.Find(engine)
+	return ok && b.Clones && !b.Hidden
+}
+
+// CloneEngineNames lists the cloning engines, for messages.
+func CloneEngineNames() []string {
+	out := []string{"pocket", "zipvoice"}
+	for _, b := range sidecar.Backends() {
+		if b.Clones && !b.Hidden {
+			out = append(out, b.Name)
+		}
+	}
+	return out
+}
+
 // autoTranscript fills a missing transcript with speech recognition when a
-// model is installed; ZipVoice needs one and it helps other engines.
-func (s *Service) autoTranscript(p clones.Profile) clones.Profile {
-	if p.Text != "" || s.Listener == nil || !s.Listener.Available() {
+// model is installed and needed is set: only for engines that need one, as
+// one that can work either way (VoxCPM2) sounds freer without, and that is
+// the user's choice to make.
+func (s *Service) autoTranscript(p clones.Profile, needed bool) clones.Profile {
+	if !needed || p.Text != "" || s.Listener == nil || !s.Listener.Available() {
 		return p
 	}
 	if text, _, err := s.Listener.TranscribeFile(p.Ref); err == nil && text != "" && clones.SetText(p.Name, text) == nil {

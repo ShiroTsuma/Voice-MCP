@@ -145,6 +145,17 @@ Renaming it moves the characters, the default voice and the tunings that use it 
         <label class="lab" for="vGroup">Group</label>
         <select id="vGroup"></select>
       </div>
+      <div class="row col">
+        <label class="lab" for="vEngine">Speaks with<span class="tip" tabindex="0" id="vEngineTip" data-tip="The engine the voice speaks with.">i</span><span class="help" id="vEngineHelp"></span></label>
+        <select id="vEngine"></select>
+      </div>
+      <div class="row col">
+        <label class="lab" for="vText">What it says<span class="opt" id="vTextOpt">optional</span><span class="tip" tabindex="0" data-tip="The words spoken in the recording.
+Some engines need them; others can work either way.
+
+**VoxCPM2:** with them it stays closer to the recording; without, it clones from the sound alone and speaks more freely.">i</span></label>
+        <textarea id="vText" maxlength="2000" placeholder="The words spoken in the recording"></textarea>
+      </div>
       <div class="row">
         <label class="lab" for="vOn">In the voice pickers<span class="help">For characters and the default voice</span></label>
         <label class="switch"><input type="checkbox" id="vOn"><span></span></label>
@@ -521,6 +532,8 @@ function showVoice(name) {
   $('vDesc').value = v.description || '';
   $('vDesc').placeholder = 'e.g. warm narrator for bedtime stories';
   fillGroups($('vGroup')); $('vGroup').value = v.group || '';
+  fillEngineSelect($('vEngine'), v.engine); vEngineHelp();
+  $('vText').value = v.transcript || '';
   // Its switch saves at once, as the engines' voices do; Save keeps the rest.
   const isOff = () => offList().some(x => x.toLowerCase() === v.name.toLowerCase());
   $('vOn').checked = !isOff();
@@ -532,7 +545,7 @@ function showVoice(name) {
   const who = users()[v.name] || [];
   const facts = [
     ['Made from', v.designed_from ? 'a description: “' + v.designed_from + '”' : 'a recording' + (v.source ? ' (' + v.source + ')' : '')],
-    ['Speaks with', engineLabel(v.engine) + (v.seconds ? ', from ' + Math.round(v.seconds) + ' s of speech' : '')],
+    ['Recording', v.seconds ? Math.round(v.seconds) + ' s of speech' : 'none'],
     ['Used by', who.length ? andList(who) : 'nobody yet; pick it for a character in Characters'],
   ];
   const dl = $('vFacts'); dl.textContent = '';
@@ -543,6 +556,9 @@ $('voice').addEventListener('submit', async e => {
   e.preventDefault();
   const v = voices.find(x => x.name === open); if (!v) return;
   const to = $('vName').value.trim(), desc = $('vDesc').value.trim(), group = $('vGroup').value;
+  const eng = $('vEngine').value, text = $('vText').value.trim();
+  // An engine that needs the words keeps them (or has them written down on the switch).
+  const needs = (engines().find(e => e.name === eng) || {}).transcript;
   if (!validName(to)) { say('status', 'A voice name is 1-40 lowercase letters, digits, - or _', true); $('vName').focus(); return; }
   if (to !== v.name && voices.some(x => x.name === to)) { say('status', 'Another voice has that name', true); $('vName').focus(); return; }
   let now = v.name;
@@ -550,6 +566,10 @@ $('voice').addEventListener('submit', async e => {
     if (to !== v.name) { await api('clone', { action: 'rename', name: v.name, new_name: to }); now = to; }
     if (desc !== (v.description || '')) await api('clone', { action: 'describe', name: now, description: desc });
     if (group !== (v.group || '')) await api('clone', { action: 'group', name: now, group });
+    // The words first: an engine that needs them then finds them, one that
+    // does not clones from the sound alone when they were cleared.
+    if (text !== (v.transcript || '') && (text || !needs)) await api('clone', { action: 'set_transcript', name: now, transcript: text });
+    if (eng && eng !== v.engine) await api('clone', { action: 'set_engine', name: now, engine: eng });
     await load(now);
     say('status', now !== v.name ? 'Renamed; the characters using it follow' : 'Saved');
   } catch (err) { await load(now).catch(() => {}); say('status', err.message, true); }
@@ -585,19 +605,35 @@ seg('mSecs', '12');
 
 // The engines a voice can speak with, installed ones first; one not installed cannot be picked.
 function fillEngines() {
-  const sel = $('mEngine'), keep = sel.value; sel.textContent = '';
+  const sel = $('mEngine');
+  fillEngineSelect(sel, sel.value);
+  engineHelp();
+}
+// Fills an engine picker with the cloning engines: installed first, then the
+// ones that could be installed here, last those this PC's card does not run.
+// keep stays picked when installed; a voice's own engine stays even when not,
+// so its details show what it speaks with.
+function fillEngineSelect(sel, keep) {
+  sel.textContent = '';
   const list = engines();
-  // Installed first; then the ones that could be installed here; last, those this PC's card does not run.
   const rank = e => e.ready ? 0 : e.runs === false ? 2 : 1;
   for (const e of [...list].sort((a, b) => rank(a) - rank(b))) {
-    const o = document.createElement('option'); o.value = e.name; o.disabled = !e.ready;
+    const o = document.createElement('option'); o.value = e.name; o.disabled = !e.ready && e.name !== keep;
     o.textContent = e.label + (e.ready ? '' : e.runs === false ? ' — needs ' + e.needs : ' — not installed');
     sel.append(o);
   }
-  const ok = n => list.some(e => e.name === n && e.ready);
-  sel.value = ok(keep) ? keep : (list.find(e => e.ready) || {}).name || '';
-  engineHelp();
+  if (keep && !list.some(e => e.name === keep)) { const o = document.createElement('option'); o.value = keep; o.textContent = keep; sel.append(o); }
+  // fillEngines keeps only an installed engine; a voice's own always stays (its option is enabled above).
+  const kept = [...sel.options].some(o => o.value === keep && !o.disabled);
+  sel.value = kept ? keep : (list.find(e => e.ready) || {}).name || '';
 }
+function vEngineHelp() {
+  const e = engines().find(x => x.name === $('vEngine').value);
+  $('vEngineHelp').textContent = e && e.transcript ? 'Needs what the recording says' : '';
+  $('vTextOpt').textContent = e && e.transcript ? 'needed' : 'optional';
+  $('vEngineTip').dataset.tip = e ? 'The engine the voice speaks with. Switching keeps the recording and its words, so switching back is the same.\n**' + e.label + ':** ' + e.note + '.' : 'The engine the voice speaks with.';
+}
+$('vEngine').addEventListener('change', vEngineHelp);
 const langWord = c => { try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(c) || c; } catch { return c; } };
 function engineHelp() {
   const e = engines().find(x => x.name === $('mEngine').value);

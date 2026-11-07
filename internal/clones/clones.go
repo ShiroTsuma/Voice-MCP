@@ -294,12 +294,32 @@ func Remove(name string) error {
 	return os.RemoveAll(dir(name))
 }
 
-// SetText stores a transcript for an existing profile.
+// SetText stores a transcript for an existing profile; empty removes it, so
+// an engine that can work either way clones from the clip alone.
 func SetText(name, text string) error {
 	if _, err := Get(name); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir(name), "ref.txt"), []byte(strings.TrimSpace(text)+"\n"), 0o644)
+	file := filepath.Join(dir(name), "ref.txt")
+	if text = strings.TrimSpace(text); text == "" {
+		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	return os.WriteFile(file, []byte(text+"\n"), 0o644)
+}
+
+// SetEngine has a voice speak with another cloning engine. The recording,
+// transcript and saved prompt stay: a prompt is only used by the engine that
+// made it, so switching back finds it again.
+func SetEngine(name, engineName string) (Profile, error) {
+	p, err := Get(name)
+	if err != nil {
+		return Profile{}, err
+	}
+	p.Engine = engineName
+	return p, writeMeta(p)
 }
 
 func decode(src string) ([]float32, int, error) {

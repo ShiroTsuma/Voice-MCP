@@ -28,6 +28,9 @@ var cloneUsage = `usage:
   voice clone list
   voice clone preview <name> [-out file.wav] [text]
   voice clone text <name> <transcript>
+      "" clears it, where the engine needs none (voxcpm2 then clones from the clip alone)
+  voice clone engine <name> <engine>
+      speaks with another cloning engine; recording, transcript and prompt stay
   voice clone remove <name>
 
 Engines: pocket (default, CPU), zipvoice (CPU, needs -text), and on the GPU
@@ -114,7 +117,7 @@ func runClone(args []string) error {
 		if t, _ := m["transcript"].(string); t != "" {
 			fmt.Printf("transcript: %s\n", t)
 		} else {
-			fmt.Println("no transcript: fine for pocket; zipvoice, " + strings.Join(transcriptEngines(), ", ") + " need `voice clone text`")
+			fmt.Println("no transcript: fine for this engine; zipvoice, " + strings.Join(transcriptEngines(), ", ") + " need `voice clone text`")
 		}
 	case "list":
 		w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
@@ -146,6 +149,15 @@ func runClone(args []string) error {
 			return errors.New(cloneUsage)
 		}
 		_, err := c.Clone(ctx, service.CloneArgs{Action: "set_transcript", Name: pos[0], Transcript: strings.Join(pos[1:], " ")})
+		return err
+	case "engine":
+		if len(pos) != 2 {
+			return errors.New(cloneUsage)
+		}
+		_, err := c.Clone(ctx, service.CloneArgs{Action: "set_engine", Name: pos[0], Engine: pos[1]})
+		if err == nil {
+			fmt.Printf("%s speaks with %s now\n", pos[0], pos[1])
+		}
 		return err
 	case "remove":
 		if len(pos) != 1 {

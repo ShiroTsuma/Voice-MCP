@@ -4,7 +4,12 @@ the clip's transcript comes with it, and takes the style in plain words in
 parentheses before the text ("(cheerful tone)Hello").
 
 Options: model=openbmb/VoxCPM2, device=cuda|cpu, steps=10 (diffusion steps
-per frame), cfg=2.0. Per request, extra may override steps and cfg, and
+per frame), cfg=2.0.
+
+A voice with a transcript also continues from the clip and what it says,
+closer to the recording; one without clones from the clip's sound alone,
+which was heard as more natural. The voice decides: voice writes no
+transcript for this engine by itself. Per request, extra may override steps and cfg, and
 instruct is the style ("teasing tone"), from voice's moods.
 
 The language comes from the text itself; the model takes no language tag.
