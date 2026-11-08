@@ -190,6 +190,7 @@ func (b *backend) speaking(on bool) {
 func (b *backend) preparing(on bool) {
 	prepMu.Lock()
 	defer prepMu.Unlock()
+	prepGen++
 	if prepTimer != nil {
 		prepTimer.Stop()
 		prepTimer = nil
@@ -202,7 +203,15 @@ func (b *backend) preparing(on bool) {
 	if (sv.CornerSpeaking != nil && !*sv.CornerSpeaking) || b.panel().Visible() {
 		return
 	}
+	gen := prepGen
 	prepTimer = time.AfterFunc(800*time.Millisecond, func() {
+		// Stop does not wait for a timer already running: the off that
+		// stopped this one may have passed, and then the ring stays down.
+		prepMu.Lock()
+		defer prepMu.Unlock()
+		if gen != prepGen {
+			return
+		}
 		b.ctl.cornerPreparing(true, b.speakerTint())
 	})
 }
@@ -210,6 +219,7 @@ func (b *backend) preparing(on bool) {
 var (
 	prepMu    sync.Mutex
 	prepTimer *time.Timer
+	prepGen   uint64 // which preparing the timer is for; an off since makes it stale
 )
 
 // speakerTint is the colour of the character speaking now, 0xRRGGBB, or 0.

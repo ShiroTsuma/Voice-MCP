@@ -143,6 +143,10 @@ func (c *controller) cornerSpeech(on bool, tint uint32) {
 	}
 	c.speechMu.Lock()
 	defer c.speechMu.Unlock()
+	// Any feed before this call is over: what it still writes does not count.
+	// Closing its stop is not enough, as its select may take one more tick
+	// first and write "speaking" after the off below, leaving the ring lit.
+	gen := c.speechGen.Add(1)
 	if c.speechStop != nil {
 		close(c.speechStop)
 		c.speechStop = nil
@@ -158,7 +162,12 @@ func (c *controller) cornerSpeech(on bool, tint uint32) {
 		defer tick.Stop()
 		for {
 			level := c.sp.Level()
-			c.ov.Set(func(s *overlay.State) { s.Speaking, s.SpeakLevel, s.Tint = true, level, tint })
+			c.ov.Set(func(s *overlay.State) {
+				if c.speechGen.Load() != gen {
+					return // ended meanwhile; the off that ended it stands
+				}
+				s.Speaking, s.SpeakLevel, s.Tint = true, level, tint
+			})
 			select {
 			case <-stop:
 				return

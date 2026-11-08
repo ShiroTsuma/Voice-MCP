@@ -34,12 +34,18 @@ type controller struct {
 	l      *listen.Listener
 	agents *service.Agents
 	ov     *overlay.Overlay // dictation's state in the screen corner; nil if it could not open
-	// The agent's ring in the corner while it speaks: speechStop ends its feed.
+	// The agent's ring in the corner while it speaks: speechStop ends its
+	// feed, and speechGen tells the feed wanted now from one already ended,
+	// whose last tick could otherwise land after the off and leave the ring lit.
 	speechMu   sync.Mutex
 	speechStop chan struct{}
+	speechGen  atomic.Uint64
 	// onSpeaking learns when speech starts and ends, onDictating when the user
-	// starts and stops dictating (the speaking popup).
+	// starts and stops dictating (the speaking popup). Speech events go
+	// through speakEvents, one goroutine in order: one goroutine per event
+	// could run an end before its start and leave the popup or ring up for good.
 	onSpeaking, onDictating func(on bool)
+	speakEvents             chan bool
 	// onReaderKey runs on the reading window's hotkey.
 	onReaderKey func()
 	sessions    *audio.Sessions
@@ -63,7 +69,8 @@ func logf(format string, args ...any) {
 }
 
 func startExtras(ctx context.Context, cfg *preset.Config, sp *core.Speaker, l *listen.Listener, agents *service.Agents) *controller {
-	c := &controller{cfg: cfg, sp: sp, l: l, agents: agents}
+	c := &controller{cfg: cfg, sp: sp, l: l, agents: agents, speakEvents: make(chan bool, 256)}
+	go c.deliverSpeaking()
 	overlay.Logf = logf
 	if ov, err := overlay.Start(); err != nil {
 		logf("%v", err)
@@ -89,6 +96,21 @@ func startExtras(ctx context.Context, cfg *preset.Config, sp *core.Speaker, l *l
 	}()
 	go c.janitor(ctx)
 	return c
+}
+
+// deliverSpeaking passes speech starts and ends to onSpeaking one at a time,
+// in the order they happened. Fired as a goroutine each, an end could run
+// before its start: the ring or popup went off, then on, with nothing to
+// follow, and stayed.
+func (c *controller) deliverSpeaking() {
+	for on := range c.speakEvents {
+		c.mu.Lock()
+		fn := c.onSpeaking
+		c.mu.Unlock()
+		if fn != nil {
+			fn(on)
+		}
+	}
 }
 
 func (c *controller) duckLevel() float64 {
@@ -146,8 +168,12 @@ func (c *controller) onActivity(speaking bool) {
 		c.restore = nil
 	}
 	duck := c.duck
-	if fn := c.onSpeaking; fn != nil {
-		go fn(speaking)
+	select {
+	case c.speakEvents <- speaking:
+	default:
+		// Only if whoever shows speech has hung for hundreds of events; the
+		// speaker must not wait on it.
+		logf("speech events: nothing takes them, dropped speaking=%v", speaking)
 	}
 	if speaking {
 		if c.sessions != nil && duck < 1 {
