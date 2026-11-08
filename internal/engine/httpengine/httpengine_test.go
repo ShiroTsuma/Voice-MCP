@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -279,4 +280,93 @@ func TestIdleReachesRunningServers(t *testing.T) {
 		t.Fatal("not kept for new servers")
 	}
 	SetIdle(-1)
+}
+
+// TestHelperServer is not a test: the tests below start the test binary
+// running only it as a pretend sidecar, which VOICE_TEST_HELPER says how
+// to behave.
+func TestHelperServer(t *testing.T) {
+	switch os.Getenv("VOICE_TEST_HELPER") {
+	case "":
+		return
+	case "die": // a model that cannot load, as with the hub unreachable
+		os.Stderr.WriteString("Loading weights: 100%\rOSError: Can't load processor for 'Qwen/Qwen3-TTS-12Hz-1.7B-Base'\n")
+		os.Exit(1)
+	case "hang":
+		time.Sleep(time.Minute)
+		os.Exit(0)
+	case "offline": // models missing from the cache: loads only online
+		if os.Getenv("HF_HUB_OFFLINE") != "0" {
+			os.Exit(exitRetryOnline)
+		}
+		srv := &http.Server{Addr: os.Getenv("VOICE_TEST_ADDR"), Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"ready":true}`))
+		})}
+		go func() { time.Sleep(20 * time.Second); os.Exit(0) }()
+		srv.ListenAndServe()
+		os.Exit(0)
+	}
+}
+
+func helperEngine(t *testing.T, mode string) *Engine {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	SidecarDir = t.TempDir()
+	t.Setenv("VOICE_TEST_HELPER", mode)
+	t.Setenv("VOICE_TEST_ADDR", addr)
+	exe, _ := os.Executable()
+	return &Engine{name: "qwen3_fast", url: "http://" + addr, start: []string{exe, "-test.run=^TestHelperServer$"}, timeout: time.Minute}
+}
+
+// A server that dies while loading its model fails the request at once with
+// what it died of, instead of leaving it waiting out the start timeout, and
+// the sentences right after fail at once too, for the fallback voice.
+func TestServerThatDiesWhileLoadingFails(t *testing.T) {
+	e := helperEngine(t, "die")
+	start := time.Now()
+	err := e.ensure(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "exited while loading") || !strings.Contains(err.Error(), "Can't load processor") {
+		t.Fatalf("err %v", err)
+	}
+	if d := time.Since(start); d > 15*time.Second {
+		t.Fatalf("took %s", d)
+	}
+	start = time.Now()
+	if again := e.ensure(context.Background()); again == nil || time.Since(start) > time.Second {
+		t.Fatalf("second start: %v after %s", again, time.Since(start))
+	}
+	e.Unload(context.Background()) // an unload clears it: the next start tries again
+	if !e.failed.IsZero() {
+		t.Fatal("failure kept after unload")
+	}
+}
+
+// A server that hangs while loading, writing nothing, is stopped.
+func TestServerThatHangsIsStopped(t *testing.T) {
+	old := stallTimeout
+	stallTimeout = 2 * time.Second
+	defer func() { stallTimeout = old }()
+	e := helperEngine(t, "hang")
+	err := e.ensure(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "wrote nothing") {
+		t.Fatalf("err %v", err)
+	}
+	if e.running != nil {
+		t.Fatal("hung server still counted as running")
+	}
+}
+
+// A server that could not load from the cache offline starts once more
+// online.
+func TestServerRetriesOnline(t *testing.T) {
+	e := helperEngine(t, "offline")
+	if err := e.ensure(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	stop(e.proc)
 }

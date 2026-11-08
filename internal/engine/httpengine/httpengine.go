@@ -56,8 +56,26 @@ type Engine struct {
 
 	mu       sync.Mutex
 	running  chan struct{} // open while a server this engine started is alive
+	proc     *os.Process   // that server, to stop it when it hangs while loading
+	exitCode int           // its exit code once running is closed
 	measured time.Time     // when its graphics memory was last asked for
+	failed   time.Time     // when its server last failed to start
+	failure  error         // why
 }
+
+// stallTimeout is how long a loading server may stay silent (its log does
+// not grow) before voice gives up on it; a download or a first compile
+// writes progress, a hang writes nothing. failCooldown is how long a server
+// that failed to start is not started again: the sentences after the first
+// go to the fallback voice at once instead of each waiting for a new start.
+var (
+	stallTimeout = 10 * time.Minute
+	failCooldown = time.Minute
+)
+
+// exitRetryOnline is the sidecar's exit code when it could not load its
+// models from the cache offline; voice starts it once more online.
+const exitRetryOnline = 75
 
 func New(name string, cfg engine.Config) (engine.Engine, error) {
 	url := strings.TrimRight(cfg.String("url"), "/")
@@ -146,6 +164,7 @@ func (e *Engine) Unload(ctx context.Context) {
 	defer e.mu.Unlock()
 	e.shutdown(ctx)
 	e.running = nil
+	e.failed = time.Time{}
 }
 
 // chosen holds options set while voice runs (a model size picked in the
@@ -324,6 +343,13 @@ func (e *Engine) ensure(ctx context.Context) error {
 	if e.healthy(ctx) {
 		return nil
 	}
+	e.mu.Lock()
+	failure := e.failure
+	recent := failure != nil && time.Since(e.failed) < failCooldown
+	e.mu.Unlock()
+	if recent && len(e.start) > 0 {
+		return failure // it failed moments ago: the fallback speaks
+	}
 	// Room for its model first (a budget for GPU voices), before this
 	// engine's lock: making room unloads other engines, which take theirs.
 	if fn := BeforeStart; fn != nil && len(e.start) > 0 {
@@ -363,52 +389,157 @@ func (e *Engine) ensure(ctx context.Context) error {
 		}
 	}
 	if !alive {
-		want := e.want()
-		args := make([]string, len(e.start))
-		for i, a := range e.start {
-			if i > 0 && e.start[i-1] == "--option" {
-				if k, _, ok := strings.Cut(a, "="); ok {
-					a = k + "=" + want[k]
-				}
-			}
-			if i > 0 && e.start[i-1] == "--idle-seconds" {
-				if s := idleSeconds.Load(); s >= 0 {
-					a = strconv.FormatInt(s, 10)
-				}
-			}
-			args[i] = expand(a)
+		if err := e.launch(nil); err != nil {
+			return err
 		}
-		cmd := exec.Command(args[0], args[1:]...)
-		os.MkdirAll(SidecarDir, 0o755)
-		cmd.Dir = SidecarDir
-		cmd.Env = append(os.Environ(), "PYTHONPATH="+SidecarCode)
-		if os.Getenv("HF_HOME") == "" {
-			// Model weights follow sidecar_dir instead of the user profile.
-			cmd.Env = append(cmd.Env, "HF_HOME="+filepath.Join(SidecarDir, "models"))
-		}
-		if log, err := os.Create(filepath.Join(SidecarDir, e.name+".log")); err == nil {
-			cmd.Stdout, cmd.Stderr = log, log
-		}
-		detach(cmd)
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("engine %q: start server: %w", e.name, err)
-		}
-		running := make(chan struct{})
-		e.running = running
-		go func() { cmd.Wait(); close(running) }()
 	}
+	err := e.await(ctx)
+	if errors.Is(err, errRetryOnline) {
+		// The models were not all in the cache after all: once more, online.
+		if err = e.launch([]string{"HF_HUB_OFFLINE=0"}); err == nil {
+			err = e.await(ctx)
+		}
+	}
+	if err != nil && ctx.Err() == nil {
+		e.failed, e.failure = time.Now(), err
+	}
+	return err
+}
+
+// logPath is the file the engine's server writes its output to.
+func (e *Engine) logPath() string { return filepath.Join(SidecarDir, e.name+".log") }
+
+// launch starts the engine's server with env added to voice's environment.
+// Call with e.mu held.
+func (e *Engine) launch(env []string) error {
+	want := e.want()
+	args := make([]string, len(e.start))
+	for i, a := range e.start {
+		if i > 0 && e.start[i-1] == "--option" {
+			if k, _, ok := strings.Cut(a, "="); ok {
+				a = k + "=" + want[k]
+			}
+		}
+		if i > 0 && e.start[i-1] == "--idle-seconds" {
+			if s := idleSeconds.Load(); s >= 0 {
+				a = strconv.FormatInt(s, 10)
+			}
+		}
+		args[i] = expand(a)
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	os.MkdirAll(SidecarDir, 0o755)
+	cmd.Dir = SidecarDir
+	cmd.Env = append(os.Environ(), "PYTHONPATH="+SidecarCode)
+	if os.Getenv("HF_HOME") == "" {
+		// Model weights follow sidecar_dir instead of the user profile.
+		cmd.Env = append(cmd.Env, "HF_HOME="+filepath.Join(SidecarDir, "models"))
+	}
+	cmd.Env = append(cmd.Env, env...)
+	var log *os.File
+	if f, err := os.Create(e.logPath()); err == nil {
+		log = f
+		cmd.Stdout, cmd.Stderr = f, f
+	}
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		if log != nil {
+			log.Close()
+		}
+		return fmt.Errorf("engine %q: start server: %w", e.name, err)
+	}
+	running := make(chan struct{})
+	e.running, e.proc = running, cmd.Process
+	go func() {
+		cmd.Wait()
+		if log != nil {
+			log.Close()
+		}
+		e.exitCode = cmd.ProcessState.ExitCode() // read only after running closes
+		close(running)
+	}()
+	return nil
+}
+
+var errRetryOnline = errors.New("could not load its models offline")
+
+// await waits until the server answers ready. It gives up when the server
+// exits, when its log stays silent for stallTimeout, or after the engine's
+// start timeout, stopping a server that hangs so the next start is clean.
+// Call with e.mu held.
+func (e *Engine) await(ctx context.Context) error {
+	running := e.running // nil: a server voice did not start is loading
+	logPath := e.logPath()
+	size, grew := logSize(logPath), time.Now()
 	deadline := time.Now().Add(e.timeout)
-	for time.Now().Before(deadline) {
+	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-running:
+			if e.healthy(ctx) {
+				return nil
+			}
+			e.running = nil
+			if e.exitCode == exitRetryOnline {
+				return errRetryOnline
+			}
+			return fmt.Errorf("engine %q: server exited while loading (code %d): %s; see %s", e.name, e.exitCode, lastLine(logPath), logPath)
 		case <-time.After(time.Second):
 		}
 		if e.healthy(ctx) {
 			return nil
 		}
+		now := time.Now()
+		if n := logSize(logPath); n != size {
+			size, grew = n, now
+		}
+		var why string
+		switch {
+		case now.After(deadline):
+			why = fmt.Sprintf("did not come up within %s", e.timeout)
+		case running != nil && now.Sub(grew) > stallTimeout:
+			why = fmt.Sprintf("wrote nothing for %s while loading", stallTimeout)
+		default:
+			continue
+		}
+		if running != nil {
+			stop(e.proc)
+			e.running = nil
+		}
+		return fmt.Errorf("engine %q: server %s; see %s", e.name, why, logPath)
 	}
-	return fmt.Errorf("engine %q: server did not come up within %s; see %s", e.name, e.timeout, filepath.Join(SidecarDir, e.name+".log"))
+}
+
+func logSize(path string) int64 {
+	if st, err := os.Stat(path); err == nil {
+		return st.Size()
+	}
+	return -1
+}
+
+// lastLine is the last line a server wrote, usually the error it died of;
+// progress bars rewrite their line with \r, so those count as lines too.
+func lastLine(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return "no log"
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err == nil && st.Size() > 8192 {
+		f.Seek(st.Size()-8192, io.SeekStart)
+	}
+	data, _ := io.ReadAll(f)
+	lines := strings.FieldsFunc(string(data), func(r rune) bool { return r == '\n' || r == '\r' })
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			if len(l) > 300 {
+				l = l[:300] + "..."
+			}
+			return l
+		}
+	}
+	return "nothing in its log"
 }
 
 // SynthesizeBatch renders several sentences in one voice with one call, when

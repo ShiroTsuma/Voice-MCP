@@ -30,6 +30,7 @@ queues utterances anyway.
 import argparse
 import array
 import base64
+import hashlib
 import importlib
 import io
 import json
@@ -51,6 +52,65 @@ def builtin():
 
 
 BUILTIN = builtin()
+
+
+# The exit code of a server that could not load its models offline: voice
+# starts it once more with HF_HUB_OFFLINE=0, so missing files download.
+EXIT_RETRY_ONLINE = 75
+
+
+def hub_cache():
+    if os.environ.get("HF_HUB_CACHE"):
+        return os.environ["HF_HUB_CACHE"]
+    home = os.environ.get("HF_HOME") or os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
+    return os.path.join(home, "hub")
+
+
+def cached(repo):
+    """Whether the Hugging Face cache holds a downloaded snapshot of repo."""
+    snapshots = os.path.join(hub_cache(), "models--" + repo.replace("/", "--"), "snapshots")
+    try:
+        return any(os.listdir(os.path.join(snapshots, d)) for d in os.listdir(snapshots))
+    except OSError:
+        return False
+
+
+def loaded_marker(name, options):
+    """A file saying this backend with these options loaded completely, so all
+    it needs from the hub is in the cache."""
+    key = hashlib.sha1(json.dumps([name, sorted(options.items())]).encode()).hexdigest()[:16]
+    return os.path.join(hub_cache(), ".voice-loaded", f"{name}-{key}")
+
+
+def hub_models(name, options):
+    """The hub models a built-in backend loads: its model option, or what
+    backends.json has setup download for it."""
+    if options.get("model"):
+        return [options["model"]]
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backends.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            for b in json.load(f)["backends"]:
+                if b.get("name") == name:
+                    return list(b.get("prefetch") or [])
+    except (OSError, ValueError, KeyError):
+        pass
+    return []
+
+
+def choose_offline(name, options):
+    """Load from the cache without asking the hub when everything is there: a
+    hub that cannot be reached (a VPN, a dropped connection) would otherwise
+    stop a model that needs nothing from it. Online only when HF_HUB_OFFLINE
+    is set (voice sets 0 to retry online) or nothing says the files are here."""
+    if "HF_HUB_OFFLINE" in os.environ:
+        return False
+    models = hub_models(name, options)
+    if not os.path.exists(loaded_marker(name, options)) and not (models and all(cached(m) for m in models)):
+        return False
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    return True
 
 
 def load_backend(name, options):
@@ -207,7 +267,29 @@ def main():
 
     Handler.name = args.backend
     Handler.options = options
-    Handler.backend = load_backend(args.backend, options)  # load before listening: /health means ready
+    offline = choose_offline(args.backend, options)
+    if offline:
+        print(f"voice_sidecar {args.backend}: models are in the cache, loading them offline", file=sys.stderr, flush=True)
+    try:
+        Handler.backend = load_backend(args.backend, options)  # load before listening: /health means ready
+    except Exception:
+        if not offline:
+            raise
+        traceback.print_exc(file=sys.stderr)
+        try:
+            os.remove(loaded_marker(args.backend, options))
+        except OSError:
+            pass
+        print(f"voice_sidecar {args.backend}: could not load offline; voice starts it again online", file=sys.stderr, flush=True)
+        sys.stderr.flush()
+        os._exit(EXIT_RETRY_ONLINE)
+    try:
+        marker = loaded_marker(args.backend, options)
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+    except OSError:
+        pass
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"voice_sidecar {args.backend} ready on http://{args.host}:{args.port}", file=sys.stderr, flush=True)
     # Exit after idle seconds without synthesis, freeing GPU memory (0: stay);

@@ -1,7 +1,9 @@
 package httpengine
 
 import (
+	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 )
 
@@ -13,4 +15,16 @@ import (
 func detach(cmd *exec.Cmd) {
 	const newGroup, noWindow = 0x00000200, 0x08000000
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: newGroup | noWindow, HideWindow: true}
+}
+
+// stop ends a server and the interpreter a venv launcher started under it.
+func stop(p *os.Process) {
+	if p == nil {
+		return
+	}
+	kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(p.Pid))
+	kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	if kill.Run() != nil {
+		p.Kill()
+	}
 }
